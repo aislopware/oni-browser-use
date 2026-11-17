@@ -76,7 +76,9 @@ jobs:
           wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
             | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
           echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
+          # python3-websockets: oracle.py drives both browsers over CDP with it,
+          # and the runner image's Python does not ship the module.
+          sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils python3-websockets
           # The baseline must be the Chrome installed here: the runner image
           # also has /usr/bin/chromium, which the oracle would pick first and
           # which never brings up a debug endpoint under Xvfb.
