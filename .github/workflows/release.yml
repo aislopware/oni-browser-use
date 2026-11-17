@@ -5,6 +5,9 @@ name: Release
 # PARALLEL, the fast gate must pass, and the public order is fixed —
 # assets first, then npm (platforms before launcher), then Latest last.
 # Nothing is built on the developer machine.
+#
+# The fork ships GitHub release binaries only: the npm job runs just where
+# the repository variable PUBLISH_NPM is "true", and is skipped here.
 on:
   push:
     tags: ["v*"]
@@ -174,6 +177,7 @@ jobs:
   # here from the build artifacts, so the launcher and the platform packages
   # still ship identical bytes to the release page.
   npm:
+    if: vars.PUBLISH_NPM == 'true'
     needs: [plan, build, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -201,7 +205,10 @@ jobs:
         run: ./scripts/publish-npm-ci.sh dist
 
   latest:
-    needs: [plan, npm]
+    # A skipped npm job must not skip this one: without it the release
+    # stays a draft that nothing can download.
+    if: ${{ !cancelled() && needs.publish.result == 'success' && (needs.npm.result == 'success' || needs.npm.result == 'skipped') }}
+    needs: [plan, publish, npm]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
