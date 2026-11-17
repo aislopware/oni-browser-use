@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-11-17
+
 ### Added
 - `OBU_HOST_NOTE` lets the application that runs obu say in one line whose browser the agent drives: its own browser panel, a browser of the agent's own. The note joins the MCP instructions and the first result, where it replaces obu's real-browser note, which could only say "the user's own browser".
 - `OBU_ENDPOINT_PATH=/k/<token>` adds a path prefix to the debug endpoint named by `--host`/`--port`, so an application that owns the browser can hand one agent its tabs through a secret loopback path instead of an open debug port. The WebSocket URLs the endpoint lists are used as given.
@@ -2210,7 +2212,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.6.9...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.7.0...HEAD
+[4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0
 [4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9
 [4.6.8]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.8
 [4.6.7]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.7
