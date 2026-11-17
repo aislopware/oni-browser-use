@@ -71,7 +71,7 @@ pub(super) fn extract_endpoint(args: &[String]) -> Result<(Vec<String>, Option<S
         cleaned.push(args[i].clone());
         i += 1;
     }
-    let external = port.map(|p| format!("{host}:{p}"));
+    let external = port.map(|p| crate::cdp::endpoint_base(&host, p));
     Ok((cleaned, external))
 }
 

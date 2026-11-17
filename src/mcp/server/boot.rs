@@ -170,7 +170,7 @@ pub(super) async fn launch_browser(
         }
     } else {
         // Connect to an existing Chrome on the given port.
-        let base = format!("{host}:{port}");
+        let base = crate::cdp::endpoint_base(host, port);
         // Caller-owned and already running: the agent's own tab, never the
         // first one (the tab the user is looking at).
         let target = crate::page::session_target(&base, true).await?;

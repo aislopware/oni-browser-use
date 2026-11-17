@@ -641,6 +641,7 @@ Everything optional; configuration is environment variables.
 |---|---|---|
 | `OBU_HOME` | auto | Data root override (highest priority): knowledge, logins, artifacts, fingerprint |
 | `XDG_STATE_HOME` | XDG spec | Data root becomes `$XDG_STATE_HOME/obu` when set |
+| `OBU_ENDPOINT_PATH` | unset | Path prefix of the debug endpoint named by `--host`/`--port`, such as `/k/<token>`. For a host application (an editor, an agent UI) that owns the browser and serves `/json` and `/json/version` for one agent's tabs under a secret path instead of an open debug port |
 | `OBU_SESSION` | unset | Names this agent's session inside the data root (letters, digits, `-`, `_`, `.`, up to 32): its own tabs in an attached browser and its own CLI daemon, kept under `agent-sessions/<name>/`; everything else stays shared |
 | `OBU_PROFILE_DIR` | `<data root>/profile` | Persistent browser profile location — point it at a directory only you can write (it holds the live cookie jar) |
 | `OBU_FRESH` | unset | `1` = ephemeral profile (no persistence) |

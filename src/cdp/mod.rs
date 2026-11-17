@@ -23,7 +23,8 @@ pub mod session;
 
 pub use client::CdpClient;
 pub use discovery::{
-    first_page_target, list_page_targets, list_targets, version, TargetInfo, VersionInfo,
+    endpoint_base, first_page_target, list_page_targets, list_targets, parse_endpoint_path,
+    version, TargetInfo, VersionInfo,
 };
 pub use protocol::{CdpEvent, CdpRequest};
 pub use session::{CdpSession, SessionSubscription};

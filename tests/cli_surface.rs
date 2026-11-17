@@ -292,3 +292,63 @@ fn an_invalid_session_name_is_refused_before_anything_runs() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
 }
+
+/// `OBU_ENDPOINT_PATH`: a host application serves its debug endpoint under a
+/// secret path instead of an open port. Every discovery request of a command
+/// that names that port must carry the prefix, and a malformed one is a
+/// usage error instead of a silent fall back to the bare port.
+#[test]
+fn an_endpoint_path_prefixes_every_discovery_request() {
+    use std::io::{Read, Write};
+    use std::sync::{Arc, Mutex};
+
+    let home = home("endpoint-path");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port().to_string();
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let paths = seen.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut buf = [0u8; 2048];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..n]).into_owned();
+            let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
+            // No targets and no browser socket: the command fails after
+            // discovery, which is all this test reads.
+            let body = if path.ends_with("/json/version") {
+                "{}"
+            } else {
+                "[]"
+            };
+            paths.lock().unwrap().push(path);
+            let _ = stream.write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+        }
+    });
+
+    let out = command(&home)
+        .env("OBU_ENDPOINT_PATH", "/k/s3cret/")
+        .args(["see", "--no-daemon", "--host", "127.0.0.1", "--port", &port])
+        .output()
+        .unwrap();
+    let seen = seen.lock().unwrap().clone();
+    assert!(!seen.is_empty(), "the endpoint was never asked: {out:?}");
+    assert!(
+        seen.iter().all(|path| path.starts_with("/k/s3cret/json")),
+        "requests outside the prefix: {seen:?}"
+    );
+
+    let out = command(&home)
+        .env("OBU_ENDPOINT_PATH", "k/../elsewhere")
+        .args(["see", "--no-daemon", "--host", "127.0.0.1", "--port", &port])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("OBU_ENDPOINT_PATH"));
+}

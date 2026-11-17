@@ -89,6 +89,8 @@ ENVIRONMENT
   OBU_HOME           isolate everything (daemon, Chrome, sessions, knowledge) in a directory
   OBU_SESSION        name this agent's session inside the data dir: its own tabs in an
                        attached browser and its own daemon; logins and knowledge stay shared
+  OBU_ENDPOINT_PATH  path prefix of the debug endpoint named by --host/--port, for a host
+                       application that serves /json under a secret path (e.g. /k/<token>)
   OBU_CMD_TIMEOUT    client wait for a daemon response, seconds (default 300)
   OBU_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
   OBU_NO_COMPRESS=1  disable response compression
@@ -495,6 +497,7 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
         "env": {
             "OBU_HOME": "isolate daemon/Chrome/sessions/knowledge in a directory",
             "OBU_SESSION": "name this agent's session inside the data dir (letters, digits, - _ . up to 32): its own tabs in an attached browser and its own daemon; logins, knowledge and fingerprint stay shared",
+            "OBU_ENDPOINT_PATH": "path prefix of the debug endpoint named by --host/--port (e.g. /k/<token>), for a host application that serves /json and /json/version under a secret path instead of an open debug port",
             "OBU_CMD_TIMEOUT": "client wait for a daemon response, seconds (default 300)",
             "OBU_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
             "OBU_NO_COMPRESS": "set 1 to disable response compression",

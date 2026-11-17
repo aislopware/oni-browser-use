@@ -55,6 +55,46 @@ impl TargetInfo {
     }
 }
 
+/// Pure core of [`endpoint_base`]: the path prefix a host application serves
+/// its debug endpoint under (`OBU_ENDPOINT_PATH`). Empty when unset, the
+/// normalized prefix when it is plain path segments, else why it is not.
+pub fn parse_endpoint_path(raw: Option<&str>) -> std::result::Result<String, String> {
+    let path = match raw.map(str::trim) {
+        None | Some("") => return Ok(String::new()),
+        Some(path) => path.trim_end_matches('/'),
+    };
+    let plain = path.starts_with('/')
+        && path.len() <= 256
+        && path[1..].split('/').all(|segment| {
+            !segment.is_empty()
+                && segment != "."
+                && segment != ".."
+                && segment
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~'))
+        });
+    if !plain {
+        return Err(
+            "OBU_ENDPOINT_PATH must be a path such as /k/<token>: segments of letters, digits, \
+             '-', '_', '.' or '~'"
+                .into(),
+        );
+    }
+    Ok(path.to_string())
+}
+
+/// The `base` of a debug endpoint the caller named: `host:port`, followed by
+/// the path prefix from `OBU_ENDPOINT_PATH`. A host application that owns the
+/// browser (an editor, an agent UI) can serve `/json` and `/json/version`
+/// for one agent's tabs under a secret path instead of an open debug port;
+/// the WebSocket URLs it lists are used as given. `main` rejects an invalid
+/// prefix before any command runs; here it reads as none.
+pub fn endpoint_base(host: &str, port: u16) -> String {
+    let path =
+        parse_endpoint_path(std::env::var("OBU_ENDPOINT_PATH").ok().as_deref()).unwrap_or_default();
+    format!("{host}:{port}{path}")
+}
+
 /// HTTP client for the DevTools endpoint. Never proxied: the endpoint is
 /// reached directly, exactly like the CDP WebSocket that follows discovery
 /// (which never uses a proxy). reqwest's environment proxy matcher has no
@@ -71,7 +111,8 @@ fn devtools_client() -> Result<reqwest::Client> {
 
 /// Fetch `/json/version` from a browser debug endpoint.
 ///
-/// `base` is the `host:port` (no scheme), e.g. `127.0.0.1:9222`.
+/// `base` is the `host:port` (no scheme), e.g. `127.0.0.1:9222`, with the
+/// path prefix of [`endpoint_base`] when the endpoint is served under one.
 pub async fn version(base: &str) -> Result<VersionInfo> {
     let url = format!("http://{base}/json/version");
     let client = devtools_client()?;
@@ -111,4 +152,26 @@ pub async fn raw_targets(base: &str) -> Result<Value> {
     let url = format!("http://{base}/json");
     let client = devtools_client()?;
     Ok(client.get(&url).send().await?.json().await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_endpoint_path_is_plain_segments_or_refused() {
+        assert_eq!(parse_endpoint_path(None), Ok(String::new()));
+        assert_eq!(parse_endpoint_path(Some("  ")), Ok(String::new()));
+        assert_eq!(
+            parse_endpoint_path(Some("/k/aB3-_x.~/")),
+            Ok("/k/aB3-_x.~".into())
+        );
+        // Anything that could change the host, add a query or climb out of
+        // the prefix is refused instead of read as "no prefix".
+        for bad in [
+            "k/x", "/k/../x", "/k//x", "/k/x?y", "/k/x#y", "/@evil/x", "/k/a b", "/",
+        ] {
+            assert!(parse_endpoint_path(Some(bad)).is_err(), "{bad}");
+        }
+    }
 }

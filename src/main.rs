@@ -214,6 +214,10 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // would run on the tabs every unnamed command shares.
     obu::platform::parse_session(std::env::var("OBU_SESSION").ok().as_deref())
         .map_err(obu::ObuError::Usage)?;
+    // Likewise a malformed endpoint prefix: dropped, the command would ask
+    // the bare port for its tabs instead of the host application's bridge.
+    obu::cdp::parse_endpoint_path(std::env::var("OBU_ENDPOINT_PATH").ok().as_deref())
+        .map_err(obu::ObuError::Usage)?;
 
     // Restore the default SIGPIPE for CLI-output commands so an early pipe
     // reader (`obu ... | head -1`) exits quietly instead of panicking —
@@ -296,7 +300,7 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     let base = if launches_here {
         browser.as_ref().unwrap().base()
     } else {
-        format!("{host}:{port}")
+        obu::cdp::endpoint_base(&host, port)
     };
 
     let result = match cmd.as_str() {
