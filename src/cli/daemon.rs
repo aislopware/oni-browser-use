@@ -542,7 +542,9 @@ async fn launch_browser() -> Result<(Page, Option<crate::browser::Browser>)> {
     crate::realbrowser::init_lane();
     let (browser, base) = crate::browser::launch_lane().await?;
     let result = async {
-        let target = crate::cdp::first_page_target(&base).await?;
+        // No owned browser = attached to the user's: work in the agent's own
+        // tab, never the first one (the tab they are looking at).
+        let target = crate::page::session_target(&base, browser.is_none()).await?;
         let client = crate::cdp::CdpClient::connect(target.ws_url()?).await?;
         let page = Page::attach(crate::cdp::CdpSession::root(client), &base, None).await?;
         if browser.is_some() && !crate::realbrowser::real_lane() {

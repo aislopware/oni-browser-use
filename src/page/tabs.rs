@@ -6,7 +6,13 @@ use crate::cdp::list_page_targets;
 
 impl Page {
     /// Input is delivered to this target, including after a foreground popup.
+    /// Never in an attached browser: `Page.bringToFront` hides whatever tab
+    /// shares the window and raises that window over the user's work — and
+    /// the agent's tabs there each sit in their own window, already active.
     pub async fn activate(&self) -> Result<()> {
+        if crate::browser::attached_browser() {
+            return Ok(());
+        }
         self.cdp
             .send_with_timeout("Page.bringToFront", None, Duration::from_secs(5))
             .await?;
@@ -41,10 +47,13 @@ impl Page {
     /// person was working in (issue #89). It is only needed when input would
     /// otherwise go to a background tab (a popup took the foreground, #49).
     /// `BLADE_NO_ACTIVATE=1` never raises the window, accepting that trade.
+    /// An attached browser is never raised at all (see [`Page::activate`]),
+    /// so the visibility probe is skipped there too.
     pub async fn activate_if_needed(&self) -> Result<()> {
-        if std::env::var("BLADE_NO_ACTIVATE")
-            .map(|v| v == "1")
-            .unwrap_or(false)
+        if crate::browser::attached_browser()
+            || std::env::var("BLADE_NO_ACTIVATE")
+                .map(|v| v == "1")
+                .unwrap_or(false)
         {
             return Ok(());
         }
@@ -52,6 +61,35 @@ impl Page {
             return Ok(());
         }
         self.activate().await
+    }
+
+    /// Attached browser: refuse input while the session's window is minimized
+    /// AND the page could not be given focus emulation (see `Page::attach`).
+    /// With emulation a minimized window renders and takes input like any
+    /// other (measured, Brave 157: clicks, typing, select, scroll and vision
+    /// all land, window still minimized). Without it a minimized page is not
+    /// rendered: text targets resolved to the wrong element and focus never
+    /// reached the field — and this lane never raises a window to fix it. An
+    /// honest refusal with the way out beats a click on the wrong thing.
+    pub async fn refuse_minimized_window(&self) -> Result<()> {
+        if self.shown || !crate::browser::attached_browser() {
+            return Ok(());
+        }
+        let window = self
+            .cdp
+            .send_with_timeout("Browser.getWindowForTarget", None, Duration::from_secs(2))
+            .await
+            .ok();
+        if !minimized_from_window(window.as_ref()) {
+            return Ok(());
+        }
+        Err(BladeError::Other(
+            "the agent's browser window is minimized — a minimized page is not rendered, so \
+             clicks and keys cannot be delivered reliably, and bladebro never raises a window \
+             in a browser it attached to. Continue in a fresh background window (`state \
+             open-tab <url>`), or have the window restored (it may stay behind other windows)."
+                .into(),
+        ))
     }
 
     /// Evaluate a JS expression in an isolated world. The isolated world has
@@ -210,29 +248,40 @@ impl Page {
         // reads "localhost:" as the scheme — leaving a stuck about:blank tab
         // whose screenshot then burns its full CDP timeout (reproduced live).
         let url = with_scheme(url);
-        let mut params = json!({"url":url.as_str()});
-        if let Some(id) = self.cdp.browser_context_id() {
-            params["browserContextId"] = json!(id);
+        let client = match &self.browser_client {
+            Some(bc) => bc.clone(),
+            // WS mode: browser-level connection on demand.
+            None => super::agent_tab::browser_client(&self.base).await?,
+        };
+        // An attached browser is the user's: the tab opens in a background
+        // window of its own instead of taking over the one they are in.
+        let attached = crate::browser::attached_browser();
+        let id =
+            super::agent_tab::create_tab(&client, &url, self.cdp.browser_context_id(), attached)
+                .await?;
+        if attached {
+            // A tab of the agent's own: one it may fall back to later. Not
+            // the current one until the session actually switches to it.
+            if let Err(e) =
+                super::agent_tab::remember_opened(&super::agent_tab::record_path(), &self.base, &id)
+            {
+                eprintln!("[bladebro] {e} — the new tab is not remembered as the agent's own");
+            }
         }
-        if let Some(bc) = &self.browser_client {
-            let res = bc.send("Target.createTarget", Some(params)).await?;
-            return res
-                .get("targetId")
-                .and_then(|v| v.as_str())
-                .map(String::from)
-                .ok_or_else(|| BladeError::Other("no targetId from Target.createTarget".into()));
+        Ok(id)
+    }
+
+    /// Attached browser: record the tab the session is on (see `agent_tab`).
+    /// Best-effort — a failed write costs continuity, never the command.
+    fn remember_tab(&self, target_id: &str, created: bool) {
+        if let Err(e) = super::agent_tab::remember(
+            &super::agent_tab::record_path(),
+            &self.base,
+            target_id,
+            created,
+        ) {
+            eprintln!("[bladebro] {e} — the next command may resume on another tab");
         }
-        // WS mode: browser-level connection on demand.
-        let ver = crate::cdp::version(&self.base).await?;
-        let ws = ver
-            .web_socket_debugger_url
-            .ok_or_else(|| BladeError::Other("browser has no webSocketDebuggerUrl".into()))?;
-        let client = CdpClient::connect(&ws).await?;
-        let res = client.send("Target.createTarget", Some(params)).await?;
-        res.get("targetId")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .ok_or_else(|| BladeError::Other("no targetId from Target.createTarget".into()))
     }
 
     /// Attach an auxiliary tab without detaching or replacing the active page.
@@ -298,6 +347,12 @@ impl Page {
             }
         }
         *self = new_page;
+        // Attached browser: the tab the session is on outlives this process —
+        // record it so the next one-shot command resumes here, not on the
+        // tab this one left.
+        if crate::browser::attached_browser() {
+            self.remember_tab(target_id, false);
+        }
         Ok(())
     }
 
@@ -329,6 +384,17 @@ fn active_from_visibility(reply: Option<&Value>) -> bool {
         == Some("visible")
 }
 
+/// Is the window in a `Browser.getWindowForTarget` reply minimized? An
+/// unreadable reply is "not minimized": the check exists to refuse a known
+/// bad state, never to block input on a browser that cannot answer it.
+fn minimized_from_window(reply: Option<&Value>) -> bool {
+    reply
+        .and_then(|r| r.get("bounds"))
+        .and_then(|b| b.get("windowState"))
+        .and_then(|s| s.as_str())
+        == Some("minimized")
+}
+
 #[cfg(test)]
 mod activation_tests {
     use super::*;
@@ -350,6 +416,34 @@ mod activation_tests {
             (None, false),
         ] {
             assert_eq!(active_from_visibility(reply.as_ref()), active, "{reply:?}");
+        }
+    }
+
+    #[test]
+    fn only_a_minimized_window_refuses_attached_input() {
+        for (reply, minimized) in [
+            (
+                Some(json!({"windowId": 7, "bounds": {"windowState": "minimized"}})),
+                true,
+            ),
+            (
+                Some(json!({"windowId": 7, "bounds": {"windowState": "normal", "left": 0}})),
+                false,
+            ),
+            (
+                Some(json!({"windowId": 7, "bounds": {"windowState": "fullscreen"}})),
+                false,
+            ),
+            // Browsers without window control answer with an error or
+            // nothing: input must not be blocked on that.
+            (Some(json!({"error": {"message": "not supported"}})), false),
+            (None, false),
+        ] {
+            assert_eq!(
+                minimized_from_window(reply.as_ref()),
+                minimized,
+                "{reply:?}"
+            );
         }
     }
 }

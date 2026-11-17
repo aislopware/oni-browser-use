@@ -49,9 +49,10 @@ pub(crate) use self::discover::find_chrome;
 pub use self::display::VirtualDisplay;
 pub(crate) use self::flags::env_chrome_flags;
 pub use self::flags::{
-    gl_mid_session_loss, gpu_state, is_software_renderer, launched_headless, launched_no_sandbox,
-    launched_pipe, mark_gl_mid_session_loss, reconcile_gl, set_gpu_state, set_launched_headless,
-    set_launched_no_sandbox, set_launched_pipe, GlReconcile, GlStage, GpuState, Transport,
+    attached_browser, gl_mid_session_loss, gpu_state, is_software_renderer, launched_headless,
+    launched_no_sandbox, launched_pipe, mark_gl_mid_session_loss, reconcile_gl,
+    set_attached_browser, set_gpu_state, set_launched_headless, set_launched_no_sandbox,
+    set_launched_pipe, GlReconcile, GlStage, GpuState, Transport,
 };
 pub use self::launch::launch_lane;
 pub use self::probe::{probe_gl_live, GlLive, WorkerEvidence};

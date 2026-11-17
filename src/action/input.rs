@@ -10,6 +10,50 @@ use crate::cdp::CdpSession;
 use crate::error::{BladeError, Result};
 use crate::stealth::biometrics::gaussian;
 
+/// How long one mouse move may go unacked. 5s: if Chrome is stuck (e.g. a
+/// new tab loading), don't hang 30s.
+const MOVE_ACK: Duration = Duration::from_secs(5);
+/// Attached browser: the wait before a move is taken as queued (see
+/// [`send_mouse_move`]) — far above a live page's ack (one frame).
+const QUEUED_MOVE_ACK: Duration = Duration::from_millis(400);
+
+/// One `mouseMoved`. Chrome acks a mouse move with the next frame, and a
+/// hidden page (minimized or fully covered window, background tab) produces
+/// none: the ack never comes, though the move is queued and reaches the page
+/// ahead of the next press (measured, Brave 157: `mousemove`s, then
+/// `mousedown`/`mouseup`/`click`, all trusted). Every other lane raises a
+/// hidden tab before input; an attached browser is the user's and is never
+/// raised, so there an unacked move is left queued instead of failing the
+/// action. `queued` latches on the first miss so the rest of the path does
+/// not wait a full ack each.
+async fn send_mouse_move(
+    cdp: &CdpSession,
+    params: serde_json::Value,
+    queued: &mut bool,
+) -> Result<()> {
+    if !crate::browser::attached_browser() {
+        cdp.send_with_timeout("Input.dispatchMouseEvent", Some(params), MOVE_ACK)
+            .await?;
+        return Ok(());
+    }
+    let wait = if *queued {
+        Duration::from_millis(1)
+    } else {
+        QUEUED_MOVE_ACK
+    };
+    match cdp
+        .send_with_timeout("Input.dispatchMouseEvent", Some(params), wait)
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(BladeError::Timeout(_)) => {
+            *queued = true;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// Dispatch a human-like mouse move from a random start point to `target`.
 /// Returns the final (click) position after bezier path + overshoot correction.
 /// Shared by click (adds press/release after) and hover (no click).
@@ -18,7 +62,7 @@ pub(super) async fn dispatch_mouse_move(
     target: (f64, f64),
     last_mouse: &Arc<std::sync::Mutex<Option<(f64, f64)>>>,
 ) -> Result<(f64, f64)> {
-    dispatch_mouse_move_bounded(cdp, target, last_mouse, None).await
+    dispatch_mouse_move_bounded(cdp, target, last_mouse, None, &mut false).await
 }
 
 async fn dispatch_mouse_move_bounded(
@@ -26,6 +70,7 @@ async fn dispatch_mouse_move_bounded(
     target: (f64, f64),
     last_mouse: &Arc<std::sync::Mutex<Option<(f64, f64)>>>,
     bounds: Option<[f64; 4]>,
+    queued: &mut bool,
 ) -> Result<(f64, f64)> {
     let mut rng = crate::stealth::Rng::new();
     // Random start point — offset from the target by 100-300px.
@@ -58,22 +103,20 @@ async fn dispatch_mouse_move_bounded(
     // Include movementX/movementY deltas — PerimeterX/HUMAN tracks these
     // coordinate deltas as behavioral biometrics; missing or zero values
     // are an instant bot flag.
-    // 5s timeout: if Chrome is stuck (e.g. new tab loading), don't hang 30s.
-    let to = Duration::from_secs(5);
     for pt in &path {
         let (mx, my) = {
             let lm = last_mouse.lock().unwrap_or_else(|e| e.into_inner());
             lm.map(|(lx, ly)| ((pt.x - lx).round() as i64, (pt.y - ly).round() as i64))
                 .unwrap_or((0, 0))
         };
-        cdp.send_with_timeout(
-            "Input.dispatchMouseEvent",
-            Some(json!({
+        send_mouse_move(
+            cdp,
+            json!({
                 "type": "mouseMoved",
                 "x": pt.x, "y": pt.y,
                 "movementX": mx, "movementY": my,
-            })),
-            to,
+            }),
+            queued,
         )
         .await?;
         *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((pt.x, pt.y));
@@ -136,7 +179,9 @@ async fn dispatch_mouse_click_bounded(
     last_mouse: &Arc<std::sync::Mutex<Option<(f64, f64)>>>,
     bounds: Option<[f64; 4]>,
 ) -> Result<()> {
-    let (cx, cy) = dispatch_mouse_move_bounded(cdp, (x, y), last_mouse, bounds).await?;
+    let mut queued = false;
+    let (cx, cy) =
+        dispatch_mouse_move_bounded(cdp, (x, y), last_mouse, bounds, &mut queued).await?;
 
     let mut rng = crate::stealth::Rng::new();
     let to = Duration::from_secs(5);
@@ -155,14 +200,14 @@ async fn dispatch_mouse_click_bounded(
             lm.map(|(lx, ly)| ((tx - lx).round() as i64, (ty - ly).round() as i64))
                 .unwrap_or((0, 0))
         };
-        cdp.send_with_timeout(
-            "Input.dispatchMouseEvent",
-            Some(json!({
+        send_mouse_move(
+            cdp,
+            json!({
                 "type": "mouseMoved",
                 "x": tx, "y": ty,
                 "movementX": mx, "movementY": my,
-            })),
-            to,
+            }),
+            &mut queued,
         )
         .await?;
         *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((tx, ty));

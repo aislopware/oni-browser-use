@@ -7,7 +7,8 @@
 //! Module map: this file is the Page struct + observation accessors and the
 //! Drop contract; `attach` builds it, `tabs` / `navigate` / `heal` / `logs` /
 //! `route` hold the method families (`route` is the client-side route-
-//! transition guard), and `model` / `perception` / `refs` / `intercept` are
+//! transition guard), `agent_tab` picks the tab a session starts on (its own
+//! one in an attached browser), and `model` / `perception` / `refs` / `intercept` are
 //! the capture pipeline.
 
 pub mod intercept;
@@ -15,6 +16,7 @@ pub mod model;
 pub mod perception;
 pub mod refs;
 
+pub mod agent_tab;
 pub mod attach;
 pub mod heal;
 pub mod logs;
@@ -24,6 +26,7 @@ pub mod tabs;
 mod gl;
 mod route;
 
+pub use self::agent_tab::session_target;
 pub use self::logs::{NetEntry, XhrEntry};
 pub(crate) use self::navigate::with_scheme;
 pub use self::route::{RouteEpoch, RouteSettle, ROUTE_BUDGET};
@@ -246,6 +249,10 @@ pub struct Page {
     /// Context pruning: enabled by default, toggled via
     /// `BLADE_NO_COMPRESS=1` env var or `state compress off`.
     compress_enabled: std::sync::atomic::AtomicBool,
+    /// Focus emulation is on for this page (attached browsers): it renders
+    /// and takes input as a tab that is being looked at, whatever its window
+    /// is doing.
+    shown: bool,
 }
 
 impl std::fmt::Debug for Page {
@@ -548,6 +555,7 @@ impl Page {
         // macOS Page.bringToFront raises the window over every other app (#89).
         if action.injects_input() {
             self.activate_if_needed().await?;
+            self.refuse_minimized_window().await?;
         }
         // S5: pacing governor — realistic inter-action gaps.
         self.pace(&action).await;

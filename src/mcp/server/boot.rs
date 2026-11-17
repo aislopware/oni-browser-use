@@ -5,7 +5,7 @@
 #[cfg(unix)]
 use serde_json::json;
 
-use crate::cdp::{self, CdpClient, CdpSession};
+use crate::cdp::{CdpClient, CdpSession};
 use crate::error::{BladeError, Result};
 use crate::page::Page;
 
@@ -101,7 +101,9 @@ pub(super) async fn launch_browser(
     if crate::realbrowser::real_lane() && port == 0 {
         let (browser, base) = crate::browser::launch_lane().await?;
         let result = async {
-            let target = cdp::first_page_target(&base).await?;
+            // No owned browser = attached to the user's: work in the agent's
+            // own tab, never the first one (the tab they are looking at).
+            let target = crate::page::session_target(&base, browser.is_none()).await?;
             let client = CdpClient::connect(target.ws_url()?).await?;
             let page = Page::attach(CdpSession::root(client), &base, None).await?;
             Ok(page)
@@ -121,6 +123,7 @@ pub(super) async fn launch_browser(
         #[cfg(unix)]
         {
             let (browser, client) = crate::browser::Browser::launch_pipe().await?;
+            crate::browser::set_attached_browser(false);
             let result = async {
                 let session = attach_pipe(&client).await?;
                 let page = Page::attach(session, "pipe", Some(client)).await?;
@@ -150,7 +153,7 @@ pub(super) async fn launch_browser(
         let browser = crate::browser::Browser::launch(0).await?;
         let base = browser.base();
         let result = async {
-            let target = cdp::first_page_target(&base).await?;
+            let target = crate::page::session_target(&base, false).await?;
             let client = CdpClient::connect(target.ws_url()?).await?;
             let page = Page::attach(CdpSession::root(client), &base, None).await?;
             crate::logins::restore(page.cdp_ref()).await?;
@@ -168,7 +171,9 @@ pub(super) async fn launch_browser(
     } else {
         // Connect to an existing Chrome on the given port.
         let base = format!("{host}:{port}");
-        let target = cdp::first_page_target(&base).await?;
+        // Caller-owned and already running: the agent's own tab, never the
+        // first one (the tab the user is looking at).
+        let target = crate::page::session_target(&base, true).await?;
         let client = CdpClient::connect(target.ws_url()?).await?;
         let page = Page::attach(CdpSession::root(client), &base, None).await?;
         // External Chrome is caller-owned: never inject our login sidecar.

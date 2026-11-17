@@ -605,7 +605,7 @@ async fn run_tool(
     // Explicit --host/--port: drive that already-running browser directly.
     // Skip the local daemon entirely (never launch or own Chrome here).
     if let Some(base) = external {
-        let result = run_connected(tool, args, &base, true).await?;
+        let result = run_connected(tool, args, &base, true, true).await?;
         let code = print_result(&result, json_mode);
         if code != 0 {
             exit_with(code);
@@ -697,12 +697,15 @@ async fn run_tool(
 
     // `external = real_lane`: on the real browser we never restore saved
     // logins, warm the profile, or snapshot cookies — it is not ours.
+    // `attached = no owned browser`: the lane attached to the user's running
+    // browser, so the command works in the agent's own tab.
     let result = signal
         .interruptible(run_connected(
             tool,
             args,
             &base,
             crate::realbrowser::real_lane(),
+            browser.is_none(),
         ))
         .await;
 
@@ -727,8 +730,18 @@ async fn run_tool(
 /// warm the profile (no surprise navigation away from the user's tab), or shut
 /// Chrome down. `external=false` owns the browser, so it restores logins,
 /// warms on first run, and the caller owns shutdown.
-async fn run_connected(tool: &str, args: &Value, base: &str, external: bool) -> Result<ToolResult> {
-    let target = crate::cdp::first_page_target(base).await?;
+///
+/// `attached=true` is a browser Bladebro did not launch (`--host`/`--port`,
+/// `rb mode attach`): the command runs in the agent's own tab, never in the
+/// first tab — that one is whatever the user is looking at.
+async fn run_connected(
+    tool: &str,
+    args: &Value,
+    base: &str,
+    external: bool,
+    attached: bool,
+) -> Result<ToolResult> {
+    let target = crate::page::session_target(base, attached).await?;
     let client = crate::cdp::CdpClient::connect(target.ws_url()?).await?;
     let mut page = Page::attach(crate::cdp::CdpSession::root(client), base, None).await?;
 
