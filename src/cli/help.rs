@@ -325,10 +325,10 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             "notes": ["auto-starts on the first command; run manually only to watch startup errors"]
         }),
         "stop" => json!({
-            "usage": "obu stop",
+            "usage": "obu stop [--close-tabs]",
             "tool": null,
             "examples": [],
-            "notes": ["graceful (flushes logins + knowledge); idempotent — exit 0 when nothing is running"]
+            "notes": ["graceful (flushes logins + knowledge); idempotent — exit 0 when nothing is running", "--close-tabs: attached browser only — also closes the tabs obu opened there (never the user's); run it when the work is over"]
         }),
         "help" => json!({
             "usage": "obu help [command] [--json]",
@@ -793,7 +793,7 @@ call; no host restart is ever needed.
             r#"obu stop — shut the daemon down
 
 USAGE
-  obu stop
+  obu stop [--close-tabs]
 
 Graceful: flushes logins + domain knowledge, kills Chrome, removes the
 socket. Idempotent — exit 0 even when nothing is running. The daemon runs
@@ -801,6 +801,12 @@ one command at a time: if it does not answer within 10s (busy with a long
 command, or wedged), stop sends SIGTERM to the pid from the pid file — the
 running command is cancelled (outcome unknown) and Chrome still closes
 gracefully; SIGKILL follows if it is still alive 10s later.
+
+A browser obu attached to (rb mode attach, --host/--port) is the user's
+and is never closed. The agent's own tab there stays open as well, so the
+next command resumes on it. --close-tabs is for when the work is over: it
+closes every tab obu opened in that browser (never one of the user's)
+and reports, per endpoint, what a readback of the tab list shows.
 "#
         }
         "help" => {

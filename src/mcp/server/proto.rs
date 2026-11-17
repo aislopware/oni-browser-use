@@ -9,7 +9,7 @@ use crate::mcp::tools::tools_to_json;
 use crate::page::Page;
 
 use super::{handle_act, handle_run, handle_see_tool, handle_state, handle_vision};
-use super::{shape_result, INSTRUCTIONS, PROTOCOL_VERSION, STATELESS_VERSION, SUPPORTED_VERSIONS};
+use super::{instructions, shape_result, PROTOCOL_VERSION, STATELESS_VERSION, SUPPORTED_VERSIONS};
 
 pub(super) fn handle_initialize(id: Option<Value>, params: &Value) -> Value {
     // Legacy handshake (removed in 2026-07-28 but old clients require
@@ -32,7 +32,7 @@ pub(super) fn handle_initialize(id: Option<Value>, params: &Value) -> Value {
                 "name": "obu",
                 "version": env!("CARGO_PKG_VERSION"),
             },
-            "instructions": INSTRUCTIONS,
+            "instructions": instructions(),
         }
     })
 }
@@ -46,7 +46,7 @@ pub(super) fn handle_discover(id: Option<Value>, version: Option<&str>) -> Value
         "capabilities": {
             "tools": { "listChanged": false }
         },
-        "instructions": INSTRUCTIONS,
+        "instructions": instructions(),
         "ttlMs": 3_600_000,
         "cacheScope": "public",
     });

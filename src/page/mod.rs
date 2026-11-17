@@ -27,7 +27,7 @@ mod gl;
 mod ref_store;
 mod route;
 
-pub use self::agent_tab::session_target;
+pub use self::agent_tab::{close_own_tabs, session_target};
 pub use self::logs::{NetEntry, XhrEntry};
 pub(crate) use self::navigate::with_scheme;
 pub use self::route::{RouteEpoch, RouteSettle, ROUTE_BUDGET};

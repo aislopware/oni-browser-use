@@ -523,6 +523,12 @@ Fixed debug port: a browser started with `--remote-debugging-port=<N>` writes
 no `DevToolsActivePort` (Brave never writes one), so discovery cannot see it —
 `rb port <N>` names it once (`rb port auto` clears it); `attach` then uses it
 directly and `auto` attaches whenever a browser is listening there.
+Several agents in one attached browser: the agent's tab and its refs belong to
+the data dir, so give each agent its own (`OBU_HOME=<dir>`, with the same
+`rb` settings) and each works in its own window. The tab outlives the process
+so the next command resumes on it; when the work is over,
+`obu stop --close-tabs` closes the tabs obu opened there — never one of
+yours — and says what a readback of the tab list shows.
 Browser override: `rb use <id>` · custom binary (nix/flatpak wrapper):
 `rb use --binary <path|auto>` · profile pick: `rb profile <key>` (validated;
 an absolute profile path also works) · re-import: `rb refresh` · wipe the
