@@ -209,5 +209,7 @@ jobs:
       - name: Expose the release as Latest, last
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job has no checkout for gh to read the repository from.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.plan.outputs.tag }}
         run: gh release edit "$TAG" --draft=false --latest
