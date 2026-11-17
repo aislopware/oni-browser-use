@@ -11,6 +11,30 @@ fn rb_row(label: &str, value: &str) -> String {
     crate::ui::kv(label, value, 9)
 }
 
+/// The `port` row: the fixed attach port, whether a browser answers there
+/// right now, and — when the mode ignores it — how to make it count.
+fn port_line(port: u16, mode: crate::realbrowser::Mode) -> String {
+    use crate::realbrowser::Mode;
+    let live = if crate::realbrowser::devtools_listening(port) {
+        crate::ui::green("listening")
+    } else {
+        crate::ui::yellow(&format!(
+            "no browser answers — start the browser with --remote-debugging-port={port}"
+        ))
+    };
+    let ignored = match mode {
+        Mode::Attach | Mode::Auto => String::new(),
+        m => format!(
+            " · {}",
+            crate::ui::dim(&format!(
+                "unused while mode is {} (`rb mode attach`)",
+                m.as_str()
+            ))
+        ),
+    };
+    format!("127.0.0.1:{port} fixed · {live}{ignored}")
+}
+
 /// `rb refresh` / `rb forget` must not run under a live clone session (an
 /// MCP server, a second daemon): only the CLI daemon can be stopped from
 /// here, and any other session's exit copies its stale clone back over a
@@ -54,16 +78,23 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
         "status" => {
             let paused = rb::input_paused();
             let sel = rb::resolve_selection(&cfg);
+            // A fixed attach port stands without a discovered browser.
+            let fixed = rb::fixed_attach_port(&cfg);
             if json_mode {
                 let v = serde_json::json!({
                     "ok": true,
                     "enabled": cfg.enabled,
                     "mode": cfg.mode.as_str(),
-                    "effective_mode": sel.as_ref().ok().map(|(_, p)| rb::effective_mode(&cfg, &p.root).as_str()),
+                    "effective_mode": if fixed.is_some() {
+                        Some("attach")
+                    } else {
+                        sel.as_ref().ok().map(|(_, p)| rb::effective_mode(&cfg, &p.root).as_str())
+                    },
                     "browser": cfg.browser.clone(),
                     "profile": cfg.profile.clone(),
                     "binary": cfg.binary.clone(),
-                    "attach_port": sel.as_ref().ok().and_then(|(_, p)| rb::devtools_port(&p.root)),
+                    "port": cfg.port,
+                    "attach_port": fixed.or_else(|| sel.as_ref().ok().and_then(|(_, p)| rb::devtools_port(&p.root))),
                     "visible": cfg.visible,
                     "idle_shutdown": cfg.idle_shutdown,
                     "idle_hum": cfg.idle_hum,
@@ -118,7 +149,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                             )
                         )
                     );
-                    if let Some(port) = rb::devtools_port(&profile.root) {
+                    if let Some(port) = rb::devtools_port(&profile.root).filter(|_| cfg.port.is_none()) {
                         println!(
                             "{}",
                             rb_row("attach", &format!("live debug endpoint on 127.0.0.1:{port} — auto would attach"))
@@ -137,7 +168,15 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                         ),
                     }
                 }
+                // Not an error under a fixed attach port: the port alone
+                // names the endpoint.
+                Err(_) if fixed.is_some() => {
+                    println!("{}", rb_row("mode", &format!("{} → attach (now)", cfg.mode.as_str())));
+                }
                 Err(e) => println!("{}", rb_row("selection", &ui::red(&e.to_string()))),
+            }
+            if let Some(port) = cfg.port {
+                println!("{}", rb_row("port", &port_line(port, cfg.mode)));
             }
             if paused {
                 println!(
@@ -170,28 +209,41 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 }
                 return Ok(());
             }
-            let (spec, profile) = rb::resolve_selection(&cfg)?;
-            let mode = rb::effective_mode(&cfg, &profile.root);
-            if mode != rb::Mode::Attach && spec.binary.as_os_str().is_empty() {
-                return Err(crate::error::BladeError::Other(format!(
-                    "{} has a profile dir but no launchable binary — install it, or pick \
-                     another browser with `bladebro rb use`.",
-                    spec.name
-                )));
-            }
-            // Import now (clone lane) so problems surface HERE, not inside a
-            // later agent run.
-            if mode == rb::Mode::Clone {
-                rb::ensure_current_import(&spec, &profile)?;
+            // A fixed attach port names the endpoint by itself: the lane can
+            // switch on without a discovered browser (nothing is launched).
+            let fixed = rb::fixed_attach_port(&cfg);
+            let sel = rb::resolve_selection(&cfg);
+            let sel = if fixed.is_some() { sel.ok() } else { Some(sel?) };
+            let mode = sel
+                .as_ref()
+                .map(|(_, p)| rb::effective_mode(&cfg, &p.root))
+                .unwrap_or(rb::Mode::Attach);
+            if let Some((spec, profile)) = &sel {
+                if mode != rb::Mode::Attach && spec.binary.as_os_str().is_empty() {
+                    return Err(crate::error::BladeError::Other(format!(
+                        "{} has a profile dir but no launchable binary — install it, or pick \
+                         another browser with `bladebro rb use`.",
+                        spec.name
+                    )));
+                }
+                // Import now (clone lane) so problems surface HERE, not inside
+                // a later agent run.
+                if mode == rb::Mode::Clone {
+                    rb::ensure_current_import(spec, profile)?;
+                }
             }
             cfg.enabled = true;
             rb::save_config(&cfg)?;
             restart_daemon_for_lane().await;
             if json_mode {
-                let v = serde_json::json!({
+                let mut v = serde_json::json!({
                     "ok": true, "enabled": true, "mode": mode.as_str(),
-                    "browser": spec.id, "profile": profile.key,
+                    "browser": sel.as_ref().map(|(s, _)| s.id.clone()),
+                    "profile": sel.as_ref().map(|(_, p)| p.key.clone()),
                 });
+                if let Some(port) = fixed {
+                    v["attach_port"] = port.into();
+                }
                 println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
                 return Ok(());
             }
@@ -201,12 +253,17 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 ui::bold(&ui::green("ON"))
             );
             println!();
-            println!("{}", rb_row("browser", &format!("{} ({})", spec.name, spec.brand.as_str())));
-            println!(
-                "{}",
-                rb_row("profile", &format!("\"{}\" · {}", profile.name, ui::dim(&profile.path.display().to_string())))
-            );
+            if let Some((spec, profile)) = &sel {
+                println!("{}", rb_row("browser", &format!("{} ({})", spec.name, spec.brand.as_str())));
+                println!(
+                    "{}",
+                    rb_row("profile", &format!("\"{}\" · {}", profile.name, ui::dim(&profile.path.display().to_string())))
+                );
+            }
             println!("{}", rb_row("mechanism", mode.as_str()));
+            if let Some(port) = cfg.port {
+                println!("{}", rb_row("port", &port_line(port, cfg.mode)));
+            }
             println!("{}", rb_row("lane", "zero page patches — your real environment IS the stealth"));
             println!();
             println!(
@@ -282,6 +339,44 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 println!("mechanism set to {}", ui::bold(mode.as_str()));
                 if cfg.enabled {
                     println!("  {}", ui::dim("applies at the running session's next action — owned browsers relaunch; attach sessions detach"));
+                }
+            }
+            Ok(())
+        }
+
+        "port" => {
+            match rest.first().map(|s| s.as_str()) {
+                None => {}
+                Some("auto") => {
+                    cfg.port = None;
+                    rb::save_config(&cfg)?;
+                }
+                Some(raw) => {
+                    let port = raw.parse::<u16>().ok().filter(|p| *p > 0).ok_or_else(|| {
+                        crate::error::BladeError::Usage(format!(
+                            "bladebro rb port <1-65535|auto> — `{raw}` is not a port"
+                        ))
+                    })?;
+                    cfg.port = Some(port);
+                    rb::save_config(&cfg)?;
+                }
+            }
+            if json_mode {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ok": true,
+                        "port": cfg.port,
+                        "live": cfg.port.map(rb::devtools_listening),
+                    })
+                );
+            } else {
+                match cfg.port {
+                    Some(port) => println!("attach port: {}", port_line(port, cfg.mode)),
+                    None => println!(
+                        "attach port: auto — discovered from the profile's DevToolsActivePort \
+                         (`bladebro rb port <N>` names a fixed one)"
+                    ),
                 }
             }
             Ok(())
@@ -611,7 +706,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
         }
 
         other => Err(crate::error::BladeError::Usage(format!(
-            "unknown rb subcommand `{other}` — use on|off|status|mode|use|profile|visible|idle-hum|idle-shutdown|refresh|forget|pause|resume"
+            "unknown rb subcommand `{other}` — use on|off|status|mode|port|use|profile|visible|idle-hum|idle-shutdown|refresh|forget|pause|resume"
         ))),
     }
 }
