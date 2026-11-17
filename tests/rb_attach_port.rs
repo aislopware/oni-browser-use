@@ -164,7 +164,10 @@ fn attach_uses_the_fixed_port_without_browser_discovery() {
 
     let out = home.run(&["nav", "https://example.com", "--no-daemon"]);
     let text = text(&out);
-    assert!(!out.status.success(), "the mock serves no page: {text}");
+    assert!(
+        !out.status.success(),
+        "the mock cannot open a tab for the agent: {text}"
+    );
     let seen = seen.lock().unwrap().clone();
     assert!(
         seen.iter().any(|p| p.starts_with("/json/version")),
@@ -189,6 +192,13 @@ fn attach_uses_the_fixed_port_without_browser_discovery() {
         assert!(
             seen.iter().any(|p| p == "/json"),
             "tabs must be listed on the fixed port, saw {seen:?}"
+        );
+        // The one tab there is the user's. The command must fail on opening
+        // a tab of its own (this mock has no browser socket) — it used to
+        // adopt the first tab and navigate it.
+        assert!(
+            text.contains("browser has no webSocketDebuggerUrl"),
+            "the user's tab must never be adopted: {text}"
         );
     }
 }

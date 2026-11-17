@@ -159,6 +159,22 @@ pub fn launched_headless() -> bool {
     LAUNCH_HEADLESS.load(Ordering::Relaxed)
 }
 
+/// True while this process drives a browser it attached to but did not launch
+/// (`rb mode attach`, `--host/--port`): the user's own browser, with their
+/// tabs open. Tab handling reads it — the session works in a tab of its own,
+/// and nothing raises a window (see `page::agent_tab`).
+static ATTACHED_BROWSER: AtomicBool = AtomicBool::new(false);
+
+/// Record whether the session's browser is attached (the user's) or owned.
+pub fn set_attached_browser(attached: bool) {
+    ATTACHED_BROWSER.store(attached, Ordering::Relaxed);
+}
+
+/// True when the session's browser was attached to, not launched.
+pub fn attached_browser() -> bool {
+    ATTACHED_BROWSER.load(Ordering::Relaxed)
+}
+
 /// Launch-transport flag: true when the browser was launched with
 /// `--remote-debugging-pipe`. Chrome treats that transport as its automation
 /// transport and enables the blink AutomationControlled feature, so

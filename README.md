@@ -371,7 +371,7 @@ The daemon runs every command with its own lane and browser settings (`CHROME_PA
 |---|---|
 | `--json` | One JSON object on stdout: `{ok, is_error, text}` (+ `image_path` for vision) |
 | `--no-daemon` | Launch Chrome per command instead of using the daemon |
-| `--host` / `--port` | Drive an already-running Chrome on this debug port |
+| `--host` / `--port` | Drive an already-running Chrome on this debug port — in a background window of its own, never a tab you have open |
 | `--marks` | Vision: overlay numbered ref badges |
 
 **Exit codes are the contract:** `0` success · `1` command failed (the text carries page state for recovery) · `2` usage error (the message says how to fix it).

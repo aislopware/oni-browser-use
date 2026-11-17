@@ -775,6 +775,12 @@ fixed-port browser writes no DevToolsActivePort (Brave never writes one), so
 name the port once with `rb port <N>`: attach then uses it directly, and
 auto attaches whenever a browser is listening there.
 
+In an attached browser the agent works in a background window of its own
+(remembered across commands): the tabs you have open are never navigated,
+hidden or raised over, and no window is ever brought to the front. The
+agent's page gets focus emulation: it renders and takes input as a tab
+that is being looked at, while its window stays covered or minimized.
+
 The switch applies to the CLI daemon and to MCP sessions — the daemon
 restarts immediately, and a running MCP relaunches its browser at the next
 call; no host restart is ever needed.

@@ -99,6 +99,15 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
             // to, the session is now dead — auto-switch to a
             // remaining tab so the next command doesn't error.
             if !page.current_tab_alive().await {
+                // Attached browser: every other tab may be one the user has
+                // open — move to the agent's own tab, never onto theirs.
+                if crate::browser::attached_browser() {
+                    let id = page.switch_to_agent_tab().await?;
+                    let view = page.view(1500);
+                    return Ok(format!(
+                        "\u{2713} closed tab {target_id} (was current; switched to the agent's own tab {id})\n{view}"
+                    ));
+                }
                 let tabs = page.tab_targets().await;
                 if let Some(first) = tabs.first() {
                     page.switch_tab(&first.id).await?;
