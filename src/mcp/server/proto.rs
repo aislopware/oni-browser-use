@@ -84,6 +84,19 @@ pub async fn handle_tools_call(
     params: &Value,
     page: &mut Page,
 ) -> std::result::Result<Value, BladeError> {
+    // An attached browser's tab outlives this server: its ref table is kept
+    // for the next process on that tab (no-ops everywhere else).
+    page.refs_sync().await;
+    let result = tools_call(id, params, page).await;
+    page.refs_save();
+    result
+}
+
+async fn tools_call(
+    id: Option<Value>,
+    params: &Value,
+    page: &mut Page,
+) -> std::result::Result<Value, BladeError> {
     let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
 

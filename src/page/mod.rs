@@ -24,6 +24,7 @@ pub mod navigate;
 pub mod tabs;
 
 mod gl;
+mod ref_store;
 mod route;
 
 pub use self::agent_tab::session_target;
@@ -33,7 +34,7 @@ pub use self::route::{RouteEpoch, RouteSettle, ROUTE_BUDGET};
 
 use std::time::Duration;
 
-pub use model::{LivePageModel, PageDelta, PageElement};
+pub use model::{LivePageModel, PageDelta, PageElement, RefSnapshot};
 pub use perception::{
     capture, capture_content, detect_block, dismiss_consent, dismiss_consent_with_stored,
     re_settle, wait_for_load, wait_for_settle, wait_for_settle_with_network, PageCapture,
@@ -249,6 +250,11 @@ pub struct Page {
     /// Context pruning: enabled by default, toggled via
     /// `BLADE_NO_COMPRESS=1` env var or `state compress off`.
     compress_enabled: std::sync::atomic::AtomicBool,
+    /// This tab's target id when its ref table is kept on disk between
+    /// processes (attached browsers only — see `ref_store`).
+    ref_target: Option<String>,
+    /// Digest of the ref table last written or read for `ref_target`.
+    refs_saved: u64,
     /// Focus emulation is on for this page (attached browsers): it renders
     /// and takes input as a tab that is being looked at, whatever its window
     /// is doing.

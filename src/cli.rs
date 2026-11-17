@@ -141,6 +141,19 @@ pub async fn dispatch(
     args: &Value,
     page: &mut Page,
 ) -> std::result::Result<ToolResult, BladeError> {
+    // An attached browser's tab outlives this process: its ref table is
+    // carried from command to command (no-ops everywhere else).
+    page.refs_sync().await;
+    let result = dispatch_tool(tool, args, page).await;
+    page.refs_save();
+    result
+}
+
+async fn dispatch_tool(
+    tool: &str,
+    args: &Value,
+    page: &mut Page,
+) -> std::result::Result<ToolResult, BladeError> {
     // Vision is special — an image instead of (only) text. Taken from the
     // capture directly, not re-parsed out of the MCP response: an oversized
     // screenshot is saved by the handler and comes back as a path, which
