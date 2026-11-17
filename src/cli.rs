@@ -529,7 +529,11 @@ async fn run_cli_inner(
         "hermes" => hermes::run(rest, json_mode).await,
         "daemon" => run_daemon().await,
         "stop" => {
-            let text = stop_daemon().await?;
+            let mut text = stop_daemon().await?;
+            // After the daemon let go of the page, never while it drives it.
+            if rest.iter().any(|a| a == "--close-tabs") {
+                text = format!("{text}\n{}", crate::page::close_own_tabs().await);
+            }
             print_result(
                 &ToolResult {
                     text,

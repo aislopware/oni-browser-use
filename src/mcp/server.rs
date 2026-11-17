@@ -79,6 +79,28 @@ const SUPPORTED_VERSIONS: &[&str] = &[
 /// deliberately compact: it is paid for once per session, in every client.
 const INSTRUCTIONS: &str = "Stealth browser driver. act interacts (navigate/click/type/fill/batch/eval), see reads (extract=\"auto\" first on list/search/product pages; mode=\"content\" for articles; format=\"json\" for pure JSON), state manages cookies/tabs/sessions, run executes step batches with branching and inline reads, vision screenshots. WORK LOOP: navigate -> act by text (no see needed) or by ref (refs are page-scoped: refresh them after a navigation or tab switch; within a page they self-heal) -> every action returns an observation, so a see after acting is usually unnecessary. act eval answers one line, `result: <compact JSON>` (a returned string containing JSON is flagged in a note). Results disclose what the driver cannot verify: page_total/partial (lazy or paginated results), sponsored items, unwrapped redirect links, duplicates removed, and a URL range filter whose page prices fall outside it. Oversized payloads go to an artifact file, read back with see artifact=\"...\" - nothing is truncated silently. Errors carry the current page state; never blind-retry a submit.";
 
+/// Added for a session attached to the user's own running browser. The tab
+/// list it reads holds their tabs next to its own, and nothing else on the
+/// surface says which is which before the first `switch-tab` lands on one.
+const ATTACHED_NOTE: &str = " ATTACHED: this is the user's own running browser, signed in as them. You work in your own background tab; every other tab is theirs - do not switch to, navigate or close one unless asked.";
+
+/// The instructions for this process's lane, read when a client asks: `rb`
+/// settings can change under a long-lived server.
+fn instructions() -> String {
+    let cfg = crate::realbrowser::config();
+    let real =
+        crate::realbrowser::lane_from(std::env::var("OBU_LANE").ok().as_deref(), cfg.enabled);
+    instructions_for(real && cfg.mode == crate::realbrowser::Mode::Attach)
+}
+
+fn instructions_for(attached: bool) -> String {
+    if attached {
+        format!("{INSTRUCTIONS}{ATTACHED_NOTE}")
+    } else {
+        INSTRUCTIONS.to_string()
+    }
+}
+
 /// Extract the per-request protocol version (SEP-2575). New-spec clients
 /// send `_meta["io.modelcontextprotocol/protocolVersion"]` on every
 /// request; legacy clients omit it and get the legacy dialect.
@@ -148,6 +170,16 @@ pub(crate) fn retry_safe(tool: &str, args: &Value) -> bool {
 #[cfg(test)]
 mod retry_tests {
     use super::*;
+
+    /// A session in the user's browser is told whose tabs it will see; an
+    /// isolated one pays for no extra words.
+    #[test]
+    fn only_an_attached_session_is_told_the_other_tabs_are_the_users() {
+        assert_eq!(instructions_for(false), INSTRUCTIONS);
+        let attached = instructions_for(true);
+        assert!(attached.starts_with(INSTRUCTIONS));
+        assert!(attached.contains("every other tab is theirs"), "{attached}");
+    }
     #[test]
     fn recovery_does_not_replay_mutations_or_unknown_calls() {
         for tool in ["act", "run", "unknown"] {

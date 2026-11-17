@@ -219,6 +219,101 @@ pub(super) async fn agent_target(base: &str, record: &Path) -> Result<TargetInfo
     )))
 }
 
+/// How long a closed tab may stay in the browser's target list.
+const CLOSE_SETTLE: Duration = Duration::from_millis(100);
+const CLOSE_SETTLE_ROUNDS: usize = 15;
+
+/// `obu stop --close-tabs`: close the tabs obu opened in every browser
+/// this data dir attached to, and forget them. Without it a finished piece of
+/// work leaves its background window in the user's browser for good — nothing
+/// else ever closes a tab the next command might resume on.
+pub async fn close_own_tabs() -> String {
+    close_tabs_recorded_in(&record_path(), &super::ref_store::dir()).await
+}
+
+/// One line per endpoint, each from a readback of the browser's target list.
+/// Only `own` tabs are closed: `current` can be a tab of the user's that the
+/// agent was switched to, and is only forgotten.
+async fn close_tabs_recorded_in(record: &Path, refs: &Path) -> String {
+    let mut map = read_record(record);
+    let recorded = map.len();
+    let mut lines = Vec::new();
+    for base in map.keys().cloned().collect::<Vec<_>>() {
+        let own = map.get(&base).map(|e| e.own.clone()).unwrap_or_default();
+        let open = |live: &[TargetInfo]| -> Vec<String> {
+            own.iter()
+                .filter(|id| live.iter().any(|t| t.id == **id))
+                .cloned()
+                .collect()
+        };
+        let asked = async {
+            let targets = open(&list_page_targets(&base).await?);
+            if !targets.is_empty() {
+                let client = browser_client(&base).await?;
+                for id in &targets {
+                    // Answered or not, the readback below is what counts.
+                    let _ = client
+                        .send("Target.closeTarget", Some(json!({"targetId": id})))
+                        .await;
+                }
+            }
+            Ok::<_, ObuError>(targets)
+        }
+        .await;
+        let targets = match asked {
+            Ok(targets) => targets,
+            // The record stays: the tabs may still be there when it answers.
+            Err(_) if !own.is_empty() => {
+                lines.push(format!(
+                    "{base}: browser not reachable — {} agent tab(s) not closed, still \
+                     recorded; run `obu stop --close-tabs` again once it is up",
+                    own.len()
+                ));
+                continue;
+            }
+            Err(_) => Vec::new(),
+        };
+        let mut left = targets.clone();
+        for _ in 0..CLOSE_SETTLE_ROUNDS {
+            if left.is_empty() {
+                break;
+            }
+            tokio::time::sleep(CLOSE_SETTLE).await;
+            if let Ok(live) = list_page_targets(&base).await {
+                left = open(&live);
+            }
+        }
+        for id in targets.iter().filter(|id| !left.contains(id)) {
+            super::ref_store::forget(refs, id);
+        }
+        let closed = targets.len() - left.len();
+        if left.is_empty() {
+            map.remove(&base);
+        } else if let Some(entry) = map.get_mut(&base) {
+            entry.current = entry.current.take().filter(|id| left.contains(id));
+            entry.own = left.clone();
+        }
+        if !left.is_empty() {
+            lines.push(format!(
+                "{base}: closed {closed} agent tab(s); {} still open: {}",
+                left.len(),
+                left.join(", ")
+            ));
+        } else if closed > 0 {
+            lines.push(format!("{base}: closed {closed} agent tab(s)"));
+        }
+    }
+    if map.len() != recorded || !lines.is_empty() {
+        if let Err(e) = write_record(record, &map) {
+            lines.push(format!("{e} — the closed tabs are still recorded"));
+        }
+    }
+    if lines.is_empty() {
+        return "no agent tabs open".into();
+    }
+    lines.join("\n")
+}
+
 impl Page {
     /// Move the session to the agent's own tab, opening a fresh one when the
     /// remembered one is gone. Returns its target id.
@@ -493,6 +588,69 @@ mod tests {
         assert_eq!(b.pages, ["USER"], "the user's tab is all that is left");
         drop(b);
         let _ = std::fs::remove_file(dir);
+    }
+
+    /// `stop --close-tabs`: the agent's tabs go, the user's stay — including
+    /// one the agent was switched to — and the next session starts clean.
+    #[tokio::test]
+    async fn closing_the_agents_tabs_leaves_the_users_alone_and_forgets_them() {
+        let (base, browser) = fake_browser(false).await;
+        let record = scratch("close");
+        let refs = record.parent().unwrap().join("refs");
+        assert_eq!(agent_target(&base, &record).await.unwrap().id, "AGENT1");
+        browser.lock().unwrap().pages.push("AGENT-B".into());
+        remember(&record, &base, "AGENT-B", true).unwrap();
+        // `switch-tab` onto the user's tab: current, never the agent's own.
+        remember(&record, &base, "USER", false).unwrap();
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("AGENT1.json"), b"{}").unwrap();
+        std::fs::write(refs.join("USER.json"), b"{}").unwrap();
+
+        let said = close_tabs_recorded_in(&record, &refs).await;
+        assert_eq!(said, format!("{base}: closed 2 agent tab(s)"));
+        let (pages, mut closes) = {
+            let b = browser.lock().unwrap();
+            (b.pages.clone(), b.closes.clone())
+        };
+        assert_eq!(pages, ["USER"], "only the user's tab is left");
+        closes.sort();
+        assert_eq!(
+            closes,
+            ["AGENT-B", "AGENT1"],
+            "the user's tab was not asked to close"
+        );
+        assert!(read_record(&record).is_empty(), "nothing left to resume on");
+        assert!(
+            !refs.join("AGENT1.json").exists(),
+            "its ref table goes with the tab"
+        );
+        assert!(refs.join("USER.json").exists());
+
+        // Nothing recorded: says so, and touches no browser.
+        assert_eq!(
+            close_tabs_recorded_in(&record, &refs).await,
+            "no agent tabs open"
+        );
+        let _ = std::fs::remove_dir_all(record.parent().unwrap());
+    }
+
+    /// A browser that does not answer: nothing was closed, and the verdict
+    /// must not say otherwise or drop the record of what is still open.
+    #[tokio::test]
+    async fn an_unreachable_browser_keeps_its_tabs_recorded() {
+        let record = scratch("close-down");
+        let refs = record.parent().unwrap().join("refs");
+        // A port nothing listens on.
+        let gone = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = gone.local_addr().unwrap().to_string();
+        drop(gone);
+        remember(&record, &base, "AGENT1", true).unwrap();
+
+        let said = close_tabs_recorded_in(&record, &refs).await;
+        assert!(said.contains("browser not reachable"), "{said}");
+        assert!(said.contains("1 agent tab(s) not closed"), "{said}");
+        assert_eq!(read_record(&record)[&base].own, ["AGENT1"]);
+        let _ = std::fs::remove_dir_all(record.parent().unwrap());
     }
 
     #[test]

@@ -44,6 +44,13 @@ fn file(dir: &Path, target: &str) -> Option<PathBuf> {
     plain.then(|| dir.join(format!("{target}.json")))
 }
 
+/// A tab that was closed for good takes its table with it.
+pub(super) fn forget(dir: &Path, target: &str) {
+    if let Some(path) = file(dir, target) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// What the last change-check compares against: a snapshot is rewritten only
 /// when the table moved.
 pub(super) fn digest(snap: &RefSnapshot) -> u64 {
