@@ -102,6 +102,53 @@ pub struct LivePageModel {
 /// Max remembered dead-ref identities.
 const GRAVEYARD_CAP: usize = 64;
 
+/// The ref table of one tab, as it survives between processes.
+///
+/// `next_ref` is monotonic only within a process. A one-shot command against
+/// a browser that outlives it (an attached one) used to start again at `e1`,
+/// so the `e12` the previous command printed named a different element in the
+/// next one — the silent rebinding the monotonic counter exists to prevent.
+/// The table is carried over instead: the same element keeps its ref, a new
+/// one gets a number never used on this tab, a dead one still self-heals.
+///
+/// Field state (`StateProbe`: values, checked) is deliberately not part of
+/// it: it can hold what the user typed, and it is re-read from the live page
+/// before any delta is computed against it.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RefSnapshot {
+    pub next_ref: u64,
+    /// Live refs in ref order: (ref id, sig, role, name, fingerprint).
+    #[serde(default)]
+    pub refs: Vec<(String, String, String, String, u64)>,
+    /// Dead refs, oldest first: (ref id, sig, role, name).
+    #[serde(default)]
+    pub graveyard: Vec<(String, String, String, String)>,
+}
+
+/// `e12` -> 12. Anything else has no number (and sorts first).
+fn ref_number(id: &str) -> u64 {
+    id.strip_prefix('e')
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
+}
+
+impl RefSnapshot {
+    /// The first ref number no entry here uses. A snapshot is a file: one
+    /// whose counter is behind its own refs (hand-edited, half-written by an
+    /// older build) must not make the next mint collide with them.
+    pub fn floor(&self) -> u64 {
+        let used = self
+            .refs
+            .iter()
+            .map(|r| r.0.as_str())
+            .chain(self.graveyard.iter().map(|g| g.0.as_str()))
+            .map(ref_number)
+            .max()
+            .unwrap_or(0);
+        self.next_ref.max(used + 1)
+    }
+}
+
 /// Shown under the page line while the latest read went unanswered.
 const UNANSWERED_NOTE: &str = "(page did not answer this read - busy or mid-navigation; showing the last answered state, refs kept - observe again)\n";
 
@@ -125,6 +172,64 @@ impl Default for LivePageModel {
 impl LivePageModel {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The ref table to carry into the next process (see [`RefSnapshot`]).
+    pub fn snapshot(&self) -> RefSnapshot {
+        let mut refs: Vec<_> = self
+            .prev_state
+            .iter()
+            .map(|(id, p)| {
+                (
+                    id.clone(),
+                    p.sig.clone(),
+                    p.role.clone(),
+                    p.name.clone(),
+                    p.fingerprint,
+                )
+            })
+            .collect();
+        // HashMap order is per-process random; the file must not churn.
+        refs.sort_by(|a, b| ref_number(&a.0).cmp(&ref_number(&b.0)).then(a.0.cmp(&b.0)));
+        RefSnapshot {
+            next_ref: self.next_ref,
+            refs,
+            graveyard: self.graveyard.clone(),
+        }
+    }
+
+    /// Resume a tab's ref table before its first capture: the next `ingest`
+    /// stabilizes against it exactly as against an earlier capture of this
+    /// process — surviving elements keep their refs, the rest are buried.
+    pub fn seed(&mut self, snap: RefSnapshot) {
+        self.raise_ref_floor(snap.floor());
+        self.prev_state = snap
+            .refs
+            .into_iter()
+            .map(|(id, sig, role, name, fingerprint)| {
+                (
+                    id,
+                    PrevState {
+                        sig,
+                        role,
+                        name,
+                        probe: None,
+                        fingerprint,
+                    },
+                )
+            })
+            .collect();
+        self.graveyard = snap.graveyard;
+        if self.graveyard.len() > GRAVEYARD_CAP {
+            let excess = self.graveyard.len() - GRAVEYARD_CAP;
+            self.graveyard.drain(..excess);
+        }
+    }
+
+    /// Never mint a ref below `floor` (another process minted up to there on
+    /// this tab). Only ever raises the counter.
+    pub fn raise_ref_floor(&mut self, floor: u64) {
+        self.next_ref = self.next_ref.max(floor);
     }
 
     /// Current page URL.

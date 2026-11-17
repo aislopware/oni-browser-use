@@ -752,7 +752,7 @@ impl Page {
             }
         });
 
-        let lpm = LivePageModel::new();
+        let (lpm, ref_target, refs_saved) = super::ref_store::resume(&cdp).await;
         // M4+M6: Check for consent banners and block pages after initial load.
         let consent = dismiss_consent(&cdp).await.unwrap_or(None);
         let blocked = detect_block(&cdp).await.unwrap_or(None);
@@ -838,6 +838,8 @@ impl Page {
             compress_enabled: std::sync::atomic::AtomicBool::new(
                 std::env::var("BLADE_NO_COMPRESS").as_deref() != Ok("1"),
             ),
+            ref_target,
+            refs_saved,
             shown,
         };
 
