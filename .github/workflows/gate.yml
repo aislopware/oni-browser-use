@@ -14,6 +14,10 @@ on:
         description: "What to gate; the calling run's commit when empty"
         type: string
         default: ""
+      macos:
+        description: "Also build and test natively on macOS, on the organisation's own Mac"
+        type: boolean
+        default: false
   workflow_dispatch:
 
 env:
@@ -103,13 +107,17 @@ jobs:
   # Native compile, unit tests and a link of the shipped profile. The browser
   # probes are NOT here: they are parallel jobs in probes.yml, so a slow or
   # flaky browser step can never hold up a merge or a release gate.
+  #
+  # macOS runs on the organisation's own Mac (`onicode-ios` is its runner
+  # label), which takes release runs only: a push or a pull request gets the
+  # macOS compile check in `cross` and this job on Windows.
   native:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, windows-latest]
+        os: ${{ fromJSON(inputs.macos && '["onicode-ios", "windows-latest"]' || '["windows-latest"]') }}
     steps:
       - uses: actions/checkout@v7
         with:

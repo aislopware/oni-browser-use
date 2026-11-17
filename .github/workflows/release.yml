@@ -1,39 +1,32 @@
 name: Release
 
-# Tag-driven. `git push origin main --tags` (or scripts/release-prep.sh) is
-# the whole local action: every artifact is built on a native runner in
-# PARALLEL, the fast gate must pass, and the public order is fixed —
-# assets first, then npm (platforms before launcher), then Latest last.
-# Nothing is built on the developer machine.
+# Started by hand for a tag that is already pushed (scripts/release-prep.sh
+# --push does both). Every job works from that tag's tree: the artifacts are
+# built on native runners in PARALLEL, the fast gate must pass, and the public
+# order is fixed — assets first, then npm (platforms before launcher), then
+# Latest last. Nothing is built on the developer machine.
 #
 # The fork ships GitHub release binaries only, for Linux x86_64 and macOS
 # Apple Silicon: the npm job runs just where the repository variable
 # PUBLISH_NPM is "true", and is skipped here.
 #
-# A run started by hand releases an existing tag from that tag's tree, and
-# builds the macOS binary on the organisation's own Mac: hosted macOS
-# runners can be out of capacity for longer than a queued job survives.
+# macOS work runs on the organisation's own Mac, which accepts this workflow
+# on main, started by hand, and nothing else. That is why a tag push does not
+# start a release.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to release (e.g. v4.6.9)"
         required: true
         type: string
-      macos_runner:
-        description: "Where the macOS binaries are built"
-        type: choice
-        options: [self-hosted, github]
-        default: self-hosted
 
 permissions:
   contents: write
   id-token: write # npm provenance
 
 concurrency:
-  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
@@ -48,32 +41,28 @@ jobs:
     outputs:
       tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
-      macos: ${{ steps.v.outputs.macos }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
       - id: v
         env:
-          TAG_INPUT: ${{ github.event.inputs.tag }}
-          MACOS_RUNNER: ${{ github.event.inputs.macos_runner }}
+          TAG_INPUT: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          tag="${TAG_INPUT:-${GITHUB_REF_NAME}}"
+          tag="$TAG_INPUT"
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: bad tag '$tag'" >&2; exit 1; }
           v="${tag#v}"
           python3 scripts/check-release-tree.py "$v"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          # The self-hosted Mac accepts this workflow on main, started by hand, and nothing else.
-          if [[ "$MACOS_RUNNER" == "self-hosted" ]]; then macos="onicode-ios"; else macos="macos-26"; fi
-          echo "macos=$macos" >> "$GITHUB_OUTPUT"
 
   gate:
     needs: plan
     uses: ./.github/workflows/gate.yml
     with:
       ref: ${{ needs.plan.outputs.tag }}
+      macos: true
 
   build:
     needs: plan
@@ -90,7 +79,8 @@ jobs:
             legacy: linux-x86_64
             bin: target/x86_64-unknown-linux-gnu/release/obu
             zig: true
-          - os: ${{ needs.plan.outputs.macos }}
+          # The organisation's own Mac, by its runner label.
+          - os: onicode-ios
             target: aarch64-apple-darwin
             asset: darwin-arm64
             legacy: macos-aarch64

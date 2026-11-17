@@ -6,6 +6,9 @@
 # NOTHING and runs NO test — the tag is the input to .github/workflows/
 # release.yml, which runs the gate and builds every artifact on native
 # runners in parallel. Long local verification is what this replaces.
+# `--push` pushes the tag and starts that workflow for it: a tag push alone
+# starts nothing, because the Mac that builds for macOS takes hand-started
+# runs only.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -68,8 +71,9 @@ echo "committed and tagged v$VERSION"
 if [[ "$PUSH" == "--push" ]]; then
     git push origin main
     git push origin "v$VERSION"
+    gh workflow run release.yml --ref main -f tag="v$VERSION"
     echo "pushed — .github/workflows/release.yml is building the release binaries in parallel"
 else
     echo "push with:  git push origin main --tags"
-    echo "then watch: gh run watch --workflow Release"
+    echo "then start: gh workflow run release.yml --ref main -f tag=v$VERSION"
 fi
