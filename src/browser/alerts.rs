@@ -42,7 +42,7 @@ fn claim(flag: &AtomicBool) -> bool {
     !flag.swap(true, Ordering::Relaxed)
 }
 
-/// `BLADE_PROXY` set but `BLADE_TZ` missing/empty: the page-visible timezone
+/// `OBU_PROXY` set but `OBU_TZ` missing/empty: the page-visible timezone
 /// cannot match the proxy's region. Pure for testing.
 pub fn proxy_tz_mismatch(proxy: Option<&str>, tz: Option<&str>) -> bool {
     proxy.map(|p| !p.is_empty()).unwrap_or(false) && tz.map(|t| t.is_empty()).unwrap_or(true)
@@ -69,13 +69,13 @@ pub fn pending_notes() -> Vec<String> {
             );
         }
         if proxy_tz_mismatch(
-            std::env::var("BLADE_PROXY").ok().as_deref(),
-            std::env::var("BLADE_TZ").ok().as_deref(),
+            std::env::var("OBU_PROXY").ok().as_deref(),
+            std::env::var("OBU_TZ").ok().as_deref(),
         ) && claim(&PROXY_TZ_NOTE)
         {
             notes.push(
-                "note: BLADE_PROXY is set but BLADE_TZ is not — the page-visible timezone will not \
-                 match the proxy's region. Set BLADE_TZ (e.g. `America/New_York`) to match the proxy."
+                "note: OBU_PROXY is set but OBU_TZ is not — the page-visible timezone will not \
+                 match the proxy's region. Set OBU_TZ (e.g. `America/New_York`) to match the proxy."
                     .into(),
             );
         }

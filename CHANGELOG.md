@@ -12,20 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `act upload` verifies delivery in the page — file count, name, size and the first byte — instead of trusting `DOM.setFileInputFiles`, and reports `not delivered: …` when the page cannot use the file. Under a Flatpak browser the file is copied into a per-process staging directory shared with the sandbox; native browsers still get the original path.
-- `BLADE_NO_ACTIVATE=1` never calls `Page.bringToFront`: clicks, navigation and vision act on the page without raising the browser window.
+- `OBU_NO_ACTIVATE=1` never calls `Page.bringToFront`: clicks, navigation and vision act on the page without raising the browser window.
 
 ### Fixed
 - macOS (and every OS): a click or navigation raised the browser window above whatever the person was working in. `Page.bringToFront` now runs only when the target is not already its window's active tab — a background tab still gets activated, so input after a foreground popup keeps landing (#89).
-- Stealth-injection page breakage: shared workers stay native (module workers, cross-tab sharing and relative `importScripts` work again; the mask does not reach SharedWorker globals, a documented gap), the RTC listener wrapper dedupes and removes like native, the SDP filter drops whole candidate lines, `addIceCandidate` stays native, `BLADE_LOCALE=en_US` is normalized to `en-US` in the page, workers, CDP override and per-domain profiles, `BLADE_NOISE` no longer locks a canvas to 2D or drifts audio samples, and the console capture no longer runs page getters or `toJSON` and is bounded.
+- Stealth-injection page breakage: shared workers stay native (module workers, cross-tab sharing and relative `importScripts` work again; the mask does not reach SharedWorker globals, a documented gap), the RTC listener wrapper dedupes and removes like native, the SDP filter drops whole candidate lines, `addIceCandidate` stays native, `OBU_LOCALE=en_US` is normalized to `en-US` in the page, workers, CDP override and per-domain profiles, `OBU_NOISE` no longer locks a canvas to 2D or drifts audio samples, and the console capture no longer runs page getters or `toJSON` and is bounded.
 - The WebGL mask never reports a limit above what the backend can serve: MAX_TEXTURE_SIZE, renderbuffer/cube size, combined texture units, MAX_SAMPLES, viewport dims and the point/line ranges are capped at the native answer, so a page sizing a buffer from the mask gets no GL error and the differential oracle's `glMaxTex` key matches stock on software hosts.
-- Xvfb and its window manager run in their own process group with a parent-death signal: Ctrl-C to a one-shot run no longer takes the display away while Chrome is closing (the graceful close that flushes storage now happens), and a SIGKILL to bladebro alone takes the display and the browser down instead of orphaning them.
+- Xvfb and its window manager run in their own process group with a parent-death signal: Ctrl-C to a one-shot run no longer takes the display away while Chrome is closing (the graceful close that flushes storage now happens), and a SIGKILL to obu alone takes the display and the browser down instead of orphaning them.
 - Linux discovery prefers a native Chrome/Chromium over a snap-confined one, which cannot read the hidden data root.
 - Amazon's consent banner: `#sp-cc-rejectall-link` is on the reject ladder, so the pre-seeded selector is actually replayed (and the cold ladder can reject it too).
 - An upload source is refused when its spelling names a system directory even if it resolves outside (NixOS `/etc` symlinks into `/nix/store`).
-- `bladebro doctor` checks the window manager the virtual display needs: Xvfb without `xfwm4` runs headful with no decorations (`outerWidth == innerWidth`, `availHeight == height`) and is now reported with the install hint, instead of only the audit catching it.
+- `obu doctor` checks the window manager the virtual display needs: Xvfb without `xfwm4` runs headful with no decorations (`outerWidth == innerWidth`, `availHeight == height`) and is now reported with the install hint, instead of only the audit catching it.
 
 ### Changed
-- `bladebro audit` documentation and gates treat the suite's own, host-dependent total as the bar instead of a fixed 111.
+- `obu audit` documentation and gates treat the suite's own, host-dependent total as the bar instead of a fixed 111.
 
 ### Build
 - The release pipeline is tag-driven and runs in CI: `scripts/release-prep.sh X.Y.Z --push` writes versions, promotes this file and tags in under a second, then `release.yml` runs the gate and builds all five artifacts on native runners in parallel, publishes the 20 assets, the six npm packages (platforms before the launcher) and Latest last. `release.sh` is gone, the toolchain is pinned by `rust-toolchain.toml` so local and CI lint with the same compiler, and the browser instruments run in `probes.yml` (nightly, tag, manual) instead of inside every build.
@@ -51,11 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A navigation that lands on Chrome's own error page is an error, not `navigated → chrome-error://chromewebdata/`; a bare host whose query carries a URL gets its scheme; query values are compared decoded; an iframe's `pushState` no longer arms the route guard; per-domain timezone and locale revert on domains that do not set them; a failed action clears the busy flag so the idle hum resumes.
 - Tracker blocking never fails the page's own top-level navigation; block state reports what interception is really doing after a failed toggle; host-level entries such as `ads.twitter.com` match; a bare Cloudflare Turnstile widget is detected as a wall.
 - Input and click actions land on the addressed element or refuse: type and clear adopt only the target's own editor and refuse a disabled or unfocused target, clicks reach the control itself instead of a nested one, offscreen targets scroll into view and click as trusted input, `select` refuses a disabled control and reads the choice back, hover reports a miss instead of a success, scroll reports both axes, Shift chords send the shifted glyph, and value readback compares whitespace exactly.
-- `bladebro mcp` and the daemon never lose a termination signal while busy: the in-flight call is cancelled with an explicit unknown outcome, a gone client tears down instead of erroring out, the post-crash and dead-tab retries contain a panic, and the idle-restart note appears only when the idle timer closed Chrome. `bladebro stop` stops a busy daemon.
+- `obu mcp` and the daemon never lose a termination signal while busy: the in-flight call is cancelled with an explicit unknown outcome, a gone client tears down instead of erroring out, the post-crash and dead-tab retries contain a panic, and the idle-restart note appears only when the idle timer closed Chrome. `obu stop` stops a busy daemon.
 - MCP parameters are honoured or rejected before any effect: a `while` without an exit test, `upload label=`, `see extract=` combined with a read that drops it, and `act collect max` now match their documentation; ref eval survives `{candidate}` inside a page name and awaits a returned Promise; auto-extract counters describe the returned items; `see url=` navigates before reading; vision runtime errors return a tool error with page state.
-- `bladebro audit` fails closed when the vector suite never reports a score, and runs from npm and release installs from a built-in copy of the suite; the updater accepts only real `/releases/tag/<version>` redirects and removes its temp files on every exit path.
+- `obu audit` fails closed when the vector suite never reports a score, and runs from npm and release installs from a built-in copy of the suite; the updater accepts only real `/releases/tag/<version>` redirects and removes its temp files on every exit path.
 - Real-browser clones track the selected profile: a profile selected in another user-data root is re-imported, an older session never overwrites a refreshed clone, deep profile trees copy past six levels with the cut reported, and a symlinked browser binary keeps the name it was found by.
-- Discovery reaches the DevTools endpoint directly instead of through `HTTP_PROXY`/`ALL_PROXY`; a `BLADE_PROXY` carrying embedded credentials is refused with the value redacted instead of reaching Chrome's argv; every failed launch attempt stops its process tree and profile; `BLADE_CHROME_FLAGS` splits shell-style and merges its feature lists with the built-ins; an in-process command closes the owned browser on Ctrl-C or SIGTERM and then dies of the signal.
+- Discovery reaches the DevTools endpoint directly instead of through `HTTP_PROXY`/`ALL_PROXY`; a `OBU_PROXY` carrying embedded credentials is refused with the value redacted instead of reaching Chrome's argv; every failed launch attempt stops its process tree and profile; `OBU_CHROME_FLAGS` splits shell-style and merges its feature lists with the built-ins; an in-process command closes the owned browser on Ctrl-C or SIGTERM and then dies of the signal.
 - The learned consent-selector fast path is valid JavaScript again and replays only under the policy that learned it, so an Accept selector can never be clicked under the default reject policy.
 - The npm launcher reports a binary's signal death as `128+N` instead of exit 0, and forwards SIGTERM/SIGINT/SIGHUP to the binary and waits for its shutdown.
 
@@ -129,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Authenticated cross-origin downloads keep the active browser context and subscribe to the temporary download tab before navigating. Completed attachments no longer report a false failure; rejected/inline responses fail honestly and close the auxiliary tab while preserving the original page.
-- Raspberry Pi OS trixie arm64 agent sessions automatically use a scoped incognito compatibility path for the Chromium network-service hang reported in #45. Other hosts retain persistent profiles; explicit profile overrides and real/external browsers retain their mode. `BLADE_INCOGNITO=auto|0|1` provides an override, with the storage tradeoff disclosed at launch and in `doctor`.
+- Raspberry Pi OS trixie arm64 agent sessions automatically use a scoped incognito compatibility path for the Chromium network-service hang reported in #45. Other hosts retain persistent profiles; explicit profile overrides and real/external browsers retain their mode. `OBU_INCOGNITO=auto|0|1` provides an override, with the storage tradeoff disclosed at launch and in `doctor`.
 - Incognito tabs stay in one managed browser context. Browser-wide cookie snapshots and readback use that same context, preserving login restart, explicit logout and named-session restoration instead of silently reading the regular profile's cookie jar.
 - CDP event waits subscribe before the triggering command, so an event arriving before its response cannot disappear. Navigation preserves scheme, fragment and significant trailing paths; hash-router transitions execute instead of reporting false "already here", and do not wait for a full-document event.
 - Browser discovery rejects directories, non-executable files and invalid explicit `CHROME_PATH` overrides. Doctor shares the launcher's discovery, bounds the version probe, returns nonzero on failed checks and reports unmeasured disk space honestly.
@@ -150,10 +150,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Cross-platform stealth parity: one ladder, per-platform backends, no foreign strings.** The GL ladder is now explicit per OS — Linux/Android keep `--use-angle=gl-egl` as stage 1 (retried), and it reaches hardware *headless* too (measured: no X display needed — the machine's own GPU is reported, so the mask never installs and headless rendering is hardware-fast); macOS and Windows get an explicit fallback backend behind the platform default (`--use-angle=metal` / `--use-angle=d3d11`); `--disable-gpu` is gone from headless launches. Previously, a software-GL host on Mac or Windows had its mask replay a *Linux Mesa* string (Windows x86) or a *phone GPU* (Apple Silicon) — the identity mismatch this release removes.
-- **WebGL masking detects the machine's GPU on every OS.** `lspci` (Linux/Android, output byte-identical to 4.6.0), `Win32_VideoController` via PowerShell CIM with a `wmic` fallback (Windows), `system_profiler` (macOS) — and the renderer string is built in the detected OS's own ANGLE shape: Direct3D-11 strings on Windows (`ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)`), Metal strings on macOS (`ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)`), Mesa strings on Linux. D3D11 WARP counts as software (the mask engages instead of reporting WARP); Microsoft's no-driver adapters (Basic Display/Render, Remote Display, Hyper-V) are never claimed. `BLADE_GPU` overrides remain (`intel|amd|nvidia|apple|mali|adreno`).
+- **WebGL masking detects the machine's GPU on every OS.** `lspci` (Linux/Android, output byte-identical to 4.6.0), `Win32_VideoController` via PowerShell CIM with a `wmic` fallback (Windows), `system_profiler` (macOS) — and the renderer string is built in the detected OS's own ANGLE shape: Direct3D-11 strings on Windows (`ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)`), Metal strings on macOS (`ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)`), Mesa strings on Linux. D3D11 WARP counts as software (the mask engages instead of reporting WARP); Microsoft's no-driver adapters (Basic Display/Render, Remote Display, Hyper-V) are never claimed. `OBU_GPU` overrides remain (`intel|amd|nvidia|apple|mali|adreno`).
 - **`--disable-remote-fonts` removed.** Measured on stock Chromium 154: with the flag a page's own `@font-face` fetch never happens (0 requests, `NetworkError`, fallback text metrics) — no real Chrome refuses webfonts, and any page loading its own fonts can read the difference, on every platform. The macOS on-demand-font dialog that motivated it (issue #9) is handled by the CSS alias block, now macOS-gated (elsewhere it was a page-visible extra stylesheet no stock browser has).
 - **The cyclic-prototype shield covers function-typed prototypes.** `Object.setPrototypeOf(maskedFn, someFn)` whose chain runs back through the mask is the same creepjs torture with a function as the new proto; an object-only guard let it through to the old `RangeError` recursion (measured in `work/stealth461`). The shared `_cyc` walk — page masks and the SharedWorker wrapper — now walks functions too: native `TypeError: Cyclic __proto__ value` in both shapes.
-- **`bladebro audit` is a gate, not a printout.** Any vector FAIL (parsed from the SCORE footer), failed self-check, or consistency-stamp drift exits non-zero; the report read was also too tight (2000 chars truncated the suite's flattened output — the full report is read now).
+- **`obu audit` is a gate, not a printout.** Any vector FAIL (parsed from the SCORE footer), failed self-check, or consistency-stamp drift exits non-zero; the report read was also too tight (2000 chars truncated the suite's flattened output — the full report is read now).
 - **CI drives the real audit on every OS.** The built binary runs its own vector suite through a browser on ubuntu, macOS and Windows on each release push and the exit code gates — the "green CI, broken lane on macOS/Windows" class is structurally dead.
 
 ### Added
@@ -166,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Masked functions answer the function-proto cyclic torture with the engine's own `TypeError` (was `RangeError`; residual: the `Reflect`-return channel, advanced-branch only).
 - Windows/macOS fallback profiles can no longer name a different OS's GPU class (the Linux-Mesa-on-Windows / Mali-on-Apple-Silicon mismatch).
 - The battery-API shim (installs only where the engine lacks `getBattery`) returns an EventTarget with the BatteryManager property shape instead of a plain object.
-- Windows CI caught `bladebro audit` building `file://D:\...` from `path.display()` — not a valid URL, and Chrome refuses it (`Cannot navigate to invalid URL`). File URLs are platform-correct now (`file:///D:/...`; the `\\?\` canonicalize prefix is stripped) with unit tests.
+- Windows CI caught `obu audit` building `file://D:\...` from `path.display()` — not a valid URL, and Chrome refuses it (`Cannot navigate to invalid URL`). File URLs are platform-correct now (`file:///D:/...`; the `\\?\` canonicalize prefix is stripped) with unit tests.
 - The zero-device `mediaDevices` gate never fired: the attach-time probe reads `navigator.mediaDevices` on about:blank — a non-secure context where Chrome exposes nothing on any machine — so device-less hosts (the CI runners; invisible on dev machines, which have devices) skipped the patch that exists precisely for them. The patch now installs when the count is zero **or unreadable**; its page-side gate keeps passing real devices through untouched.
 - **`--window-size=1920,1080` is pinned only on Linux/Android**, where the virtual display is ours; on macOS/Windows the agent window opens at the native default on the real desktop. The forced size produced `innerWidth 1028 > screen.width 1024` on a 1024×768 Windows CI desktop — a page-visible incoherence the Windows audit caught on its first full run.
 - **The suite's machine-size checks demand sanity, not desktops**: `hardwareConcurrency >= 4` flagged a 3-vCPU macOS CI runner (VM-sliced core counts are legitimate) and `deviceMemory >= 4` was the same class — both now require presence and a positive value.
@@ -183,19 +183,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `shell-torture` in the stealth vector suite: ten masked-or-native API functions (navigator, WebGL1/2, canvas, console, Element) must each answer the cyclic-prototype torture with `TypeError:Cyclic __proto__ value`. A future mask that skips the shared helpers fails the audit. The suite's Linux-polyfill checks became platform-truth checks (`webshare-absent`, `contentindex-absent`, `contactsmanager-absent`). Bar: 62/62.
 
 ### Fixed
-- creepjs `tests/prototype.html`: 11 lies / 2369 properties → **0 lies / 2367** (3/3 runs, identical hash), and 0 lies with the GL mask forced on (`BLADE_WEBGL=spoof`) as well. The independent detectability census over 18 interfaces (`work/stealth452/probe_census.py`): 12 → 0. The agent lane's creepjs identity now converges on the rb-on real lane (`extension: unknown`; same `0% headless` / `0% stealth` lines; `38% like-headless` — the value the machine's own browser reads; the old 6% was measured with the mask active).
+- creepjs `tests/prototype.html`: 11 lies / 2369 properties → **0 lies / 2367** (3/3 runs, identical hash), and 0 lies with the GL mask forced on (`OBU_WEBGL=spoof`) as well. The independent detectability census over 18 interfaces (`work/stealth452/probe_census.py`): 12 → 0. The agent lane's creepjs identity now converges on the rb-on real lane (`extension: unknown`; same `0% headless` / `0% stealth` lines; `38% like-headless` — the value the machine's own browser reads; the old 6% was measured with the mask active).
 
 ## [4.5.2] - 2026-10-13
 
 ### Changed
-- The pi extension is now one call: it resolves the bladebro binary and registers it with `pi.registerMcpServer()` — pi's own MCP client runs the protocol. The hand-rolled client (spawn, framing, handshake, tool-call proxy, restart logic, TUI formatters) is gone: the file goes from 521 lines to 63, and the five tools, their schemas and the `initialize` instructions all come from the binary, so there is nothing left to drift. Exposure is `direct` (tools declared to the model; the first prompt waits for the connection) and the request timeout is 180s to cover `run`/`batch`/`collect`. A missing binary registers nothing and says exactly why at session start.
-- The bundled pi skill is now the empty, user-editable template its name implies: bladebro needs no skill — guidance rides the MCP handshake — so `skills/bladebro/SKILL.md` exists only for a user who wants their own house rules for the agent.
+- The pi extension is now one call: it resolves the obu binary and registers it with `pi.registerMcpServer()` — pi's own MCP client runs the protocol. The hand-rolled client (spawn, framing, handshake, tool-call proxy, restart logic, TUI formatters) is gone: the file goes from 521 lines to 63, and the five tools, their schemas and the `initialize` instructions all come from the binary, so there is nothing left to drift. Exposure is `direct` (tools declared to the model; the first prompt waits for the connection) and the request timeout is 180s to cover `run`/`batch`/`collect`. A missing binary registers nothing and says exactly why at session start.
+- The bundled pi skill is now the empty, user-editable template its name implies: obu needs no skill — guidance rides the MCP handshake — so `skills/obu/SKILL.md` exists only for a user who wants their own house rules for the agent.
 
 ### Added
 - Source-level Android support: the Linux gates this driver leans on (Xvfb display, `/proc` reads, `SO_PEERCRED` peer checks, ancestor validation, updater magic bytes) now compile for `target_os = "android"`, and a CI job checks `aarch64-linux-android` on every push so the port cannot rot. No Android artifact is published — see the updater note below.
 
 ### Fixed
-- `bladebro -u` on Android refuses before downloading and names the real update path, instead of fetching a glibc-linked Linux binary that can never run on bionic and then failing the run check with a message that blamed corruption or the wrong architecture. `bladebro -v` says the same instead of suggesting `-u` where it cannot work.
+- `obu -u` on Android refuses before downloading and names the real update path, instead of fetching a glibc-linked Linux binary that can never run on bionic and then failing the run check with a message that blamed corruption or the wrong architecture. `obu -v` says the same instead of suggesting `-u` where it cannot work.
 - The Android ancestor-validation relaxation is pinned to the system identity (uid 1000 **and** gid 1000): group-write is forgiven only for that group, never for a group ordinary app uids belong to.
 
 ## [4.5.1] - 2026-10-13
@@ -204,7 +204,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `act eval` has a stated result contract. Text mode answers ONE line, `result: <compact JSON of the returned value>` — parse that line and you have the value; a returned string that itself contains JSON is called out in a note (parse it once more, do not throw it away), a DOM node/Window says what to return instead, and `undefined` is stated in words. `format:"json"` returns the bare value, `{data,note}` when a note rides along, or an `{artifact,bytes,next_offset}` envelope when oversized.
 - `extract auto` states what the DOM actually holds: `page_total` with `partial`/`paged` when the page claims more results than are loaded (lazy load or pagination), `sponsored` counts for paid placements (still flagged per item, still in page order), `duplicates_removed`, and `redirects_unwrapped` — redirect/tracking wrappers (Amazon `/sspa/click`, Google `/url?q=`, ad `/aclk`, …) resolve to their canonical destination instead of an interstitial.
 - An unknown `act` action answers with the full vocabulary, the correct step when the word is really a step field (`{"action":"url"}` gets the navigate step verbatim), and a `did you mean` for typos. The vocabulary now lives next to the `Action` enum, so the schema, the CLI parser and the error cannot drift apart again.
-- The MCP `initialize` instructions carry the working loop, not just the tool names (extract-first on list pages, page-scoped refs, observations after every action, what each honesty signal means) — every client gets it at connect. The npm package ships the same guidance as a bundled pi skill (`pi.skills` → `skills/bladebro/SKILL.md`).
+- The MCP `initialize` instructions carry the working loop, not just the tool names (extract-first on list pages, page-scoped refs, observations after every action, what each honesty signal means) — every client gets it at connect. The npm package ships the same guidance as a bundled pi skill (`pi.skills` → `skills/obu/SKILL.md`).
 
 ### Fixed
 - A range filter the site ignores is now visible: when a URL carries a `min-max` filter and every readable item price falls outside it, `extract auto` states both numbers, so unfiltered results cannot be mistaken for filtered ones.
@@ -240,7 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Options (`role=option`) and hidden checkboxes/radios reachable through their visible labels are captured, addressable by selector and text, routed to the visible label for trusted clicks, and report `checked`/`aria-selected` state readbacks; ambiguous labels refuse clearly. Selecting never submits a form.
 - `act wait condition=js` takes the expression from `js=` (the `text=` field stays as the documented alias), rejects missing or conflicting expressions, returns JavaScript syntax errors immediately and surfaces runtime exceptions at the deadline; timeouts are integers 0 to 3600 seconds. Same contract across act, batch, run and the CLI.
 - Act responses keep their context-pruning tier across `see` reads, so act/see loops stop re-sending full-budget page state; content reads state their truncation explicitly (`truncated: N chars total, showed M`).
-- Template extraction: rendered text is the default with `raw=true` opt-in, `_omitted` accounts for fields skipped by policy, missing is distinguishable from empty, shadow roots and same-origin iframe rows are included, and `__blade_meta` carries provenance.
+- Template extraction: rendered text is the default with `raw=true` opt-in, `_omitted` accounts for fields skipped by policy, missing is distinguishable from empty, shadow roots and same-origin iframe rows are included, and `__obu_meta` carries provenance.
 - Product extraction binds price, seller, availability and specs to the same selected offer/variant, and reports uncertainty instead of guessing when an offer cannot be bound.
 - GL health reports main-thread and worker evidence separately, detects loss and recovery, and never claims a cause it did not verify.
 - Proxy values are validated before launch and credentials are redacted from every log path; malformed values fail with a safe message that never echoes the input.
@@ -250,7 +250,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [4.3.0] - 2026-10-09
 
 ### Added
-- Native DeepSeek Harness plugin in the existing `bladebro` npm package. Install through Web or Desktop Plugins, or `dsh plugin --profile web add bladebro`; the host manages the shared five-tool MCP connection, permissions, cancellation and reconnects.
+- Native DeepSeek Harness plugin in the existing `obu` npm package. Install through Web or Desktop Plugins, or `dsh plugin --profile web add obu`; the host manages the shared five-tool MCP connection, permissions, cancellation and reconnects.
 
 ### Fixed
 - Update downloads stream to disk, retain interrupted progress and validate resumed byte ranges and size limits before checksum verification.
@@ -259,7 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [4.2.4] - 2026-10-08
 
 ### Added
-- Reversible Hermes Agent setup: `bladebro hermes on|off|status` connects the standard five-tool MCP server, disables only native browser tools, and restores prior settings. Supports profiles, private recovery, configuration readback, and existing server environment settings.
+- Reversible Hermes Agent setup: `obu hermes on|off|status` connects the standard five-tool MCP server, disables only native browser tools, and restores prior settings. Supports profiles, private recovery, configuration readback, and existing server environment settings.
 
 ### Fixed
 - Short Unicode input now uses native IME commits, preserving non-Latin text, combining marks and emoji in form fields and editors.
@@ -290,28 +290,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A mid-session WebGL loss is detected instead of silently served.** A GPU-process crash makes Chrome restart the GPU with GL disabled (`--use-gl=disabled`) — every `getContext('webgl')` then returns null, the recorded GL verdict still said "software", the WebGL mask had nothing to mask, and nothing anywhere said so (field report: a long MCP session ran with a dead GL profile while `bladebro audit` — which launches its own browser — stayed at 61/61). The GL verdict is now reconciled against the live page on every tab attach and re-checked on a bounded 60-second cadence from tool calls; a confirmed loss demotes the recorded state, prints a loud warning, and delivers a one-shot note to the agent on the very result that detected it ("this browser LOST WebGL mid-session … restart the client for a fresh browser"). Inconclusive probes (transport failures, restricted `chrome://` origins) never demote — only answered-without-a-context replies do — and a fresh healthy verdict re-arms the advisory for the next browser generation.
+- **A mid-session WebGL loss is detected instead of silently served.** A GPU-process crash makes Chrome restart the GPU with GL disabled (`--use-gl=disabled`) — every `getContext('webgl')` then returns null, the recorded GL verdict still said "software", the WebGL mask had nothing to mask, and nothing anywhere said so (field report: a long MCP session ran with a dead GL profile while `obu audit` — which launches its own browser — stayed at 61/61). The GL verdict is now reconciled against the live page on every tab attach and re-checked on a bounded 60-second cadence from tool calls; a confirmed loss demotes the recorded state, prints a loud warning, and delivers a one-shot note to the agent on the very result that detected it ("this browser LOST WebGL mid-session … restart the client for a fresh browser"). Inconclusive probes (transport failures, restricted `chrome://` origins) never demote — only answered-without-a-context replies do — and a fresh healthy verdict re-arms the advisory for the next browser generation.
 - **All applicable one-shot advisories now reach the agent.** The single note slot could silently drop a second applicable note in the same response (e.g. a relaunch note plus a GL-loss note); the lanes batch every note.
-- **New one-shot advisories for previously stderr-only degradations:** headless fallback (no Xvfb display), `--no-sandbox` fallback (sandboxed startup failed — root or restricted container), `BLADE_PROXY` set without `BLADE_TZ` (timezone/IP mismatch that detection will catch), a failed stealth injection, and a failed headless UA override.
+- **New one-shot advisories for previously stderr-only degradations:** headless fallback (no Xvfb display), `--no-sandbox` fallback (sandboxed startup failed — root or restricted container), `OBU_PROXY` set without `OBU_TZ` (timezone/IP mismatch that detection will catch), a failed stealth injection, and a failed headless UA override.
 - Release publishing waits up to five minutes for npm registry propagation before failing closed; the previous two-minute window could expire while npm was still processing a platform package (the 4.2.0 Windows package needed ~3 minutes).
 
 ## [4.2.0] - 2026-10-07
 
 ### Security
 
-- **Prompt-injection file-read surface closed for `act upload`.** A hostile page could steer the agent into attaching credential files (`~/.ssh/id_rsa`, `~/.aws/credentials`) or bladebro's own cookie/session sidecars to a page's file input and exfiltrate their bytes. Uploads now require an absolute path to an existing regular file, refuse system directories and credential/config locations anywhere in the path, and refuse everything under the data dir except the artifacts exchange zone. The check runs at the single dispatch point — `act`, `run`/`batch` steps and the CLI all pass through it. Relative and `~` spellings (which crashed the browser process) now fail as a clean error.
+- **Prompt-injection file-read surface closed for `act upload`.** A hostile page could steer the agent into attaching credential files (`~/.ssh/id_rsa`, `~/.aws/credentials`) or obu's own cookie/session sidecars to a page's file input and exfiltrate their bytes. Uploads now require an absolute path to an existing regular file, refuse system directories and credential/config locations anywhere in the path, and refuse everything under the data dir except the artifacts exchange zone. The check runs at the single dispatch point — `act`, `run`/`batch` steps and the CLI all pass through it. Relative and `~` spellings (which crashed the browser process) now fail as a clean error.
 - **`act pdf path=` no longer silently destroys existing files.** A steered export onto an existing path (saved sessions, project source, `.git` objects, keychain files) replaced it with PDF bytes irreversibly. Existing targets — file, directory or symlink — are now refused before rendering; the write-path blocklist also gained the developer-toolchain config sinks it was missing (`.npmrc`/`npmrc`, `.git`, `.cargo`, `.m2`, `.vscode`, `.atom`, `.env`/`.env.*`, `.condarc`, `.yarnrc`, `.pypirc`), closing the one-call npm-registry / `.env.local` poisoning lane.
-- **The stealth display is cookie-authorized and ownership-verified.** Xvfb runs with a per-session `-auth` MIT-MAGIC-COOKIE-1 (0600, O_EXCL, unpredictable name; `XAUTHORITY` handed to Chrome, the window manager and the geometry probes) instead of `-ac`, so a local co-user can no longer attach to the live browser's display for screen capture or XTEST input. Readiness now requires both the pathname and abstract X sockets to be served by the Xvfb bladebro spawned (SO_PEERCRED) — not any listener in the world-writable `/tmp/.X11-unix` — and deadline expiry is a failure. Xauthority files are cleaned on drop and by the orphan reaper.
+- **The stealth display is cookie-authorized and ownership-verified.** Xvfb runs with a per-session `-auth` MIT-MAGIC-COOKIE-1 (0600, O_EXCL, unpredictable name; `XAUTHORITY` handed to Chrome, the window manager and the geometry probes) instead of `-ac`, so a local co-user can no longer attach to the live browser's display for screen capture or XTEST input. Readiness now requires both the pathname and abstract X sockets to be served by the Xvfb obu spawned (SO_PEERCRED) — not any listener in the world-writable `/tmp/.X11-unix` — and deadline expiry is a failure. Xauthority files are cleaned on drop and by the orphan reaper.
 - **The CLI daemon channel is authenticated by the state directory and the peer's uid.** A co-user with write access to a loose state dir could bind `cli.sock`, lock the genuine daemon out ("already running"), capture every `{"tool","args"}` request and author every response the CLI prints. The daemon now refuses to run — and clients refuse to trust — a socket whose parent dir is not an owner-only directory owned by this user, and both sides verify the connected peer runs as this user (SO_PEERCRED / getpeereid).
-- **Real-browser-lane debug endpoint: closed by default where no human is watching, verified everywhere.** Headless rb sessions now idle-close like the agent lane (a visible session keeps the user's-browser contract), and `rb on` warns that browser control is served on a loopback endpoint any local user can reach. Owned launches on both lanes verify the endpoint is served by the browser process bladebro spawned before trusting a `200 /json/version`, the fixed-port `9222` fallback is gone, and attach/auto-attach require a live browser of this user to actually hold the port — a stale `DevToolsActivePort` file or a squatter is refused instead of driven.
+- **Real-browser-lane debug endpoint: closed by default where no human is watching, verified everywhere.** Headless rb sessions now idle-close like the agent lane (a visible session keeps the user's-browser contract), and `rb on` warns that browser control is served on a loopback endpoint any local user can reach. Owned launches on both lanes verify the endpoint is served by the browser process obu spawned before trusting a `200 /json/version`, the fixed-port `9222` fallback is gone, and attach/auto-attach require a live browser of this user to actually hold the port — a stale `DevToolsActivePort` file or a squatter is refused instead of driven.
 - **CDP event bus byte-bounded; worker auto-attach no longer parks.** Page-authored bulk payloads (WebSocket frames, SSE data, oversized URLs) were retained up to 16384 × per-event bytes (≈16 GiB at 1 MB events) while any subscriber lagged. Oversized events now keep only their small identity fields (request id, type, status, dialog kind), capping worst-case retention at capacity × 16 KiB, and the worker/GL handler runs each attach in its own task so a busy-looping service worker can no longer freeze the subscriber loop, pin the ring, and drop attach/dialog events.
-- **Sidecars, state tree, profiles and rollback hardened against local co-users.** `logins.json` / session reads refuse symlinked files (O_NOFOLLOW); `state save` is disabled on the real-browser lane (it would persist the user's real cookie jar under the data dir); legacy or mode-stripped state trees are re-tightened on every launch (owned components only, exec bits preserved); `BLADE_FRESH` ephemeral profiles use an unpredictable name with exclusive `mkdir`; `BLADE_PROFILE_DIR` overrides validate ownership, symlinks and ancestors before use; and `bladebro --rollback` refuses symlinked or foreign-owned backups — backups are also written with O_EXCL semantics.
+- **Sidecars, state tree, profiles and rollback hardened against local co-users.** `logins.json` / session reads refuse symlinked files (O_NOFOLLOW); `state save` is disabled on the real-browser lane (it would persist the user's real cookie jar under the data dir); legacy or mode-stripped state trees are re-tightened on every launch (owned components only, exec bits preserved); `OBU_FRESH` ephemeral profiles use an unpredictable name with exclusive `mkdir`; `OBU_PROFILE_DIR` overrides validate ownership, symlinks and ancestors before use; and `obu --rollback` refuses symlinked or foreign-owned backups — backups are also written with O_EXCL semantics.
 - **Stored consent selectors are re-validated before clicking.** A poisoned knowledge-store entry could auto-click an arbitrary element on every navigation under a domain. Stored selectors must now match a visible element inside a consent-looking container with consent vocabulary before firing; everything else falls through to full detection.
 
 ### Fixed
 
-- `bladebro doctor`'s profile write-probe uses an unpredictable name with O_EXCL (a fixed name could be turned into a symlink write), and its stale-lock hint now points at a directory only the user can write.
-- README documents the `BLADE_PROFILE_DIR` ownership requirement.
+- `obu doctor`'s profile write-probe uses an unpredictable name with O_EXCL (a fixed name could be turned into a symlink write), and its stale-lock hint now points at a directory only the user can write.
+- README documents the `OBU_PROFILE_DIR` ownership requirement.
 
 ## [4.1.1] - 2026-10-06
 
@@ -329,7 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin both Linux release binaries to glibc 2.28 rather than the build host's 2.39, with an ABI gate before publication.
 
 ### Fixed
-- Xvfb orphan cleanup requires a dead Bladebro claim and exact server/display identity; system-managed displays are preserved (#24).
+- Xvfb orphan cleanup requires a dead Obu claim and exact server/display identity; system-managed displays are preserved (#24).
 - Clicks and form submits dispatch once. DOM silence and ambiguous transport failures no longer replay side effects; daemon and MCP recovery retry only observational calls.
 - Storage writes verify page readback and surface security exceptions. Named sessions refuse a different origin before changing browser state, preserve full values and empty keys, restore session cookies correctly, and reject nonportable filenames.
 - Login snapshots cover the whole cookie store, retain other sites, and honor logout. Cookie restoration preserves host/domain scope and IPv6 URLs; failed restoration preserves the sidecar. External MCP attach never injects saved logins.
@@ -397,7 +397,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   big-endian `u32` against only the big-endian Mach-O spellings, so the
   little-endian 64-bit bytes every real darwin asset starts with
   (`cf fa ed fe`, MH_CIGAM_64 — verified against the shipped v4.0.1 assets)
-  were rejected as "not a valid binary for this platform": `bladebro -u`
+  were rejected as "not a valid binary for this platform": `obu -u`
   aborted after the download and `--rollback` refused every valid backup.
   The check now accepts both byte orders of the 32/64-bit and fat-archive
   magics, lives in one place (`download::binary_magic_ok`) shared with
@@ -421,7 +421,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The npm shim fails loudly.** `bin.js` exited 0 when the platform binary
   could not be spawned (missing exec bit, wrong arch, deleted file) — a
   silent no-op scripts read as success; it now prints the launch error and
-  exits 1. The `bladebro-linux-arm64` package also ships its LICENSE like
+  exits 1. The `obu-linux-arm64` package also ships its LICENSE like
   the other five (tarball parity).
 - **CLI `--host`/`--port` errors are loud.** A missing or non-numeric value
   used to be silently dropped and re-injected as `--port 0`; both the global
@@ -446,13 +446,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both spellings as well, so a symlinked home root cannot unlock
   `~/.bashrc` and friends.
 - **The orphan reaper resolves its data root once.** `reap_orphans` called
-  `blade_dir()` again inside its sync-back path; with the process env
-  changing mid-reap (the parallel test suite flips `BLADE_HOME`), one reap
+  `obu_dir()` again inside its sync-back path; with the process env
+  changing mid-reap (the parallel test suite flips `OBU_HOME`), one reap
   could read session dirs from one root and write the sync-back into
   another — the macOS CI red on the audit commits was a test reading the
   real template after exactly this split. The root is now resolved once and
   threaded through (`reap_orphans_at` / `sync_back_only_at`), and the
-  reaper/lock tests are hermetic: temp roots, never a real `~/.blade`.
+  reaper/lock tests are hermetic: temp roots, never a real `~/.obu`.
 
 ## [4.0.1] - 2026-09-27
 
@@ -573,7 +573,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edits), and node churn — plus a runner (26 assertions: the editor contract,
   batch/run fill parity, wait semantics, extract quality) that drives the
   real CLI end to end. Wired into the gate battery.
-- **Real-browser lane — `bladebro rb on|off`.** The agent can now drive *your*
+- **Real-browser lane — `obu rb on|off`.** The agent can now drive *your*
   own Chromium-family browser (Chrome, Chromium, Brave, Edge, Vivaldi, Opera)
   with your real profile data on your real display — and with the page-injection
   layer switched **off entirely**. A real environment has no manufactured
@@ -583,7 +583,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adapters, token efficiency, resource blocking — plus the behavioral layer
   (mouse arcs, typing cadence, pacing, idle hum).
   - **Three mechanisms** (`auto` picks per environment): **clone** (default) —
-    imports your profile once into a blade-owned copy (per-process sessions,
+    imports your profile once into a obu-owned copy (per-process sessions,
     sole-survivor sync-back so the clone ages), runs your real binary on it;
     your browser may stay open and the source profile is never written to.
     **profile** — launches on your live profile (close the browser first;
@@ -613,8 +613,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     compile-verified (zigbuild ×4) — live checklist pending hardware.
   - **Safety:** `rb on` prints exactly what it uses and how to revert ("the
     agent browses as *you*"; `rb forget` wipes the imported copy);
-    `BLADE_RB_DEBUG=1` surfaces the browser's own stderr when a visible launch
-    fails. New env: `BLADE_LANE=real|agent` (per-process lane override).
+    `OBU_RB_DEBUG=1` surfaces the browser's own stderr when a visible launch
+    fails. New env: `OBU_LANE=real|agent` (per-process lane override).
   - **Hardening pass:** a running browser is detected from the right path
     (POSIX `SingletonLock` pid; Windows Chromium's `lockfile` handle — there
     is no `SingletonLock` file on Windows, verified against Chromium source),
@@ -634,13 +634,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     The lane never masks Chrome's own value: it prints the note at attach
     time and the help documents the fixed-port arm as the stealthier one.
   - **Harness guards (`tools/`):** the oracle and the lane matrix now prefer
-    the repo build (`target/release/bladebro`) over whatever `bladebro` PATH
+    the repo build (`target/release/obu`) over whatever `obu` PATH
     resolves to, print the binary under test, and **refuse `--lane real`**
     when the resolved binary predates the lane (`rb` missing). A stale
-    installed binary silently ignored `BLADE_LANE=real` — the run measured
+    installed binary silently ignored `OBU_LANE=real` — the run measured
     the agent lane and produced a bogus 15-key "regression" that was caught
     here and traced to exactly that. The agent lanes additionally pin
-    `BLADE_LANE=agent` — a live `rb on` config can no longer silently
+    `OBU_LANE=agent` — a live `rb on` config can no longer silently
     redirect them to the user's own browser — and a `mcp-pipe` lane keeps the
     zero-port transport covered.
 - **`tools/qol_probe/` now locks the pause contract (S13).** `rb pause` is
@@ -722,7 +722,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after the page navigated (an auto-applying filter click that consumed the
   next step's target) reports the navigation in the error and points at
   `optional: true` — no more bare "step N failed" when the goal was met.
-- **`BLADE_PROXY` no longer leaks the real IP through WebRTC.** The launch
+- **`OBU_PROXY` no longer leaks the real IP through WebRTC.** The launch
   flag and the SDP filter were in place, but a page enumerating its own ICE
   candidates still read the srflx address (verified live: real IP in
   `onicecandidate` with the proxy set). The injection now filters local
@@ -776,7 +776,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   live report — CreepJS's worker card read `lang/timezone/gpu/userAgent/
   device/userAgentData: blocked` and `navigator.serviceWorker.register()
   never settled`. Root cause, measured with an instrumented attach handler
-  (`BLADE_DBG_WORKERS=1`): the auto-attach pipeline evaluates the worker patch
+  (`OBU_DBG_WORKERS=1`): the auto-attach pipeline evaluates the worker patch
   BEFORE resuming a `waitForDebuggerOnStart` target — fine for dedicated
   workers (8/8 attaches eval'd `ok`), but a PAUSED service worker has no
   execution context yet, so the evaluate hangs until the 30s command
@@ -822,7 +822,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they "didn't work" (the process was never running the fixed build). The MCP
   now detects it (Linux: `/proc/self/exe` unlinked, or no longer resolving to
   the invoked `argv[0]`) and prepends a one-time note telling the host to
-  restart; the daemon warns once in its responses (`bladebro stop` picks the
+  restart; the daemon warns once in its responses (`obu stop` picks the
   new build up). No false positives — the check stays silent unless the file
   actually moved.
 - **MCP now drives Chrome over WebSocket by default — `navigator.webdriver`
@@ -835,7 +835,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   route was probed first: `Emulation.setAutomationOverride{enabled:false}`
   is accepted but has no effect on the flag (page- and browser-level), and
   the launch-flag route re-triggers the 56px unsupported-flag infobar, so the
-  transport default is the honest fix. `BLADE_TRANSPORT=pipe` opts back into
+  transport default is the honest fix. `OBU_TRANSPORT=pipe` opts back into
   the zero-port transport (the mask remains there, and remains lie-visible).
 - **WebGL is no longer dead on the MCP/pipe lane.** The pipe transport built its
   Chrome command line without `--ignore-gpu-blocklist`, so on a software-GL
@@ -928,12 +928,12 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
 - **`rb pause` silences the idle hum on the agent lane too** (the pause check
   now runs before the lane branch).
 - **The gate harness runs hermetically now.** `tools/diff_oracle/oracle.py` and
-  `tools/lane_matrix.py` pinned `BLADE_LANE=agent` but not `BLADE_HOME` — so
+  `tools/lane_matrix.py` pinned `OBU_LANE=agent` but not `OBU_HOME` — so
   every agent-lane run drove its CLI daemon on the user's **real data dir**
-  (`~/.blade`): test session profiles appeared under `profiles/`, knowledge
+  (`~/.obu`): test session profiles appeared under `profiles/`, knowledge
   stats were written, and the last run left its daemon alive (found as a live
   leak during the review's final sweep; residue quarantined). Both tools now
-  use a scratch `BLADE_HOME` (+ `BLADE_NO_WARMING=1` for deterministic
+  use a scratch `OBU_HOME` (+ `OBU_NO_WARMING=1` for deterministic
   timings), stop the daemon in a `finally`, and sweep any MCP-killed browser
   children — a gate run can no longer touch the user's data dir.
 - **The `dom-changed (+0 −0)` phantom is gone.** A click whose only
@@ -1012,10 +1012,10 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   output now flows through one gated style layer (`src/ui`): aligned
   label/value blocks for `rb` (`status`/`on`/`off`/`use`/`profile`), red error
   lines, dim dividers and hints, bold-cyan `help` headers, aligned
-  browser/profile tables, and typo suggestions (`bladebro browser use` →
+  browser/profile tables, and typo suggestions (`obu browser use` →
   “did you mean `rb use`?”). Color is ON only when it cannot corrupt a machine
   consumer: stdout is a terminal and `NO_COLOR`/`TERM=dumb` are absent;
-  `BLADE_PLAIN=1` is the hard switch, `CLICOLOR_FORCE=1` forces color for
+  `OBU_PLAIN=1` is the hard switch, `CLICOLOR_FORCE=1` forces color for
   demos. Piped output (scripts, files, MCP) stays byte-identical plain — the
   same code path, verified at 0 escape bytes off-TTY. `doctor`/`update`/
   `rollback` inherit the same gating (they used to emit ANSI unconditionally).
@@ -1029,20 +1029,20 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   `new` throws — including in the phantom nested-iframe realm CreepJS-class
   lie engines stringify from.
 - The notifications relay, the mediaDevices patch and the locale override are
-  now installed only when the environment needs them (`BLADE_PERMS=patch|real`
+  now installed only when the environment needs them (`OBU_PERMS=patch|real`
   forces the permissions decision); a headful lane keeps the honest state.
-- `bladebro audit`: 36 → 61 vectors — GL-null assertion, permissions parity
+- `obu audit`: 36 → 61 vectors — GL-null assertion, permissions parity
   battery, mask-gated GL coherence, worker/iframe propagation, descriptor
   shapes, geometry, UA-CH — plus a cross-restart consistency stamp
-  (`~/.blade/audit-stamp.json`) that flags drift in canvas/audio/screen/UA/GL.
+  (`~/.obu/audit-stamp.json`) that flags drift in canvas/audio/screen/UA/GL.
 
 ### Added
 - **`tools/diff_oracle/`** — a differential oracle: the same probe battery runs
-  against stock Chrome and Bladebro on the same virtual display, every diff is
+  against stock Chrome and Obu on the same virtual display, every diff is
   classified as EXPECTED (with a reason) or DIVERGENT, and any divergence
   exits non-zero. This is what caught the removed-flag infobar, the dead
   pipe-lane GL stack and the window-geometry drift; run it before any release.
-- `BLADE_DUMP_INJECT=<path>` writes the exact assembled injection (plus
+- `OBU_DUMP_INJECT=<path>` writes the exact assembled injection (plus
   `<path>.worker.js`) so it can be syntax-linted (`node --check`): a parse
   error silently disables every patch, and the audit's vector score is the only
   other thing that would notice.
@@ -1068,7 +1068,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   regression-tested against fixtures taken from the live pages.
 - **Reddit's one-time "Prove your humanity" check is passed automatically.**
   Sessions without the `loid` token get a reCAPTCHA v2 checkbox ("Prove your
-  humanity"); bladebro now clicks it once with the normal humanized click
+  humanity"); obu now clicks it once with the normal humanized click
   machinery, waits bounded for the solve (grids bail out — they are not
   solvable in-house and are reported honestly), and the grant is stored in
   the profile, after which the wall does not return. Verified live on a
@@ -1077,22 +1077,22 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
 ## [3.9.10] - 2026-09-25
 
 ### Fixed
-- **`npm install -g bladebro` no longer drags the pi agent's whole dependency
+- **`cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` no longer drags the pi agent's whole dependency
   tree.** The pi-extension `peerDependencies` were auto-installed by npm 7+:
   every npm install pulled ~175 extra packages (~437 MB) with install-script
   warnings. Both peers are now `optional` — plain npm installs get exactly
-  what they need (~7 MB); `pi install npm:bladebro` is unchanged (pi satisfies
+  what they need (~7 MB); `pi install npm:obu` is unchanged (pi satisfies
   the peers from its own tree).
-- **Daemon lifecycle: no more ghost-daemon multiplication.** `bladebro daemon`
+- **Daemon lifecycle: no more ghost-daemon multiplication.** `obu daemon`
   now checks the socket first and refuses to steal it from a live daemon, and
   a daemon's shutdown removes the socket + pidfile only while it still owns
   them. Before: a stale ("ghost") daemon dying unlinked the *active* daemon's
   socket — the next command spawned yet another daemon and orphaned the
   previous one, self-perpetuating and invisible to `stop`.
-- `bladebro … | head` no longer panics ("failed printing to stdout: Broken
+- `obu … | head` no longer panics ("failed printing to stdout: Broken
   pipe") — CLI-output commands restore the default SIGPIPE; `daemon`/`mcp`
   keep EPIPE as a handled error.
-- `bladebro help mcp` works (also `audit`, `update`/`-u`, `doctor`/`-doc`,
+- `obu help mcp` works (also `audit`, `update`/`-u`, `doctor`/`-doc`,
   `rollback`/`--rollback`, `-v`/`--version`); the manual and `help --json`
   now list every command. Before: only the 9 CLI commands were covered.
 - `doctor`'s Xvfb install hint (said "brew install chromium (Nix)").
@@ -1186,7 +1186,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   retries), and quiet pages pay zero extra latency.
 - **Logs go to stderr.** tracing output (RUST_LOG) wrote to stdout, so a
   `--json` run with RUST_LOG set emitted log lines around the JSON object and
-  `bladebro mcp` risked corrupting its JSON-RPC stream. stdout is now a pure
+  `obu mcp` risked corrupting its JSON-RPC stream. stdout is now a pure
   machine contract.
 
 ## [3.9.7] - 2026-09-23
@@ -1220,7 +1220,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   page. A failed pick is also no longer misclassified as a missing element —
   that triggered a pointless DOM-drift heal-retry which dropped the list and
   churned the ref.
-- **`bladebro audit`'s worker check no longer false-FAILs on a busy machine.**
+- **`obu audit`'s worker check no longer false-FAILs on a busy machine.**
   The vector suite allowed a blob worker 4s to reply; under cold-start load a
   worker could starve past that and report a spurious
   `FAIL worker-ua: timeout` (35/36 instead of the real 36/36). The window is
@@ -1249,7 +1249,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   got an empty read). `see example.com` treats a bare host as a URL, not a
   mode. `stop` is idempotent (exit 0, waits for teardown, falls back to the
   pid file and terminates a wedged daemon instead of orphaning it); a hung
-  daemon call times out with guidance (`BLADE_CMD_TIMEOUT`, default 300s)
+  daemon call times out with guidance (`OBU_CMD_TIMEOUT`, default 300s)
   instead of hanging forever; a stale socket is detected and the daemon
   restarted.
 - **`act select` honors label addressing** (fixes MCP + CLI): `select "Pet"
@@ -1302,9 +1302,9 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   is remembered per domain and auto-applied on later visits (`state block
   clear` erases it); block detections count in global stats. CLI gains
   `state block [classes|clear]`, and the daemon now persists the knowledge
-  base (periodic + on shutdown; `bladebro stop` flushes before it
+  base (periodic + on shutdown; `obu stop` flushes before it
   acknowledges).
-- **CLI: first-class agent surface.** `bladebro help --json` is the single
+- **CLI: first-class agent surface.** `obu help --json` is the single
   self-teaching manual: the same tool schemas as MCP `tools/list` plus
   per-command usage, universal flags, payload conventions, exit codes and
   examples — ONE call teaches the whole CLI (`help <cmd> --json` per
@@ -1380,14 +1380,14 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   followed by the current page state, instead of a bare error.
 
 ### Added
-- **XDG + BLADE_HOME data root (issue #20).** The data directory resolves
-  BLADE_HOME → $XDG_STATE_HOME/blade → $HOME/.local/state/blade →
-  $HOME/.blade. Migration-safe: an existing ~/.blade install keeps using it;
-  state is never split across two dirs. Windows keeps %USERPROFILE%\.blade.
+- **XDG + OBU_HOME data root (issue #20).** The data directory resolves
+  OBU_HOME → $XDG_STATE_HOME/obu → $HOME/.local/state/obu →
+  $HOME/.obu. Migration-safe: an existing ~/.obu install keeps using it;
+  state is never split across two dirs. Windows keeps %USERPROFILE%\.obu.
 - **Doctor: 13 checks.** New: data-directory resolution (with the reason),
   login-persistence sidecar health (cookie count + file permissions),
   profile hygiene (orphaned session dirs + size, auto-reaped). The profile
-  checks now honor BLADE_PROFILE_DIR.
+  checks now honor OBU_PROFILE_DIR.
 
 ## [3.9.5] - 2026-08-27
 
@@ -1401,7 +1401,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   It now resurrects `.profile.old` when `profile` is missing, and only drops
   it when the template is safe.
 - **`__Host-`/`__Secure-` prefix cookies now restore.** Chrome rejects a
-  prefixed cookie that carries a `domain` attribute; Bladebro was sending
+  prefixed cookie that carries a `domain` attribute; Obu was sending
   one, so logins on security-hardened sites (banks, GitHub's hardened
   sessions) silently never came back. They are now reconstructed from `url`.
 - **`--no-daemon` one-shot runs persist logins on exit.** The login snapshot
@@ -1424,7 +1424,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
 ### Changed
 - Login snapshot guard factored out and unit-tested; reaper swap-restore
   logic made hermetic and tested against a temp dir (the old test raced with
-  the parallel reaper test on the shared `~/.blade`).
+  the parallel reaper test on the shared `~/.obu`).
 
 ## [3.9.4] - 2026-08-27
 
@@ -1454,8 +1454,8 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   only flushes them to `Default/Cookies` on its own schedule — a copy of the
   on-disk profile taken while Chrome runs catches a torn, half-committed
   SQLite, so you came back logged out (empty cookie DB, or cookies with
-  empty values). Bladebro now snapshots the live, authoritative cookie store
-  via CDP (`Network.getCookies`) into `~/.blade/logins.json` on a schedule
+  empty values). Obu now snapshots the live, authoritative cookie store
+  via CDP (`Network.getCookies`) into `~/.obu/logins.json` on a schedule
   and at shutdown, and re-injects it (`Network.setCookies`) at launch. This
   survives clean shutdowns, SIGKILL, and power loss on every platform, and
   works even when the whole profile is gone.
@@ -1479,7 +1479,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
   exit. Persisting via the CDP snapshot *before* the kill closes that gap.
 
 ### Added
-- `~/.blade/logins.json` (0600, atomic write): the cross-platform login
+- `~/.obu/logins.json` (0600, atomic write): the cross-platform login
   sidecar that survives everything.
 
 ## [3.9.2] - 2026-08-25
@@ -1509,7 +1509,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
 - Worker WebGL spoof re-verified: worker `OffscreenCanvas.getContext('webgl')` reports the spoofed Intel renderer, not llvmpipe (CreepJS `hasBadWebGL` surface).
 
 ### Added
-- `BLADE_CHROME_FLAGS` env var appends raw Chromium flags to the launch (power-user escape hatch for GL/WebGL backend diagnosis).
+- `OBU_CHROME_FLAGS` env var appends raw Chromium flags to the launch (power-user escape hatch for GL/WebGL backend diagnosis).
 
 ### Fixed
 - `see model` truncation summary is deterministic again. The `…(N more: X link, Y button)` line iterated a HashMap (randomized per process), so it changed between calls. Roles are now sorted by count (desc) then alphabetically. Documented the grammar in the `see` tool description and README.
@@ -1519,7 +1519,7 @@ detectors flag exactly that (measured live: CreepJS `webDriverIsOn: true` →
 Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Added
-- `BLADE_NO_WARMING=1` env var to disable first-run profile warming.
+- `OBU_NO_WARMING=1` env var to disable first-run profile warming.
 - `release.sh` generates `.sha256` checksums for every release binary.
 
 ### Stealth
@@ -1534,7 +1534,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - `performance.timing` polyfill removed (fabricated timeline was internally incoherent).
 - `cdc_` MutationObserver throttled (was calling `getOwnPropertyNames` on every mutation).
 - Workers get pristine `Function.prototype.toString` for the GL spoof patch.
-- `WorkerNavigator.language` patched in worker contexts when `BLADE_LOCALE` is set.
+- `WorkerNavigator.language` patched in worker contexts when `OBU_LOCALE` is set.
 - OOPIF auto-attach now resumes ALL targets and injects full stealth into child sessions.
 - Mouse path realism: 40-step cap, 650ms time cap, log-normal delays.
 - Per-character typing with proper Shift handling, key press duration, and keyChar.
@@ -1544,7 +1544,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - Self-heal after crash only retries idempotent reads. Non-idempotent actions return "outcome UNKNOWN".
 - `check_condition` bails fast on browser death (was spinning at 10Hz for full timeout).
 - Stale Xvfb display claims from SIGKILLed processes are now reaped.
-- `bladebro version` and unknown CLI commands no longer launch Chrome.
+- `obu version` and unknown CLI commands no longer launch Chrome.
 - Refs assigned in document order (was hash-map order).
 - `switch_tab` retry loop for WS mode.
 - All `Mutex::lock().unwrap()` calls changed to poison-recovery pattern.
@@ -1569,7 +1569,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - Chrome launches with renderer sandbox ON, `--no-sandbox` is fallback only.
 - String truncation uses char-boundary-safe `truncate_utf8`.
 - `validate_write_path` blocks credential/persistence sinks on all platforms.
-- Downloads moved to `~/.blade/downloads` (0700). Screenshots moved to secure artifacts dir.
+- Downloads moved to `~/.obu/downloads` (0700). Screenshots moved to secure artifacts dir.
 - Daemon auto-start no longer uses `sh -c`.
 - Cookie JS fallback uses `serde_json::to_string`. Cookie values percent-encoded.
 
@@ -1584,16 +1584,16 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 ## [3.3.0] - 2026-08-16
 
 ### Added
-- `BLADE_NO_WARMING=1` env var to disable first-run profile warming (visits to google.com, github.com, wikipedia.org). Default behavior unchanged.
+- `OBU_NO_WARMING=1` env var to disable first-run profile warming (visits to google.com, github.com, wikipedia.org). Default behavior unchanged.
 - `release.sh` now generates and uploads `.sha256` checksum files for every release binary. Self-updater (v3.3.0+) fail-closes when a release ships no checksum.
 
 ### Fixed
 - Security: Self-updater integrity verification is now fail-closed. For releases >= 3.3.0, a missing or malformed checksum file aborts the update instead of silently skipping verification. Previously, the updater executed downloaded binaries with zero integrity verification in every real deployment.
-- Security: Updater temp file now uses an unpredictable name with O_EXCL creation, preventing symlink-based arbitrary file overwrite. The old fixed name (`.bladebro-update-tmp`) was vulnerable to pre-placed symlinks.
+- Security: Updater temp file now uses an unpredictable name with O_EXCL creation, preventing symlink-based arbitrary file overwrite. The old fixed name (`.obu-update-tmp`) was vulnerable to pre-placed symlinks.
 - Security: Chrome now launches with the renderer sandbox ON. `--no-sandbox` was previously unconditional, exposing the user's session to any renderer exploit on hostile pages. Falls back to `--no-sandbox` automatically when sandboxed startup fails (root, restricted containers).
 - Security: String truncation in URL/error/popup handling now uses char-boundary-safe `truncate_utf8` instead of byte slicing. Malicious pages with multi-byte UTF-8 at the right offset could crash the daemon (remote DoS).
 - Security: `validate_write_path` now blocks credential and persistence sinks (`.ssh`, `.gnupg`, `.aws`, `.bashrc`, `.zshrc`, shell startup files, systemd user units, Windows Startup folder) on all platforms, not just Unix system directories.
-- Security: Downloads moved from shared `/tmp/bladebro-downloads` (0755) to `~/.blade/downloads` (0700). Screenshots moved from predictable `/tmp/bladebro-screenshot-*` to the secure artifacts directory. Chrome profile directories now have all components chmodded to 0700.
+- Security: Downloads moved from shared `/tmp/obu-downloads` (0755) to `~/.obu/downloads` (0700). Screenshots moved from predictable `/tmp/obu-screenshot-*` to the secure artifacts directory. Chrome profile directories now have all components chmodded to 0700.
 - Security: Daemon auto-start no longer spawns through `sh -c`, eliminating shell injection from install paths containing single quotes.
 - Security: Cookie JS fallback now uses `serde_json::to_string` instead of Rust `{:?}` debug formatting, which is not valid JS string escaping.
 - macOS: Navigation no longer blocked by "Chrome Helper needs to download the font" system dialog. Chrome now launches with `--disable-remote-fonts` to prevent requesting on-demand CJK fonts (Osaka, STHeiti) from macOS. A CSS `@font-face` override maps these fonts to always-available alternatives (Helvetica/Arial) as a second layer of defense. Fixes #9.
@@ -1601,7 +1601,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 ## [3.2.0] - 2026-08-12
 
 ### Added
-- Context pruning: `act` responses progressively compress after turn 3 on the same page (full → 3K → 500 chars). 54% token reduction over a browsing session with zero capability loss. Counter resets on navigation, `see` calls, and errors. Toggle via `state compress on/off/status` or `BLADE_NO_COMPRESS=1` env var. On by default.
+- Context pruning: `act` responses progressively compress after turn 3 on the same page (full → 3K → 500 chars). 54% token reduction over a browsing session with zero capability loss. Counter resets on navigation, `see` calls, and errors. Toggle via `state compress on/off/status` or `OBU_NO_COMPRESS=1` env var. On by default.
 
 ### Fixed
 - Security: Unix daemon socket now explicitly set to 0600 permissions (was inheriting umask, which on misconfigured systems let any local user connect and control the browser).
@@ -1618,14 +1618,14 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - CLI `act fill` now accepts flat JSON object format (`{"e1":"John","e2":"Doe"}`) in addition to the array format (`[{"ref":"e1","text":"John"}]`). The flat object is automatically converted to the array format expected by the handler.
 
 ### Changed
-- CLI help system rewritten with per-subcommand help: `bladebro help act`, `help see`, `help state`, `help run`, `help vision`, `help daemon`, `help stop`, `help nav`. Each shows detailed args, options, and examples.
+- CLI help system rewritten with per-subcommand help: `obu help act`, `help see`, `help state`, `help run`, `help vision`, `help daemon`, `help stop`, `help nav`. Each shows detailed args, options, and examples.
 - `act type` vs `act fill` distinction clearly documented: `type` = type text into ONE element, `fill` = fill MULTIPLE form fields in ONE call.
 - `state set-cookie` CLI now supports `--path`, `--secure`, `--http-only`, `--same-site` flags.
 
 ## [3.1.3] - 2026-08-09
 
 ### Changed
-- CLI auto-daemon: the first CLI command now automatically starts a persistent daemon in the background. Subsequent commands connect to the same daemon, keeping one Chrome instance alive across all commands. No need to manually run `bladebro daemon` first. The agent just runs commands and they work efficiently. Use `--no-daemon` to force one-shot mode.
+- CLI auto-daemon: the first CLI command now automatically starts a persistent daemon in the background. Subsequent commands connect to the same daemon, keeping one Chrome instance alive across all commands. No need to manually run `obu daemon` first. The agent just runs commands and they work efficiently. Use `--no-daemon` to force one-shot mode.
 
 ## [3.1.2] - 2026-08-09
 
@@ -1641,13 +1641,13 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 ## [3.1.1] - 2026-08-09
 
 ### Added
-- `bladebro help --json` returns structured tool definitions, CLI command mapping, and flags as JSON. This is the CLI equivalent of MCP `tools/list`. An AI agent calls it once to discover the full interface, then uses `--json` on every command for structured output.
+- `obu help --json` returns structured tool definitions, CLI command mapping, and flags as JSON. This is the CLI equivalent of MCP `tools/list`. An AI agent calls it once to discover the full interface, then uses `--json` on every command for structured output.
 
 ## [3.1.0] - 2026-08-09
 
 ### Added
 - First-class CLI with the same power as the MCP server. All 5 tools (act, see, state, run, vision) available from the command line.
-- Daemon mode: `bladebro daemon` starts a persistent Chrome session via Unix socket. Subsequent commands connect to the daemon, keeping Chrome alive across commands. Same lifecycle as MCP (lazy launch, self-healing, idle timeout, reaper).
+- Daemon mode: `obu daemon` starts a persistent Chrome session via Unix socket. Subsequent commands connect to the daemon, keeping Chrome alive across commands. Same lifecycle as MCP (lazy launch, self-healing, idle timeout, reaper).
 - One-shot mode: if no daemon is running, each command launches Chrome, runs, and exits. `--no-daemon` flag forces one-shot.
 - `--json` flag for structured output optimized for AI agents. Human-readable by default.
 - Shared dispatch: CLI calls the exact same handler functions as the MCP server. Any feature update auto-propagates to both surfaces. Zero maintenance overhead.
@@ -1657,13 +1657,13 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 ## [3.0.28] - 2026-08-09
 
 ### Added
-- Linux ARM64 (aarch64) support. New `bladebro-linux-arm64` npm package, cross-compiled via cargo-zigbuild. Published to npm and GitHub releases with both new (`bladebro-linux-arm64`) and legacy (`bladebro-linux-aarch64`) naming.
-- Mali and Adreno GPU profiles for ARM systems. `BLADE_GPU=mali` and `BLADE_GPU=adreno` env var overrides.
+- Linux ARM64 (aarch64) support. New `obu-linux-arm64` npm package, cross-compiled via cargo-zigbuild. Published to npm and GitHub releases with both new (`obu-linux-arm64`) and legacy (`obu-linux-aarch64`) naming.
+- Mali and Adreno GPU profiles for ARM systems. `OBU_GPU=mali` and `OBU_GPU=adreno` env var overrides.
 - Architecture-aware GPU fallback: on aarch64, defaults to Mali-G78 instead of Intel UHD 630 (which would be a fingerprint inconsistency on ARM).
 - Architecture-aware UA fallback: on aarch64, the fallback User-Agent string correctly reports `Linux aarch64` instead of `Linux x86_64`.
 
 ### Changed
-- `BLADE_GPU` env var now accepts `mali` and `adreno` in addition to `intel`, `amd`, `nvidia`.
+- `OBU_GPU` env var now accepts `mali` and `adreno` in addition to `intel`, `amd`, `nvidia`.
 - Platform table in README now includes a status column. Linux ARM64 is marked "not live-verified" — cross-compiled but needs community testing on real ARM hardware.
 
 ## [3.0.27] - 2026-08-08
@@ -1693,7 +1693,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Changed
 
-- **Dynamic GPU detection for WebGL spoof**: Instead of hardcoding Intel UHD 630 for every GPU-less environment, Bladebro now detects the real GPU via `lspci` on Linux and generates a matching WebGL profile with the correct ANGLE renderer string and GL capability limits. Supports Intel (UHD 630, Iris Xe, Alder Lake, Tiger Lake, Skylake, Haswell), AMD (Radeon), and NVIDIA (GeForce). Falls back to Intel UHD 630 when `lspci` is unavailable (Docker without pciutils). Override with `BLADE_GPU=intel|amd|nvidia`.
+- **Dynamic GPU detection for WebGL spoof**: Instead of hardcoding Intel UHD 630 for every GPU-less environment, Obu now detects the real GPU via `lspci` on Linux and generates a matching WebGL profile with the correct ANGLE renderer string and GL capability limits. Supports Intel (UHD 630, Iris Xe, Alder Lake, Tiger Lake, Skylake, Haswell), AMD (Radeon), and NVIDIA (GeForce). Falls back to Intel UHD 630 when `lspci` is unavailable (Docker without pciutils). Override with `OBU_GPU=intel|amd|nvidia`.
 
 ### Fixed
 
@@ -1740,7 +1740,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Fixed
 
-- **Suppress MCP startup noise**: Removed startup banner `eprintln!` from the binary. Default to `warn` log level (not `bladebro=info`) in MCP mode so tracing info logs don't leak to the agent TUI. Extension stderr filter now only forwards errors/warnings, not info lines.
+- **Suppress MCP startup noise**: Removed startup banner `eprintln!` from the binary. Default to `warn` log level (not `obu=info`) in MCP mode so tracing info logs don't leak to the agent TUI. Extension stderr filter now only forwards errors/warnings, not info lines.
 
 ## [3.0.19] - 2026-08-07
 
@@ -1784,7 +1784,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - **GitHub-aware auto-extract**: `see extract=auto` on GitHub now extracts platform-specific fields: star count, fork count, stars-today (trending), issue/PR number, labels, and status (open/closed). Previously, GitHub items had shopping fields (rating) that were false positives from star-count elements.
 - **GitHub repo page content extraction**: `see mode=content` on GitHub repository pages now returns a focused summary with repo name, description, star and fork counts, topics, and README preview instead of the full page dump (file listing, sponsor info, etc.).
 - **Site-conditional field extraction**: Auto-extract now detects the site (Reddit, GitHub, or shopping) and applies only the relevant field extractors. Shopping fields (rating, reviews, availability) no longer fire on Reddit or GitHub, eliminating false-positive fields from star buttons, vote counts, and timestamp elements.
-- **Isolated world for DOM operations**: DOM queries can now run in an isolated execution world (`Page.createIsolatedWorld`) that is invisible to main-world anti-bot scripts. Patched DOM methods and `Error.stack` traps in the page's JavaScript cannot observe Bladebro's operations. The context is lazily created and reset on navigation.
+- **Isolated world for DOM operations**: DOM queries can now run in an isolated execution world (`Page.createIsolatedWorld`) that is invisible to main-world anti-bot scripts. Patched DOM methods and `Error.stack` traps in the page's JavaScript cannot observe Obu's operations. The context is lazily created and reset on navigation.
 
 ### Changed
 
@@ -1800,8 +1800,8 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Added
 
-- **Self-improving domain knowledge base**: Bladebro now learns from every session and compounds with use. Per-domain consent dialog selectors are learned from successful dismissals and auto-applied on subsequent visits (confidence-scored, learn-only-from-success). Visit tracking and global stats persist across restarts. Stored in `~/.blade/knowledge/domains/`.
-- **Behavioral fingerprint persistence**: Biometric parameters (click precision, mouse curvature, typing speed, inter-action gaps, idle hum interval) are generated once per installation and reused forever. The browser now maintains a consistent behavioral identity across sessions. Stored in `~/.blade/knowledge/behavior.json`.
+- **Self-improving domain knowledge base**: Obu now learns from every session and compounds with use. Per-domain consent dialog selectors are learned from successful dismissals and auto-applied on subsequent visits (confidence-scored, learn-only-from-success). Visit tracking and global stats persist across restarts. Stored in `~/.obu/knowledge/domains/`.
+- **Behavioral fingerprint persistence**: Biometric parameters (click precision, mouse curvature, typing speed, inter-action gaps, idle hum interval) are generated once per installation and reused forever. The browser now maintains a consistent behavioral identity across sessions. Stored in `~/.obu/knowledge/behavior.json`.
 
 ### Changed
 
@@ -1812,7 +1812,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Added
 
-- **Native pi agent support**: `pi install npm:bladebro` registers all 5 tools natively in the pi coding agent. A TypeScript extension spawns the binary as a stdio MCP subprocess, discovers tools via `tools/list`, and registers them via `pi.registerTool()`. No MCP adapter, no config files, no proxy tool. Tool definitions come from the binary at startup — auto-adapts to any tool def changes with zero extension maintenance. Auto-updates via `pi update --extensions`.
+- **Native pi agent support**: `pi install npm:obu` registers all 5 tools natively in the pi coding agent. A TypeScript extension spawns the binary as a stdio MCP subprocess, discovers tools via `tools/list`, and registers them via `pi.registerTool()`. No MCP adapter, no config files, no proxy tool. Tool definitions come from the binary at startup — auto-adapts to any tool def changes with zero extension maintenance. Auto-updates via `pi update --extensions`.
 - **Label addressing for click and hover**: `act click label="Submit"` and `act hover label="Menu"` now work, same as `type` and `fill`. Previously only `text` was supported for click/hover targeting.
 
 ### Fixed
@@ -1888,10 +1888,10 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Added
 
-- **Fingerprint seed persistence**: The stealth seed (drives canvas/audio noise, fingerprint-derived values) is now generated once and stored in `~/.blade/.fingerprint.json`. Subsequent sessions reuse the same seed, so canvas/audio fingerprints stay stable across visits. Sites tracking fingerprint consistency see the same device, not a new one each launch.
-- **Profile warming**: On first run only, Bladebro auto-visits 3 top sites (Google, GitHub, Wikipedia) to seed HTTP cache, HSTS, cookies, and browsing history. The profile starts looking like a real used browser instead of a blank slate. Runs once, takes ~4-6 seconds, never repeats (unless the profile is deleted).
+- **Fingerprint seed persistence**: The stealth seed (drives canvas/audio noise, fingerprint-derived values) is now generated once and stored in `~/.obu/.fingerprint.json`. Subsequent sessions reuse the same seed, so canvas/audio fingerprints stay stable across visits. Sites tracking fingerprint consistency see the same device, not a new one each launch.
+- **Profile warming**: On first run only, Obu auto-visits 3 top sites (Google, GitHub, Wikipedia) to seed HTTP cache, HSTS, cookies, and browsing history. The profile starts looking like a real used browser instead of a blank slate. Runs once, takes ~4-6 seconds, never repeats (unless the profile is deleted).
 - **Periodic profile sync-back**: Every 60 seconds while Chrome is alive, the session profile is synced to the template. SIGKILL or crash only loses up to 60 seconds of state instead of everything since the last graceful shutdown.
-- **Proxy/timezone/locale consistency warnings**: If `BLADE_PROXY`, `BLADE_TZ`, or `BLADE_LOCALE` changes between sessions, a warning is printed. A browser that switches IP or timezone between visits is a strong bot signal.
+- **Proxy/timezone/locale consistency warnings**: If `OBU_PROXY`, `OBU_TZ`, or `OBU_LOCALE` changes between sessions, a warning is printed. A browser that switches IP or timezone between visits is a strong bot signal.
 
 ### Changed
 
@@ -1901,7 +1901,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Fixed
 
-- **Corrupted fingerprint recovery**: If `~/.blade/.fingerprint.json` is corrupted or unreadable, a new seed is generated automatically instead of crashing.
+- **Corrupted fingerprint recovery**: If `~/.obu/.fingerprint.json` is corrupted or unreadable, a new seed is generated automatically instead of crashing.
 - **Re-warming on profile deletion**: If the template profile is manually deleted, the warming marker is reset and warming runs again on next launch.
 
 ## [3.0.7] - 2026-08-04
@@ -1979,15 +1979,15 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - **Typing reliability**: per-character key-event typing now verifies the value was actually set. If the input remains empty (framework-controlled inputs, certain focus states), falls back to JS value setting with full event dispatch (`input`, `change`, `keydown`, `keyup`). Eliminates "value empty" failures on forms that reject CDP key injection.
 - **Download with URL**: `act download url=...` now navigates to the URL first, then waits for the download to complete. Previously required a separate navigate call.
 - **Batch state ops**: `act batch` and `run` now accept `open-tab`, `close-tab`, `switch-tab`, `save`, and `load` as step actions. Previously required calling `state` separately.
-- **Update Hub asset naming**: npm-consistent platform naming (`bladebro-{os}-{arch}`) with legacy name fallback and fuzzy keyword matching. Ensures `bladebro -u` finds the correct binary on any release.
+- **Update Hub asset naming**: npm-consistent platform naming (`obu-{os}-{arch}`) with legacy name fallback and fuzzy keyword matching. Ensures `obu -u` finds the correct binary on any release.
 - **Download resume**: proper HTTP 206 (Partial Content) detection for resumable downloads. Correctly distinguishes 206 (append) from 200 (truncate and restart).
 
 ### Added
 
-- **`--check` dry run**: `bladebro -u --check` checks for updates without downloading.
-- **Binary execution verification**: downloaded binary is executed with `--version` to confirm it starts and identifies as bladebro before swapping.
+- **`--check` dry run**: `obu -u --check` checks for updates without downloading.
+- **Binary execution verification**: downloaded binary is executed with `--version` to confirm it starts and identifies as obu before swapping.
 - **Disk space pre-flight**: checks available disk space before downloading.
-- **Install method detection**: `bladebro -v` and `bladebro -doc` show install method (npm, source, binary).
+- **Install method detection**: `obu -v` and `obu -doc` show install method (npm, source, binary).
 - **Writable check**: verifies binary location is writable before swap, with clear error messages for each failure mode.
 - **Backup pruning**: keeps last 5 backups, prunes older ones.
 - **Backup verification on rollback**: verifies backup integrity before restoring, falls back to next backup if corrupted.
@@ -2007,13 +2007,13 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 ## [3.0.2] - 2026-08-03
 
 ### Added
-- npm packages for every platform: Linux x64/arm64, Windows x64, macOS x64/arm64, resolved via os/cpu-gated `optionalDependencies`. `npm install -g bladebro` works on all of them.
+- npm packages for every platform: Linux x64/arm64, Windows x64, macOS x64/arm64, resolved via os/cpu-gated `optionalDependencies`. `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` works on all of them.
 
 ## [3.0.1] - 2026-08-03
 
 ### Added
 
-- **npm distribution**: `npm install -g bladebro` ships a prebuilt binary. No Rust, no compilation. Per-platform packages via `optionalDependencies` with `os`/`cpu` fields (npm handles resolution natively). `scripts/publish-npm.sh` automates the full publish pipeline (version sync, build, publish, propagation wait).
+- **npm distribution**: `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` ships a prebuilt binary. No Rust, no compilation. Per-platform packages via `optionalDependencies` with `os`/`cpu` fields (npm handles resolution natively). `scripts/publish-npm.sh` automates the full publish pipeline (version sync, build, publish, propagation wait).
 - **Re-render immunity (D48)**: structural fingerprint identity for every captured element. FNV-1a hash over ancestor chain + tag + children + identity attributes. When React/Vue/Angular re-renders (DOM nodes replaced, text changes), refs survive via fingerprint match instead of being invalidated. The agent sees `↺ e2 (re-render survived)` in the delta. No other agent browser does this.
 - **Batch actions (D49)**: `act batch steps=[...]` runs multi-step workflows in ONE MCP call. Each step dispatches through the same handler, recapturing internally (no stale refs). Safety halt on page navigation or first failure with step-level context. 5-step form fill+submit in one call instead of 11.
 - **Auto-extract (`see extract=auto`)**: template-free list extraction via structural detection and content-value scoring (count × text × external links × headings × images). Verified on HN (30 articles), Lobste.rs (25 stories), Wikipedia (50 references), DuckDuckGo, StackOverflow, Reddit, GitHub, MDN.
@@ -2047,13 +2047,13 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 - 41 unit tests (including 3 re-render immunity tests). 26/26 real-site battery. 0 clippy warnings.
 
-- **Self-heal broken for act/run**: `handle_act` and `execute_step` wrapped `BladeError::Closed` into a generic error, so the transparent relaunch+retry never fired on mid-action crashes. Fixed: `Closed` propagates unwrapped.
+- **Self-heal broken for act/run**: `handle_act` and `execute_step` wrapped `ObuError::Closed` into a generic error, so the transparent relaunch+retry never fired on mid-action crashes. Fixed: `Closed` propagates unwrapped.
 - **Panic response used `id: null`**: broke JSON-RPC correlation; the client's request hung until timeout. Fixed to use the request id.
 - **Idle-relaunch state loss invisible**: after idle shutdown, the agent's refs failed with "never seen" and no hint. Fixed: the first post-relaunch response prepends a note explaining the browser restarted.
 - **Dead-tab recovery**: closing the attached tab externally bricked the session ("Target closed" forever). Fixed: auto-opens a fresh tab and retries.
 - **switch_tab detach-before-attach**: if the attach failed after detaching, the session was detached from everything. Fixed: attach new first, then detach old.
 - **free_port TOCTOU**: port picked, listener dropped, Chrome binds later — another process could steal it. Fixed: retry with a fresh port on startup-exit failure.
-- **Artifact filename collisions**: per-process counter started at 1 in every process, so session B overwrote session A's `blade-0001.json`. Fixed: pid-namespaced filenames + rotation (newest 300).
+- **Artifact filename collisions**: per-process counter started at 1 in every process, so session B overwrote session A's `obu-0001.json`. Fixed: pid-namespaced filenames + rotation (newest 300).
 - **read without ref**: cryptic heal error. Fixed: clear "read requires 'ref'" message.
 - **Browser drop blocked the async loop**: `shutdown_child` slept synchronously inside Drop on the executor thread (up to 3s). Fixed: offloaded to `spawn_blocking`.
 
@@ -2061,8 +2061,8 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 - **Session-scoped Chrome profiles** (`src/session_profile.rs`): per-process profile dirs with template copy-on-launch (preserves returning-visitor seasoning) and copy-back-on-exit (sole survivor syncs). Orphan reaper cleans dead sessions + Xvfb on every launch.
 - **Signal handlers** (SIGTERM/SIGINT/SIGHUP on Unix, Ctrl+C on Windows): graceful Chrome shutdown + profile sync + cleanup before exit.
-- **Display-claim files** (`/tmp/.blade-x<n>-claim`): race-free Xvfb display selection via atomic O_EXCL creation.
-- **`build.rs`**: embeds git SHA + dirty flag into the binary; `bladebro -v` shows it.
+- **Display-claim files** (`/tmp/.obu-x<n>-claim`): race-free Xvfb display selection via atomic O_EXCL creation.
+- **`build.rs`**: embeds git SHA + dirty flag into the binary; `obu -v` shows it.
 - **`release.sh`**: one-command release script — bump, changelog, build/test/clippy, tag, push, GitHub release with binary. Version skew becomes structurally impossible.
 
 ### Fixed
@@ -2072,18 +2072,18 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 ### Fixed — Reliability overhaul (14 bugs)
 
-- **Cross-session Chrome murder**: every bladebro shared one Chrome profile. A second session's launch SIGKILLed the first session's live Chrome; if both were alive, they murdered each other's browsers in a loop. Fixed with session-scoped profiles (`~/.blade/profiles/sess-<pid>`) — two sessions never touch the same Chrome.
+- **Cross-session Chrome murder**: every obu shared one Chrome profile. A second session's launch SIGKILLed the first session's live Chrome; if both were alive, they murdered each other's browsers in a loop. Fixed with session-scoped profiles (`~/.obu/profiles/sess-<pid>`) — two sessions never touch the same Chrome.
 - **Orphaned Chrome + Xvfb on kill**: no signal handlers. SIGTERM/SIGKILL from the harness orphaned Chrome + Xvfb forever (11 leaked Xvfb processes observed on one machine after a day). Fixed with SIGTERM/SIGINT/SIGHUP handlers that gracefully shut down Chrome, sync the profile back to the template, and clean up.
 - **Xvfb display leak**: orphaned Xvfb held `/tmp/.X<n>-lock`; each launch picked a higher number. Fixed with an orphan reaper that kills parentless Xvfb processes and removes stale locks + display-claim files on every launch.
-- **Xvfb launch race**: two bladebros launching simultaneously both claimed the same display. One Xvfb died, but its Chrome rendered on the survivor's Xvfb — when the survivor exited, the other's Chrome lost its display and crashed. Fixed with atomic O_EXCL display-claim files.
+- **Xvfb launch race**: two obus launching simultaneously both claimed the same display. One Xvfb died, but its Chrome rendered on the survivor's Xvfb — when the survivor exited, the other's Chrome lost its display and crashed. Fixed with atomic O_EXCL display-claim files.
 - **SIGTERM hang**: `tokio::io::stdin()` reads on a blocking-pool thread. After signal-driven shutdown, the parked read blocked `Runtime::drop` forever — the process stayed alive with Chrome long dead. Fixed with explicit `process::exit` before the runtime drops.
-- **Self-heal broken for act/run**: `handle_act` and `execute_step` wrapped `BladeError::Closed` into a generic error, so the transparent relaunch+retry never fired on mid-action crashes. Fixed: `Closed` propagates unwrapped.
+- **Self-heal broken for act/run**: `handle_act` and `execute_step` wrapped `ObuError::Closed` into a generic error, so the transparent relaunch+retry never fired on mid-action crashes. Fixed: `Closed` propagates unwrapped.
 - **Panic response used `id: null`**: broke JSON-RPC correlation; the client's request hung until timeout. Fixed to use the request id.
 - **Idle-relaunch state loss invisible**: after idle shutdown, the agent's refs failed with "never seen" and no hint. Fixed: the first post-relaunch response prepends a note explaining the browser restarted.
 - **Dead-tab recovery**: closing the attached tab externally bricked the session ("Target closed" forever). Fixed: auto-opens a fresh tab and retries.
 - **switch_tab detach-before-attach**: if the attach failed after detaching, the session was detached from everything. Fixed: attach new first, then detach old.
 - **free_port TOCTOU**: port picked, listener dropped, Chrome binds later — another process could steal it. Fixed: retry with a fresh port on startup-exit failure.
-- **Artifact filename collisions**: per-process counter started at 1 in every process, so session B overwrote session A's `blade-0001.json`. Fixed: pid-namespaced filenames + rotation (newest 300).
+- **Artifact filename collisions**: per-process counter started at 1 in every process, so session B overwrote session A's `obu-0001.json`. Fixed: pid-namespaced filenames + rotation (newest 300).
 - **read without ref**: cryptic heal error. Fixed: clear "read requires 'ref'" message.
 - **Browser drop blocked the async loop**: `shutdown_child` slept synchronously inside Drop on the executor thread (up to 3s). Fixed: offloaded to `spawn_blocking`.
 
@@ -2091,8 +2091,8 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 
 - **Session-scoped Chrome profiles** (`src/session_profile.rs`): per-process profile dirs with template copy-on-launch (preserves returning-visitor seasoning) and copy-back-on-exit (sole survivor syncs). Orphan reaper cleans dead sessions + Xvfb on every launch.
 - **Signal handlers** (SIGTERM/SIGINT/SIGHUP on Unix, Ctrl+C on Windows): graceful Chrome shutdown + profile sync + cleanup before exit.
-- **Display-claim files** (`/tmp/.blade-x<n>-claim`): race-free Xvfb display selection via atomic O_EXCL creation.
-- **`build.rs`**: embeds git SHA + dirty flag into the binary; `bladebro -v` shows it.
+- **Display-claim files** (`/tmp/.obu-x<n>-claim`): race-free Xvfb display selection via atomic O_EXCL creation.
+- **`build.rs`**: embeds git SHA + dirty flag into the binary; `obu -v` shows it.
 - **`release.sh`**: one-command release script — bump, changelog, build/test/clippy, tag, push, GitHub release with binary. Version skew becomes structurally impossible.
 
 ## [2.0.1] - 2026-07-29
@@ -2111,12 +2111,12 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 - **JS eval** (`act action=eval js="..."`): evaluate JS in the page. `ref=e5` exposes the element as `el`. Big results (>4KB) go to an artifact file. Also available as `js` steps in `run`.
 - **Console + network introspection** (`see logs=console|network`): console entries (errors/warnings first) and network requests (failures first) with status codes. Console capture uses a `_lie`-masked injection hook, zero `Runtime.enable` cost.
 - **Template extraction** (`see extract=json template={...}`): declarative structured extraction in ONE call. `{"stories": {"container": "tr.story", "fields": {"title": ".title a", "link": ".title a@href"}}}` → array of objects. Multiple lists in one call. Attribute sugar `@href|@src|@value`. Artifact-offloaded when large.
-- **Artifact offloading**: eval results, extracts, and logs over ~6KB are written to `~/.blade/artifacts/` and the response gives a file path + preview. Context stays clean.
+- **Artifact offloading**: eval results, extracts, and logs over ~6KB are written to `~/.obu/artifacts/` and the response gives a file path + preview. Context stays clean.
 - **Semantic folding**: nav/banner/footer/aside landmarks fold to one-liners on pages with a main landmark (e.g. `nav ▸ 24 items folded (filter=nav to expand)`). Filter expands them. Pages without landmarks render flat.
 - **`slim` mode** (`act slim=true`): verdict only, no delta. For agents mid-run that don't need the page state.
 - **Vision marks** (`vision marks=true`): Set-of-Marks overlay. Numbered ref badges painted on visible elements. Refs match the structural model exactly, so a vision-capable agent can say "click e5" and it works.
 - **Dialog auto-handling**: alert/confirm/prompt/beforeunload dialogs are auto-dismissed (alert=accept, confirm/prompt=cancel, beforeunload=accept) and surfaced to the agent. No more deadlocks on dialog-heavy pages.
-- **Lazy Chrome launch + idle shutdown**: Chrome launches on the first `tools/call` and shuts down after 5 minutes of inactivity (`BLADE_IDLE_TIMEOUT` env var, seconds, 0 disables). `initialize`, `tools/list`, and other metadata calls never trigger a launch.
+- **Lazy Chrome launch + idle shutdown**: Chrome launches on the first `tools/call` and shuts down after 5 minutes of inactivity (`OBU_IDLE_TIMEOUT` env var, seconds, 0 disables). `initialize`, `tools/list`, and other metadata calls never trigger a launch.
 - **Self-healing browser connection**: when Chrome crashes, the MCP server detects it and relaunches Chrome automatically. Tool calls are retried transparently.
 
 ### Fixed
@@ -2135,7 +2135,7 @@ Major reliability upgrade. 26 files changed, 1037 insertions, 397 deletions.
 First stable release. The agentic browser driver is production-ready.
 
 ### Added
-- **Update hub**: `bladebro -u` (self-update), `bladebro -doc` (9-point diagnostic), `bladebro --rollback`, `bladebro -v`. Atomic binary swap, magic-byte verification, backup + rollback. `GITHUB_TOKEN` for higher API limits. `BLADE_NO_UPDATE_CHECK=1` to skip checks
+- **Update hub**: `obu -u` (self-update), `obu -doc` (9-point diagnostic), `obu --rollback`, `obu -v`. Atomic binary swap, magic-byte verification, backup + rollback. `GITHUB_TOKEN` for higher API limits. `OBU_NO_UPDATE_CHECK=1` to skip checks
 - **MCP 2026-07-28 support**: dual-dialect protocol. Speaks 2024-11-05 through 2026-07-28, negotiated per request
 - **`server/discover`**: capability advertisement for stateless clients (SEP-2575, required by the new spec)
 - **Per-request version negotiation**: `_meta["io.modelcontextprotocol/protocolVersion"]` honored on every request; unknown versions fail closed with `UnsupportedProtocolVersionError` (-32022)
@@ -2176,7 +2176,7 @@ Pre-release. Hardening pass complete, CLI update pending.
   - Seasoning: persistent profile, storage quota, font audit
 - **18 stealth mechanisms** (S1-S18): pipe transport, idle hum, pacing governor, geo-identity, WebRTC fail-closed, per-domain memory, smooth scroll, adaptive GL, mediaDevices patch, coordinate click, remediation ladder, audit subcommand
 - **Auto-launch**: 5-tier Chrome path detection, Xvfb headful mode, lifecycle management
-- **Audit subcommand**: `bladebro audit` prints stealth vectors + self-check scorecard
+- **Audit subcommand**: `obu audit` prints stealth vectors + self-check scorecard
 - **Panic isolation**: handler panics become JSON-RPC errors, server survives
 - **Chrome death fast-fail**: `Arc<AtomicBool>` on CdpClient, race-free closed detection
 - **Dialog handling**: auto-dismiss alert/confirm/prompt/beforeunload
@@ -2193,7 +2193,7 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Session name path traversal (validate name)
 - Hum metronome evaluate tell (cache viewport, refresh every 12 cycles)
 - Hum clamp panic on tiny viewports
-- BLADE_LOCALE JS injection escape (BCP-47 validation)
+- OBU_LOCALE JS injection escape (BCP-47 validation)
 - S11 locale incoherence (apply_domain_profile swaps injection registration)
 - Stealth script stacking (register once at attach, swap only on locale change)
 - Chrome death hangs agent (closed: Arc<AtomicBool>)
@@ -2205,32 +2205,32 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/dondai44423/bladebro/compare/v4.6.9...HEAD
-[4.6.9]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.9
-[4.6.8]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.8
-[4.6.7]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.7
-[4.6.6]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.6
-[4.6.5]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.5
-[4.6.4]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.4
-[4.6.3]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.3
-[4.6.2]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.2
-[4.6.1]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.1
-[4.6.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.6.0
-[4.5.2]: https://github.com/dondai44423/bladebro/releases/tag/v4.5.2
-[4.5.1]: https://github.com/dondai44423/bladebro/releases/tag/v4.5.1
-[4.5.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.5.0
-[4.4.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.4.0
-[4.3.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.3.0
-[4.2.4]: https://github.com/dondai44423/bladebro/releases/tag/v4.2.4
-[4.2.3]: https://github.com/dondai44423/bladebro/releases/tag/v4.2.3
-[4.2.2]: https://github.com/dondai44423/bladebro/releases/tag/v4.2.2
-[4.2.1]: https://github.com/dondai44423/bladebro/releases/tag/v4.2.1
-[4.2.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.2.0
-[4.1.1]: https://github.com/dondai44423/bladebro/releases/tag/v4.1.1
-[4.1.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.1.0
-[4.0.3]: https://github.com/dondai44423/bladebro/releases/tag/v4.0.3
-[4.0.2]: https://github.com/dondai44423/bladebro/releases/tag/v4.0.2
-[4.0.1]: https://github.com/dondai44423/bladebro/releases/tag/v4.0.1
-[4.0.0]: https://github.com/dondai44423/bladebro/releases/tag/v4.0.0
-[1.0.0]: https://github.com/dondai44423/bladebro/releases/tag/v1.0.0
-[0.9.0]: https://github.com/dondai44423/bladebro/releases/tag/v0.9.0
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.6.9...HEAD
+[4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9
+[4.6.8]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.8
+[4.6.7]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.7
+[4.6.6]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.6
+[4.6.5]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.5
+[4.6.4]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.4
+[4.6.3]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.3
+[4.6.2]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.2
+[4.6.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.1
+[4.6.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.0
+[4.5.2]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.5.2
+[4.5.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.5.1
+[4.5.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.5.0
+[4.4.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.4.0
+[4.3.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.3.0
+[4.2.4]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.2.4
+[4.2.3]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.2.3
+[4.2.2]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.2.2
+[4.2.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.2.1
+[4.2.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.2.0
+[4.1.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.1.1
+[4.1.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.1.0
+[4.0.3]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.0.3
+[4.0.2]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.0.2
+[4.0.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.0.1
+[4.0.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.0.0
+[1.0.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v1.0.0
+[0.9.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v0.9.0

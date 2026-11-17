@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::stealth::biometrics::gaussian;
 
 /// How long one mouse move may go unacked. 5s: if Chrome is stuck (e.g. a
@@ -46,7 +46,7 @@ async fn send_mouse_move(
         .await
     {
         Ok(_) => Ok(()),
-        Err(BladeError::Timeout(_)) => {
+        Err(ObuError::Timeout(_)) => {
             *queued = true;
             Ok(())
         }
@@ -144,7 +144,7 @@ pub(super) async fn dispatch_mouse_click_in_box(
     last_mouse: &Arc<std::sync::Mutex<Option<(f64, f64)>>>,
 ) -> Result<()> {
     if box_.iter().any(|v| !v.is_finite()) || box_[2] <= 0.0 || box_[3] <= 0.0 {
-        return Err(BladeError::NotInteractable(
+        return Err(ObuError::NotInteractable(
             "click target has no positive area; refresh the target before clicking".into(),
         ));
     }
@@ -476,7 +476,7 @@ fn shortcut_commands(combo: &KeyCombo, macos: bool) -> Option<Vec<String>> {
 /// Dispatch a key press (keyDown + keyUp) via `Input.dispatchKeyEvent`.
 /// Accepts single characters, named keys, and chords ("Control+a").
 pub(super) async fn dispatch_key(cdp: &CdpSession, key: &str) -> Result<()> {
-    if let Some(combo) = parse_key_combo(key).map_err(BladeError::Other)? {
+    if let Some(combo) = parse_key_combo(key).map_err(ObuError::Other)? {
         let commands = shortcut_commands(&combo, cfg!(target_os = "macos"));
         return dispatch_combo(cdp, &combo, commands).await;
     }
@@ -530,7 +530,7 @@ pub(super) async fn dispatch_key(cdp: &CdpSession, key: &str) -> Result<()> {
         return Ok(());
     }
 
-    let (kname, code, vk) = named_key(key).ok_or_else(|| BladeError::Other(format!(
+    let (kname, code, vk) = named_key(key).ok_or_else(|| ObuError::Other(format!(
         "unsupported key: '{key}'. Supported: single characters, named keys (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, Space), and chords (Control+a, Meta+Enter, Shift+Tab)"
     )))?;
     // The `text` field is critical for keys that produce text - without it,
@@ -573,7 +573,7 @@ pub(super) async fn dispatch_combo(
     combo: &KeyCombo,
     commands: Option<Vec<String>>,
 ) -> Result<()> {
-    let (mut evs, main_idx) = combo_events(combo).map_err(BladeError::Other)?;
+    let (mut evs, main_idx) = combo_events(combo).map_err(ObuError::Other)?;
     if let Some(cmds) = commands {
         if let Some(obj) = evs.get_mut(main_idx).and_then(|v| v.as_object_mut()) {
             obj.insert("commands".to_string(), json!(cmds));

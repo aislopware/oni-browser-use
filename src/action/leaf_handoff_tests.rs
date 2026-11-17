@@ -165,7 +165,7 @@ async fn a_row_without_one_still_forwards_and_says_so() {
 
 #[tokio::test]
 async fn nothing_is_asked_when_the_script_already_ran_in_the_pages_world() {
-    // BLADE_MAIN_WORLD=1, or a target with no frames: the script saw
+    // OBU_MAIN_WORLD=1, or a target with no frames: the script saw
     // `n.onclick` itself, and its answer stands.
     let (cdp, page) = fake_page(false).await;
     let found = find_by_sig(&cdp, SIG, &[], "box", None).await.unwrap();

@@ -47,9 +47,9 @@ impl Page {
             return;
         }
         let before = gpu_state();
-        // An operator-forced decision (`BLADE_WEBGL`) is never rearmed
+        // An operator-forced decision (`OBU_WEBGL`) is never rearmed
         // against — the refresh must not fight an explicit override.
-        let forced = std::env::var_os("BLADE_WEBGL").is_some();
+        let forced = std::env::var_os("OBU_WEBGL").is_some();
         {
             let Ok(mut last) = GL_RECHECK.lock() else {
                 return;
@@ -126,7 +126,7 @@ impl Page {
     /// document, so contexts created from now on are masked without a
     /// restart. Called only to ADD the mask (see `gl_rearm_needed`) — the
     /// decision is never reversed automatically, and an operator-forced
-    /// `BLADE_WEBGL` is never overridden.
+    /// `OBU_WEBGL` is never overridden.
     async fn rearm_gl_injection(&mut self, spoof: bool) {
         eprintln!(
             "[stealth] GL transition: rebuilding the injection (mask {})",
@@ -176,7 +176,7 @@ mod gl_rearm_tests {
         // Already-matching states: nothing to do.
         assert!(!gl_rearm_needed(true, true, false));
         assert!(!gl_rearm_needed(false, false, false));
-        // An operator-forced BLADE_WEBGL is never rearmed against.
+        // An operator-forced OBU_WEBGL is never rearmed against.
         assert!(!gl_rearm_needed(true, false, true));
     }
 }

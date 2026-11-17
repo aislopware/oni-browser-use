@@ -9,11 +9,11 @@ and a late-hydrating draft scrambled everything.
 ## Run
 
 ```bash
-python3 tools/qol_probe/run.py          # uses target/release/bladebro
-BLADEBRO=/path/to/bladebro python3 tools/qol_probe/run.py
+python3 tools/qol_probe/run.py          # uses target/release/obu
+OBU=/path/to/obu python3 tools/qol_probe/run.py
 ```
 
-Own fixture server (port 8794), own `BLADE_HOME` (`/tmp/qol_probe_home`),
+Own fixture server (port 8794), own `OBU_HOME` (`/tmp/qol_probe_home`),
 no display leakage. Exit 0 = all 122 assertions passed.
 
 ## What it proves

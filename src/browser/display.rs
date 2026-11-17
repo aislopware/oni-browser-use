@@ -32,11 +32,11 @@ impl VirtualDisplay {
     /// Start an Xvfb virtual display on a free display number.
     ///
     /// Race-free display selection: an atomic claim file
-    /// (`/tmp/.blade-x<n>-claim`, O_EXCL create) marks the
+    /// (`/tmp/.obu-x<n>-claim`, O_EXCL create) marks the
     /// display as OURS before Xvfb even spawns. Timing-based
     /// verification ("is Xvfb still alive after 200ms") was
     /// not enough — a losing Xvfb can take >200ms to exit,
-    /// letting two bladebros share one display; when the
+    /// letting two obus share one display; when the
     /// owner exits, the survivor's Chrome loses its display
     /// and dies (observed live: SIGTERM on session A killed
     /// session B's Chrome via a shared Xvfb).
@@ -46,7 +46,7 @@ impl VirtualDisplay {
     /// connect-success alone would accept a co-user's pre-placed listener
     /// in the world-writable `/tmp/.X11-unix` (see `xvfb_socket_owned_by`).
     pub(super) fn start() -> Result<Self> {
-        let xvfb_path = find_xvfb().ok_or_else(|| BladeError::Other("Xvfb not found".into()))?;
+        let xvfb_path = find_xvfb().ok_or_else(|| ObuError::Other("Xvfb not found".into()))?;
         Self::start_with_path(&xvfb_path)
     }
 
@@ -85,10 +85,10 @@ impl VirtualDisplay {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-            // Out of bladebro's process group, so a Ctrl-C to the foreground
+            // Out of obu's process group, so a Ctrl-C to the foreground
             // job leaves the display up while the browser closes and flushes
-            // (it died with bladebro's group, and Chrome lost its display
-            // mid-close). Killed by the kernel when bladebro dies, so a
+            // (it died with obu's group, and Chrome lost its display
+            // mid-close). Killed by the kernel when obu dies, so a
             // SIGKILL that runs no Drop still takes it down, and Chrome
             // exits on losing its display.
             let mut child = match crate::platform::spawn_tied_to_process(xvfb) {
@@ -115,7 +115,7 @@ impl VirtualDisplay {
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         last_err = format!("Xvfb :{display_num} exited ({status})");
-                        eprintln!("[bladebro] Xvfb :{display_num} died ({status}), retrying");
+                        eprintln!("[obu] Xvfb :{display_num} died ({status}), retrying");
                         release_display_claim(display_num);
                         let _ = std::fs::remove_file(&auth_file);
                         break;
@@ -123,7 +123,7 @@ impl VirtualDisplay {
                     Ok(None) => {
                         if xvfb_socket_owned_by(child.id(), display_num) {
                             let wm = spawn_session_chrome(display_num, &auth_file);
-                            eprintln!("[bladebro] Xvfb virtual display on :{display_num}");
+                            eprintln!("[obu] Xvfb virtual display on :{display_num}");
                             return Ok(Self {
                                 child,
                                 wm,
@@ -154,7 +154,7 @@ impl VirtualDisplay {
                 }
             }
         }
-        Err(BladeError::Other(format!(
+        Err(ObuError::Other(format!(
             "Xvfb failed after 3 attempts: {last_err}"
         )))
     }
@@ -206,7 +206,7 @@ fn spawn_session_chrome(display_num: u16, xauth: &std::path::Path) -> Option<Chi
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        // Same lifetime as Xvfb: survives the job's Ctrl-C, dies with bladebro.
+        // Same lifetime as Xvfb: survives the job's Ctrl-C, dies with obu.
         crate::platform::spawn_tied_to_process(cmd).ok()
     });
     // Declare the taskbar after the WM owns the root and verify the read-back.
@@ -441,7 +441,7 @@ fn write_xvfb_auth_file(display_num: u16) -> Option<std::path::PathBuf> {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let path = std::path::PathBuf::from(format!(
-        "/tmp/.blade-x{display_num}-xauth-{}-{nanos}",
+        "/tmp/.obu-x{display_num}-xauth-{}-{nanos}",
         std::process::id()
     ));
     let mut f = std::fs::OpenOptions::new()
@@ -470,7 +470,7 @@ fn claim_display_num() -> Option<u16> {
         if std::path::Path::new(&format!("/tmp/.X{n}-lock")).exists() {
             continue;
         }
-        let claim = format!("/tmp/.blade-x{n}-claim");
+        let claim = format!("/tmp/.obu-x{n}-claim");
         if std::fs::OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -489,7 +489,7 @@ fn claim_display_num() -> Option<u16> {
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn release_display_claim(display_num: u16) {
-    let _ = std::fs::remove_file(format!("/tmp/.blade-x{display_num}-claim"));
+    let _ = std::fs::remove_file(format!("/tmp/.obu-x{display_num}-claim"));
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -531,7 +531,7 @@ mod readiness_tests {
     use std::os::unix::fs::PermissionsExt;
     #[test]
     fn a_live_process_without_a_display_socket_is_not_ready() {
-        let dir = std::env::temp_dir().join(format!("blade-xvfb-ready-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-xvfb-ready-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let script = dir.join("fake-xvfb");
         let pids = dir.join("pids");
@@ -572,7 +572,7 @@ mod readiness_tests {
             .flatten()
             .filter(|e| {
                 let n = e.file_name().to_string_lossy().to_string();
-                n.starts_with(".blade-x") && n.contains(&mine)
+                n.starts_with(".obu-x") && n.contains(&mine)
             })
             .collect();
         assert!(
@@ -610,7 +610,7 @@ mod readiness_tests {
 
     #[test]
     fn peer_credentials_match_the_listening_process() {
-        let dir = std::env::temp_dir().join(format!("blade-peer-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-peer-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let sock = dir.join("s");

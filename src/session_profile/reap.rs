@@ -8,22 +8,22 @@ use crate::platform;
 
 use super::SessionProfile;
 
-/// Reap the corpses of dead bladebro processes:
+/// Reap the corpses of dead obu processes:
 /// 1. Session profile dirs whose owner pid is dead → stop their
 ///    orphaned browser (found by its SingletonLock pid or, on Linux, by
 ///    an exact `--user-data-dir` match), verify nothing runs on the
 ///    profile any more, sync it back to the template, rm dir. A profile
 ///    that could not be freed is left untouched for the next launch.
-/// 2. Display claims (/tmp/.blade-x<n>-claim) whose owner is dead →
+/// 2. Display claims (/tmp/.obu-x<n>-claim) whose owner is dead →
 ///    remove the claim and a stale Xvfb lock, and kill the display's
 ///    Xvfb only if it is an orphan that started with that claim (a
 ///    later system or user-service Xvfb on the display is left alone).
 ///
 /// Runs on every Chrome launch. Self-healing: no matter how
-/// bladebro died (SIGKILL, OOM, panic), the next launch
+/// obu died (SIGKILL, OOM, panic), the next launch
 /// cleans up after it.
 pub fn reap_orphans() {
-    reap_orphans_at(&platform::blade_dir());
+    reap_orphans_at(&platform::obu_dir());
 
     // Stale Xvfb locks + orphan Xvfb processes (Linux).
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -41,12 +41,12 @@ pub fn reap_orphans() {
 /// of the whole profile. Deleting it (as reap_orphans used to) loses all
 /// seasoning on exactly the power-loss path the sidecar protects against.
 /// Returns true when a displaced template was resurrected.
-pub(super) fn restore_interrupted_swap(blade_dir: &Path) -> bool {
-    let old = blade_dir.join(".profile.old");
-    let template = blade_dir.join("profile");
+pub(super) fn restore_interrupted_swap(obu_dir: &Path) -> bool {
+    let old = obu_dir.join(".profile.old");
+    let template = obu_dir.join("profile");
     if old.is_dir() && !template.exists() {
         let _ = std::fs::rename(&old, &template);
-        eprintln!("[bladebro] restored template from .profile.old (sync swap was interrupted)");
+        eprintln!("[obu] restored template from .profile.old (sync swap was interrupted)");
         return true;
     }
     // Normal (template present) or leftover staging: drop it.
@@ -56,22 +56,22 @@ pub(super) fn restore_interrupted_swap(blade_dir: &Path) -> bool {
 
 /// The reaper core, parameterized on the data root. The root is resolved
 /// ONCE by the caller: everything below must operate on the same directory —
-/// a mid-reap `blade_dir()` re-resolution could be redirected by the
-/// process-global env changing on another thread (tests flip BLADE_HOME in
+/// a mid-reap `obu_dir()` re-resolution could be redirected by the
+/// process-global env changing on another thread (tests flip OBU_HOME in
 /// parallel), which is the split-brain this signature exists to prevent.
-pub(super) fn reap_orphans_at(blade_dir: &Path) {
+pub(super) fn reap_orphans_at(obu_dir: &Path) {
     // Startup overlaps other sessions' sync-back. Staging is disposable only
     // while we hold the same lock as the copier; otherwise leave it intact.
-    if let Some(_lock) = SessionProfile::acquire_lock_at(blade_dir) {
-        let _ = std::fs::remove_dir_all(blade_dir.join(".profile.sync"));
-        restore_interrupted_swap(blade_dir);
+    if let Some(_lock) = SessionProfile::acquire_lock_at(obu_dir) {
+        let _ = std::fs::remove_dir_all(obu_dir.join(".profile.sync"));
+        restore_interrupted_swap(obu_dir);
     }
 
     // 1. Dead session profiles + their Chromes (agent lane), then 1b. the
     // real-lane (clone) roots: a dead MCP/daemon process must not leak its
     // Chrome or lose the clone's state.
-    reap_session_root(blade_dir, None);
-    for root in real_lane_roots(blade_dir) {
+    reap_session_root(obu_dir, None);
+    for root in real_lane_roots(obu_dir) {
         if let Some(_lock) = SessionProfile::acquire_lock_at(&root) {
             restore_interrupted_real_swap(&root);
             let _ = std::fs::remove_dir_all(root.join("template.sync"));
@@ -80,9 +80,9 @@ pub(super) fn reap_orphans_at(blade_dir: &Path) {
     }
 }
 
-/// The real-lane (clone) browser roots under `blade_dir/realbrowser`.
-fn real_lane_roots(blade_dir: &Path) -> Vec<PathBuf> {
-    std::fs::read_dir(blade_dir.join("realbrowser"))
+/// The real-lane (clone) browser roots under `obu_dir/realbrowser`.
+fn real_lane_roots(obu_dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(obu_dir.join("realbrowser"))
         .map(|entries| {
             entries
                 .flatten()
@@ -94,15 +94,15 @@ fn real_lane_roots(blade_dir: &Path) -> Vec<PathBuf> {
 }
 
 /// Every root whose `profiles/` the reaper visits: the agent lane
-/// (`blade_dir` itself) and each real-lane browser root.
-pub(crate) fn session_roots(blade_dir: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![blade_dir.to_path_buf()];
-    roots.extend(real_lane_roots(blade_dir));
+/// (`obu_dir` itself) and each real-lane browser root.
+pub(crate) fn session_roots(obu_dir: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![obu_dir.to_path_buf()];
+    roots.extend(real_lane_roots(obu_dir));
     roots
 }
 
 /// Is the owner of this `sess-*` dir dead? The owner is the pid in
-/// `.blade-owner`, else the pid in the name (a creation interrupted before
+/// `.obu-owner`, else the pid in the name (a creation interrupted before
 /// the marker was written). Never dead: any other name, an unparseable
 /// owner, or this process. `doctor` reports with this same rule so its
 /// "auto-reaped on next launch" is what the next launch does.
@@ -113,7 +113,7 @@ pub(crate) fn session_owner_dead(dir: &Path) -> bool {
     let Some(name_pid) = name.strip_prefix("sess-") else {
         return false;
     };
-    let owner = std::fs::read_to_string(dir.join(".blade-owner"))
+    let owner = std::fs::read_to_string(dir.join(".obu-owner"))
         .ok()
         .and_then(|s| s.trim().parse::<u32>().ok())
         .or_else(|| name_pid.parse::<u32>().ok());
@@ -135,10 +135,10 @@ fn reap_session_root(root: &Path, real_root: Option<&Path>) {
         }
         let name = entry.file_name().to_string_lossy().to_string();
         if reap_dead_session(root, &dir, real_root) {
-            eprintln!("[bladebro] reaped dead session profile {name}");
+            eprintln!("[obu] reaped dead session profile {name}");
         } else {
             eprintln!(
-                "[bladebro] dead session profile {name} is still in use by a running process (browser or launcher); left in place (retried on next launch)"
+                "[obu] dead session profile {name} is still in use by a running process (browser or launcher); left in place (retried on next launch)"
             );
         }
     }
@@ -296,9 +296,7 @@ fn restore_interrupted_real_swap(root: &Path) {
         if dir.is_dir() {
             if !template.exists() {
                 let _ = std::fs::rename(&dir, &template);
-                eprintln!(
-                    "[bladebro] restored real-browser template from {name} (interrupted {what})"
-                );
+                eprintln!("[obu] restored real-browser template from {name} (interrupted {what})");
             } else {
                 let _ = std::fs::remove_dir_all(&dir);
             }
@@ -356,7 +354,7 @@ fn process_uses_dir(pid: u32, dir: &Path) -> bool {
     }
 }
 
-/// Only a dead Bladebro display claim authorizes cleanup. Orphanhood alone
+/// Only a dead Obu display claim authorizes cleanup. Orphanhood alone
 /// proves no ownership, and neither does the executable: the claim, the exact
 /// Xvfb cmdline and the display number must all agree.
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -367,7 +365,7 @@ fn reap_xvfb() {
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn reap_xvfb_at(tmp: &Path) {
     for n in 99..200 {
-        let claim = tmp.join(format!(".blade-x{n}-claim"));
+        let claim = tmp.join(format!(".obu-x{n}-claim"));
         let owner = std::fs::read_to_string(&claim)
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok());
@@ -376,7 +374,7 @@ fn reap_xvfb_at(tmp: &Path) {
         };
         // The sibling Xauthority file (if any) dies with its claim's owner.
         if let Ok(rd) = std::fs::read_dir(tmp) {
-            let prefix = format!(".blade-x{n}-xauth-");
+            let prefix = format!(".obu-x{n}-xauth-");
             for e in rd.flatten() {
                 if e.file_name().to_string_lossy().starts_with(&prefix) {
                     let _ = std::fs::remove_file(e.path());
@@ -405,10 +403,10 @@ fn reap_xvfb_at(tmp: &Path) {
             {
                 platform::kill_process_force(pid);
                 let _ = std::fs::remove_file(&lock);
-                eprintln!("[bladebro] reaped orphaned Xvfb :{n} (pid {pid})");
+                eprintln!("[obu] reaped orphaned Xvfb :{n} (pid {pid})");
             }
             // A live foreign server must keep its lock, even if a stale
-            // Bladebro claim was left before that server started.
+            // Obu claim was left before that server started.
             let _ = std::fs::remove_file(&claim);
             continue;
         }
@@ -417,7 +415,7 @@ fn reap_xvfb_at(tmp: &Path) {
         let _ = std::fs::remove_file(&lock);
         kill_xvfb_on_display(n, &claim);
         let _ = std::fs::remove_file(&claim);
-        eprintln!("[bladebro] reaped stale Xvfb display :{n}");
+        eprintln!("[obu] reaped stale Xvfb display :{n}");
     }
 }
 
@@ -432,7 +430,7 @@ fn reap_xvfb_at(tmp: &Path) {
 /// forever (the unit test failed on the same assumption).
 ///
 /// Conservative by construction: `1` (classic init adoption) or a parent whose
-/// comm is `systemd` (the manager). A live owner is named `bladebro`,
+/// comm is `systemd` (the manager). A live owner is named `obu`,
 /// `chromium` or `Xvfb` — never the manager — and an unreadable parent means
 /// NOT orphaned.
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -481,7 +479,7 @@ fn xvfb_cmdline_matches(cmdline: &str, display: u16) -> bool {
 }
 
 /// Did `pid` start no later than `claim` was written (plus slack)?
-/// Bladebro writes its claim and spawns Xvfb milliseconds later, so its
+/// Obu writes its claim and spawns Xvfb milliseconds later, so its
 /// server is never much younger than its claim. One that started well after
 /// a stale claim was launched by someone else — a system or user service
 /// takes a display the dead claimer had freed. Unreadable data never
@@ -588,7 +586,7 @@ mod xvfb_tests {
         let number = (150..200)
             .find(|n| {
                 !Path::new(&format!("/tmp/.X{n}-lock")).exists()
-                    && !Path::new(&format!("/tmp/.blade-x{n}-claim")).exists()
+                    && !Path::new(&format!("/tmp/.obu-x{n}-claim")).exists()
                     && !Path::new(&format!("/tmp/.X11-unix/X{n}")).exists()
             })
             .expect("a disposable test display must be free");
@@ -602,7 +600,7 @@ mod xvfb_tests {
             .trim()
             .parse()
             .unwrap();
-        let root = std::env::temp_dir().join(format!("blade-xvfb-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-xvfb-test-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let display = OrphanDisplay { pid, number, root };
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -644,10 +642,8 @@ mod xvfb_tests {
             return;
         };
         let lock = display.root.join(format!(".X{}-lock", display.number));
-        let claim = display
-            .root
-            .join(format!(".blade-x{}-claim", display.number));
-        // A dead bladebro left its claim an hour ago; this server (a system
+        let claim = display.root.join(format!(".obu-x{}-claim", display.number));
+        // A dead obu left its claim an hour ago; this server (a system
         // or user service, adopted by the manager) took the display later.
         std::fs::write(&claim, "2000000000").unwrap();
         std::fs::File::options()
@@ -667,15 +663,13 @@ mod xvfb_tests {
     }
 
     #[test]
-    fn xvfb_reaper_requires_a_dead_blade_claim() {
+    fn xvfb_reaper_requires_a_dead_obu_claim() {
         let _serial = DISPLAY_TESTS.lock().unwrap_or_else(|e| e.into_inner());
         let Some(display) = orphan_display() else {
             return;
         };
         let lock = display.root.join(format!(".X{}-lock", display.number));
-        let claim = display
-            .root
-            .join(format!(".blade-x{}-claim", display.number));
+        let claim = display.root.join(format!(".obu-x{}-claim", display.number));
         reap_xvfb_at(&display.root);
         assert!(
             proc_is_xvfb_on_display(display.pid, display.number),
@@ -720,13 +714,13 @@ mod orphan_browser_tests {
     /// A dead session (owner pid can never exist) under a private root, plus
     /// a template whose content proves whether a sync-back happened.
     fn dead_session(tag: &str) -> (PathBuf, PathBuf) {
-        let root = std::env::temp_dir().join(format!("blade-orphan-{tag}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-orphan-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("profile/Default")).unwrap();
         std::fs::write(root.join("profile/Default/Cookies"), "template").unwrap();
         let dir = root.join("profiles/sess-999999998");
         std::fs::create_dir_all(dir.join("Default")).unwrap();
-        std::fs::write(dir.join(".blade-owner"), "999999998").unwrap();
+        std::fs::write(dir.join(".obu-owner"), "999999998").unwrap();
         std::fs::write(dir.join("Default/Cookies"), "session").unwrap();
         (root, dir)
     }
@@ -819,7 +813,7 @@ mod orphan_browser_tests {
     fn reaper_never_syncs_or_deletes_a_profile_it_could_not_free() {
         let (root, dir) = dead_session("held");
         let mut other = holder(&format!(
-            "blade-test-holder --user-data-dir={}",
+            "obu-test-holder --user-data-dir={}",
             dir.display()
         ));
         singleton_lock(&dir, &format!("host-{}", other.id()));
@@ -848,31 +842,31 @@ mod template_recovery_tests {
 
     #[test]
     fn user_data_dir_match_is_exact() {
-        let dir = Path::new("/home/u/.blade/profiles/sess-12");
+        let dir = Path::new("/home/u/.obu/profiles/sess-12");
         let cases: &[(&[u8], bool)] = &[
             (
-                b"chrome\0--user-data-dir=/home/u/.blade/profiles/sess-12\0",
+                b"chrome\0--user-data-dir=/home/u/.obu/profiles/sess-12\0",
                 true,
             ),
             (
-                b"chrome --user-data-dir=/home/u/.blade/profiles/sess-12 --x",
+                b"chrome --user-data-dir=/home/u/.obu/profiles/sess-12 --x",
                 true,
             ),
             (
-                b"chrome --user-data-dir=/home/u/.blade/profiles/sess-12",
+                b"chrome --user-data-dir=/home/u/.obu/profiles/sess-12",
                 true,
             ),
             // A live neighbour whose name extends ours is not ours.
             (
-                b"chrome --user-data-dir=/home/u/.blade/profiles/sess-123 --x",
+                b"chrome --user-data-dir=/home/u/.obu/profiles/sess-123 --x",
                 false,
             ),
             (
-                b"chrome --database=/home/u/.blade/profiles/sess-12/Crashpad",
+                b"chrome --database=/home/u/.obu/profiles/sess-12/Crashpad",
                 false,
             ),
             (
-                b"chrome --x--user-data-dir=/home/u/.blade/profiles/sess-12",
+                b"chrome --x--user-data-dir=/home/u/.obu/profiles/sess-12",
                 false,
             ),
         ];
@@ -887,7 +881,7 @@ mod template_recovery_tests {
     }
     #[test]
     fn real_sync_backup_recovers_but_incomplete_import_is_discarded() {
-        let root = std::env::temp_dir().join(format!("blade-real-swap-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-real-swap-{}", std::process::id()));
         std::fs::create_dir_all(root.join(".template.old/Default")).unwrap();
         std::fs::create_dir_all(root.join("template.tmp")).unwrap();
         std::fs::write(root.join(".template.old/Default/state"), "last-good").unwrap();

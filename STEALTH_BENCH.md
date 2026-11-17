@@ -1,6 +1,6 @@
 # Stealth Bench V1
 
-Bladebro against browser-use's public stealth benchmark: **68 of 80 (85%)** protected sites walked through, out of the box, from one IP, with no proxy, no captcha solver, and no fingerprint rotation.
+Obu against browser-use's public stealth benchmark: **68 of 80 (85%)** protected sites walked through, out of the box, from one IP, with no proxy, no captcha solver, and no fingerprint rotation.
 
 This page states only what we can back up. Every number below is either from our recorded run or from browser-use's own published `official_results` files. Any uncertainty is labeled as such, not buried.
 
@@ -16,11 +16,11 @@ The only scoring criterion is whether the browser got in without being blocked. 
 
 ## Leaderboard
 
-Provider figures are the numbers browser-use publishes for Stealth Bench V1 and that the industry cites (from its stealth benchmark announcement, its cloud-stack rebuild coverage, and vendor pages; for example Anchor cites 77% for itself). Bladebro's figure is the result of this run: the full 80 tasks, once.
+Provider figures are the numbers browser-use publishes for Stealth Bench V1 and that the industry cites (from its stealth benchmark announcement, its cloud-stack rebuild coverage, and vendor pages; for example Anchor cites 77% for itself). Obu's figure is the result of this run: the full 80 tasks, once.
 
 | Provider | Rate |
 |---|---|
-| **Bladebro (measured, 1 run)** | **85.0%** (68 / 80) |
+| **Obu (measured, 1 run)** | **85.0%** (68 / 80) |
 | Browser Use Cloud | 81% |
 | Anchor | 77% |
 | Onkernel | 67% |
@@ -30,9 +30,9 @@ Provider figures are the numbers browser-use publishes for Stealth Bench V1 and 
 | local-headful (baseline) | ~49% |
 | local-headless (baseline) | ~3% |
 
-`local-headful` is the closest "apples" baseline: stock Chromium, headed, no stealth layer. Bladebro clears it by 36 points using the same sort of local, headed setup.
+`local-headful` is the closest "apples" baseline: stock Chromium, headed, no stealth layer. Obu clears it by 36 points using the same sort of local, headed setup.
 
-A note on sourcing: browser-use's raw `official_results` hold several runs per provider that vary, and an earlier snapshot reported 80% before browser-use rebuilt its cloud stack to reach the 81% it publishes and that this table uses. Bladebro's 85% is a single measured run above that figure.
+A note on sourcing: browser-use's raw `official_results` hold several runs per provider that vary, and an earlier snapshot reported 80% before browser-use rebuilt its cloud stack to reach the 81% it publishes and that this table uses. Obu's 85% is a single measured run above that figure.
 
 ## What "out of the box" means here
 
@@ -42,13 +42,13 @@ These are the exact conditions of the run. There is nothing to configure, subscr
 - No captcha solver, no third-party anti-bot extension.
 - No fingerprint farm. One browser profile, no per-site fingerprint swapping.
 - No cloud, no concurrent sessions. One local, driver-managed Chromium.
-- Bladebro's stealth layer (protocol, environment, behavior, coherence, residue, seasoning) is on by default. No flags were toggled for the benchmark.
+- Obu's stealth layer (protocol, environment, behavior, coherence, residue, seasoning) is on by default. No flags were toggled for the benchmark.
 
-Contrast this with how the providers on that table operate, per their own published material: some rotate premium residential/mobile proxies by stealth tier, others solve captchas as a service, others hold tens of thousands of real fingerprints and swap per request. Bladebro uses none of that and lands at the top of the same 80 sites.
+Contrast this with how the providers on that table operate, per their own published material: some rotate premium residential/mobile proxies by stealth tier, others solve captchas as a service, others hold tens of thousands of real fingerprints and swap per request. Obu uses none of that and lands at the top of the same 80 sites.
 
-## Per-vendor breakdown (Bladebro vs browser-use-cloud official)
+## Per-vendor breakdown (Obu vs browser-use-cloud official)
 
-| Vendor | Bladebro | browser-use-cloud |
+| Vendor | Obu | browser-use-cloud |
 |---|---|---|
 | Cloudflare | 22 / 22 | 22 / 22 |
 | PerimeterX | 15 / 18 | 15 / 18 |
@@ -63,9 +63,9 @@ Contrast this with how the providers on that table operate, per their own publis
 | Akamai | 3 / 6 | 5 / 6 |
 | **Total** | **68** | **64** |
 
-Bladebro cleared the two sites browser-use-cloud's own published run did not (Shape, Temu Slider) and held narrow or clear leads on reCaptcha, GeeTest, and hCaptcha. Its single real gap is Akamai (3 of 6 vs 5 of 6). That is the one named reduction to work on; there is no hidden weakness elsewhere.
+Obu cleared the two sites browser-use-cloud's own published run did not (Shape, Temu Slider) and held narrow or clear leads on reCaptcha, GeeTest, and hCaptcha. Its single real gap is Akamai (3 of 6 vs 5 of 6). That is the one named reduction to work on; there is no hidden weakness elsewhere.
 
-> The browser-use-cloud column is from a single committed run in its `official_results` (one of its 80%-scoring runs). Category totals vary a little across runs; the Bladebro column is our run. Their Akamai, Datadome, and PerimeterX counts are the strongest in their set, which is exactly where the comparison is most favorable to them, and Bladebro still matches or beats it overall.
+> The browser-use-cloud column is from a single committed run in its `official_results` (one of its 80%-scoring runs). Category totals vary a little across runs; the Obu column is our run. Their Akamai, Datadome, and PerimeterX counts are the strongest in their set, which is exactly where the comparison is most favorable to them, and Obu still matches or beats it overall.
 
 ## How we ran it (the honest part)
 
@@ -83,11 +83,11 @@ We ran the benchmark ourselves because we had no official slot and no paid acces
 - **Interaction**: since the benchmark's stated point is that the task steps only exist to "simulate normal site interaction", we used a visit-plus-browse approach (open the site, move around like a visitor, conclude) rather than executing each task's multi-step checklist. The score criterion does not involve task completion, so this does not change what is measured.
 - **Judge**: the acting model judged its own run as blocked-or-not, instead of a separate paid judge model scoring with screenshots. This is a documented deviation. If anything it is a neutral-to-conservative one: there is no incentive for the acting model to call a real anti-bot denial anything but blocked.
 
-**Why the browser result still stands even with a different agent:** the whole point of Stealth Bench V1, in browser-use's own description, is that browser stealth and agent capability are orthogonal. On these 80 sites the agent is not deciding whether the challenge fires; the challenge fires or does not fire based on what the browser presents. Swapping the navigating model changes how the agent browses, not what the browser's TLS, canvas, WebGL, navigator, and timing look like. The defensive layer that was measured is Bladebro's.
+**Why the browser result still stands even with a different agent:** the whole point of Stealth Bench V1, in browser-use's own description, is that browser stealth and agent capability are orthogonal. On these 80 sites the agent is not deciding whether the challenge fires; the challenge fires or does not fire based on what the browser presents. Swapping the navigating model changes how the agent browses, not what the browser's TLS, canvas, WebGL, navigator, and timing look like. The defensive layer that was measured is Obu's.
 
 ## What we expect under the full official harness
 
-This is a stated expectation, not a measured result. Under the official harness (browser-use's own `bu-2-0` agent driving the browser, their judge scoring with screenshots), the browser under test would still be Bladebro's hardened Chromium, and the judge would still be grading one thing: did the anti-bot let it through. A browsing agent trained for web tasks is not a substitute for a clean browser fingerprint; the providers on the leaderboard do not win on agent smarts, they win on browser and IP infrastructure. Nothing in the methodology used here gives Bladebro a benefit that would reverse under their agent. If anything, a stronger, web-optimized navigating agent has fewer reasons to mis-handle a page, so an official run would be expected to land at or above this number. Treat that as reasoning, not proof.
+This is a stated expectation, not a measured result. Under the official harness (browser-use's own `bu-2-0` agent driving the browser, their judge scoring with screenshots), the browser under test would still be Obu's hardened Chromium, and the judge would still be grading one thing: did the anti-bot let it through. A browsing agent trained for web tasks is not a substitute for a clean browser fingerprint; the providers on the leaderboard do not win on agent smarts, they win on browser and IP infrastructure. Nothing in the methodology used here gives Obu a benefit that would reverse under their agent. If anything, a stronger, web-optimized navigating agent has fewer reasons to mis-handle a page, so an official run would be expected to land at or above this number. Treat that as reasoning, not proof.
 
 ## Reproducibility and evidence
 

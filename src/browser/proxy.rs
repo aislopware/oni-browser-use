@@ -1,8 +1,8 @@
-//! BLADE_PROXY parsing: validated, redacted proxy descriptors.
+//! OBU_PROXY parsing: validated, redacted proxy descriptors.
 //!
 //! The raw value may embed credentials (`http://user:pass@host:port`). It
 //! must NEVER reach a log line, error message or diagnostic. Every read site
-//! goes through [`env_blade_proxy`], which validates the shape and returns a
+//! goes through [`env_obu_proxy`], which validates the shape and returns a
 //! redacted display string alongside the raw server value; validation errors
 //! describe the problem without echoing any part of the value. Browser
 //! launches read it through [`env_browser_proxy`], which additionally refuses
@@ -23,17 +23,17 @@ pub struct ProxySpec {
     pub has_credentials: bool,
 }
 
-/// `BLADE_PROXY` from the environment, parsed and validated. `Ok(None)` when
+/// `OBU_PROXY` from the environment, parsed and validated. `Ok(None)` when
 /// unset/empty (no proxy); `Err(reason)` for a malformed value — callers fail
 /// the launch with the reason, never with the value.
-pub fn env_blade_proxy() -> Result<Option<ProxySpec>, String> {
-    match std::env::var("BLADE_PROXY") {
-        Ok(v) if !v.is_empty() => parse_blade_proxy(&v).map(Some),
+pub fn env_obu_proxy() -> Result<Option<ProxySpec>, String> {
+    match std::env::var("OBU_PROXY") {
+        Ok(v) if !v.is_empty() => parse_obu_proxy(&v).map(Some),
         _ => Ok(None),
     }
 }
 
-/// `BLADE_PROXY` for a browser launch: [`env_blade_proxy`], minus the one
+/// `OBU_PROXY` for a browser launch: [`env_obu_proxy`], minus the one
 /// shape Chrome cannot take. `--proxy-server` has no credential syntax — a
 /// `user:pass@` value made every page load fail with
 /// ERR_NO_SUPPORTED_PROXIES while the launch looked healthy — and a browser
@@ -42,7 +42,7 @@ pub fn env_blade_proxy() -> Result<Option<ProxySpec>, String> {
 /// mean pausing every request of every target; refusing up front is the
 /// honest answer. The reason names the alternatives.
 pub fn env_browser_proxy() -> Result<Option<ProxySpec>, String> {
-    browser_proxy(env_blade_proxy()?)
+    browser_proxy(env_obu_proxy()?)
 }
 
 fn browser_proxy(spec: Option<ProxySpec>) -> Result<Option<ProxySpec>, String> {
@@ -66,7 +66,7 @@ fn browser_proxy(spec: Option<ProxySpec>) -> Result<Option<ProxySpec>, String> {
 /// bytes, empty host/port, non-numeric or out-of-range ports, path/query
 /// characters. Reasons never include any byte of the input — a malformed
 /// value could hide a secret in any position.
-pub fn parse_blade_proxy(raw: &str) -> Result<ProxySpec, String> {
+pub fn parse_obu_proxy(raw: &str) -> Result<ProxySpec, String> {
     let v = raw.trim();
     if v.is_empty() {
         return Err("empty value".to_string());
@@ -172,30 +172,30 @@ mod tests {
 
     #[test]
     fn valid_forms_parse_and_display_without_credentials() {
-        let s = parse_blade_proxy("http://127.0.0.1:8888").unwrap();
+        let s = parse_obu_proxy("http://127.0.0.1:8888").unwrap();
         assert_eq!(s.server, "http://127.0.0.1:8888");
         assert_eq!(s.display, "http://127.0.0.1:8888");
         assert!(!s.has_credentials);
 
-        let s = parse_blade_proxy("socks5://proxy.example.com:1080").unwrap();
+        let s = parse_obu_proxy("socks5://proxy.example.com:1080").unwrap();
         assert_eq!(s.display, "socks5://proxy.example.com:1080");
 
         // Bare host:port (Chrome accepts it; display stays as given).
-        let s = parse_blade_proxy("10.0.0.7:3128").unwrap();
+        let s = parse_obu_proxy("10.0.0.7:3128").unwrap();
         assert_eq!(s.display, "10.0.0.7:3128");
 
         // IPv6 literal.
-        let s = parse_blade_proxy("http://[::1]:8080").unwrap();
+        let s = parse_obu_proxy("http://[::1]:8080").unwrap();
         assert_eq!(s.display, "http://[::1]:8080");
 
         // Host without an explicit port stays accepted (scheme default).
-        let s = parse_blade_proxy("http://proxy.internal").unwrap();
+        let s = parse_obu_proxy("http://proxy.internal").unwrap();
         assert_eq!(s.display, "http://proxy.internal");
     }
 
     #[test]
     fn credentials_are_redacted_from_display_but_server_keeps_raw() {
-        let s = parse_blade_proxy("http://user:SEKRITPW@proxy.example.com:8888").unwrap();
+        let s = parse_obu_proxy("http://user:SEKRITPW@proxy.example.com:8888").unwrap();
         assert_eq!(s.server, "http://user:SEKRITPW@proxy.example.com:8888");
         assert!(!s.display.contains("SEKRITPW"));
         assert!(!s.display.contains("user"));
@@ -206,7 +206,7 @@ mod tests {
         assert!(s.has_credentials);
 
         // '@' inside the password: split at the LAST '@'.
-        let s = parse_blade_proxy("socks5://u:p@ss@127.0.0.1:1080").unwrap();
+        let s = parse_obu_proxy("socks5://u:p@ss@127.0.0.1:1080").unwrap();
         assert!(!s.display.contains("p@ss"));
         assert_eq!(s.display, "socks5://127.0.0.1:1080 (credentials redacted)");
     }
@@ -227,7 +227,7 @@ mod tests {
             "http://user:SEKRITPW@[::1",       // unterminated v6
         ];
         for raw in secrets {
-            let err = parse_blade_proxy(raw).expect_err(raw);
+            let err = parse_obu_proxy(raw).expect_err(raw);
             assert!(!err.contains("SEKRITPW"), "reason leaked secret: {err}");
             assert!(!err.contains("user"), "reason leaked userinfo: {err}");
             assert!(!err.contains("ftp"), "reason leaked scheme: {err}");
@@ -241,18 +241,18 @@ mod tests {
             "http://user:SEKRITPW@proxy.example.com:8888",
             "socks5://u:p@ss@127.0.0.1:1080",
         ] {
-            let err = browser_proxy(Some(parse_blade_proxy(raw).unwrap())).unwrap_err();
+            let err = browser_proxy(Some(parse_obu_proxy(raw).unwrap())).unwrap_err();
             assert!(err.contains("credentials are not supported"), "{err}");
             assert!(!err.contains("SEKRITPW") && !err.contains("p@ss"), "{err}");
         }
-        let plain = parse_blade_proxy("http://127.0.0.1:8888").unwrap();
+        let plain = parse_obu_proxy("http://127.0.0.1:8888").unwrap();
         assert_eq!(browser_proxy(Some(plain.clone())).unwrap(), Some(plain));
         assert_eq!(browser_proxy(None).unwrap(), None);
     }
 
     #[test]
     fn empty_value_is_the_only_silent_none() {
-        assert!(parse_blade_proxy("").is_err());
-        assert!(parse_blade_proxy("   ").is_err());
+        assert!(parse_obu_proxy("").is_err());
+        assert!(parse_obu_proxy("   ").is_err());
     }
 }

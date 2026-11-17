@@ -6,14 +6,14 @@
 //! surfaces — zero maintenance overhead.
 //!
 //! Two modes:
-//! - **Daemon**: `bladebro daemon` starts a persistent Chrome session.
-//!   Subsequent `bladebro` commands connect to it via Unix socket.
+//! - **Daemon**: `obu daemon` starts a persistent Chrome session.
+//!   Subsequent `obu` commands connect to it via Unix socket.
 //!   Same lifecycle as MCP (self-healing, idle timeout, reaper).
 //! - **One-shot**: if no daemon is running, each command launches Chrome,
 //!   runs, and exits.
 //!
 //! Agent contract (v3.9.7):
-//! - `bladebro help [--json]` is the single self-teaching surface: the JSON
+//! - `obu help [--json]` is the single self-teaching surface: the JSON
 //!   form carries the same tool schemas as MCP `tools/list` plus CLI-only
 //!   details (usage, examples, exit codes, stdin/@file payloads).
 //! - `--json` on any command prints ONE machine-readable object on stdout:
@@ -31,7 +31,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::mcp::server;
 use crate::page::Page;
 
@@ -54,7 +54,7 @@ use self::rb::run_rb;
 /// Unix socket path for the CLI daemon.
 #[cfg(unix)]
 fn socket_path() -> std::path::PathBuf {
-    crate::platform::blade_dir().join("cli.sock")
+    crate::platform::obu_dir().join("cli.sock")
 }
 
 /// Trust boundary for the daemon channel. A connect-success test proves
@@ -140,7 +140,7 @@ pub async fn dispatch(
     tool: &str,
     args: &Value,
     page: &mut Page,
-) -> std::result::Result<ToolResult, BladeError> {
+) -> std::result::Result<ToolResult, ObuError> {
     // An attached browser's tab outlives this process: its ref table is
     // carried from command to command (no-ops everywhere else).
     page.refs_sync().await;
@@ -153,7 +153,7 @@ async fn dispatch_tool(
     tool: &str,
     args: &Value,
     page: &mut Page,
-) -> std::result::Result<ToolResult, BladeError> {
+) -> std::result::Result<ToolResult, ObuError> {
     // Vision is special — an image instead of (only) text. Taken from the
     // capture directly, not re-parsed out of the MCP response: an oversized
     // screenshot is saved by the handler and comes back as a path, which
@@ -175,7 +175,7 @@ async fn dispatch_tool(
         "see" => server::handle_see_tool(args, page).await,
         "state" => server::handle_state(args, page).await,
         "run" => server::handle_run(args, page).await,
-        _ => return Err(BladeError::Other(format!("unknown tool: {tool}"))),
+        _ => return Err(ObuError::Other(format!("unknown tool: {tool}"))),
     };
 
     match result {
@@ -214,7 +214,7 @@ async fn dispatch_tool(
                 is_error: false,
             })
         }
-        Err(BladeError::Closed) => Err(BladeError::Closed),
+        Err(ObuError::Closed) => Err(ObuError::Closed),
         Err(e) => {
             let mut text = format!("\u{2717} error: {e}");
             let dialogs = page.drain_dialogs();
@@ -251,7 +251,7 @@ async fn dispatch_tool(
 
 /// Auto-start the daemon as a detached background process.
 /// The first CLI command triggers this — the agent never needs to
-/// run `bladebro daemon` explicitly.
+/// run `obu daemon` explicitly.
 ///
 /// SECURITY: spawns the binary DIRECTLY (no `sh -c`). The old shell path
 /// interpolated the exe path into single quotes — an install path
@@ -259,7 +259,7 @@ async fn dispatch_tool(
 #[cfg(unix)]
 fn auto_start_daemon() -> Result<()> {
     let exe = std::env::current_exe()
-        .map_err(|e| BladeError::Other(format!("cannot find bladebro binary: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot find obu binary: {e}")))?;
     use std::os::unix::process::CommandExt;
     let mut cmd = std::process::Command::new(&exe);
     cmd.arg("daemon")
@@ -277,7 +277,7 @@ fn auto_start_daemon() -> Result<()> {
         });
     }
     cmd.spawn()
-        .map_err(|e| BladeError::Other(format!("failed to start daemon: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("failed to start daemon: {e}")))?;
     Ok(())
 }
 
@@ -327,12 +327,12 @@ enum DaemonCallError {
     Unreachable(std::io::Error),
     /// The daemon was reached. It may have run — or still be running — the
     /// command: never restart it or run the command again.
-    Failed(BladeError),
+    Failed(ObuError),
 }
 
 #[cfg(unix)]
-impl From<BladeError> for DaemonCallError {
-    fn from(e: BladeError) -> Self {
+impl From<ObuError> for DaemonCallError {
+    fn from(e: ObuError) -> Self {
         DaemonCallError::Failed(e)
     }
 }
@@ -346,7 +346,7 @@ fn daemon_request_line(tool: &str, args: &Value) -> Result<String> {
     let req = serde_json::to_string(&daemon_request(tool, args))?;
     // +1: the newline that frames the request counts against the limit.
     if req.len() + 1 > MAX_REQUEST_BYTES {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "this command is {:.1} MiB; the daemon accepts at most {} MiB per command — nothing \
              was sent. Shrink the payload (e.g. split the steps across calls), or add --no-daemon \
              to run it one-shot in a fresh browser.",
@@ -359,7 +359,7 @@ fn daemon_request_line(tool: &str, args: &Value) -> Result<String> {
 
 /// Send a tool call (a [`daemon_request_line`]) to the daemon over Unix socket.
 ///
-/// Hardening: the read has a timeout (`BLADE_CMD_TIMEOUT` seconds, default
+/// Hardening: the read has a timeout (`OBU_CMD_TIMEOUT` seconds, default
 /// 300). Before this, a wedged daemon left the client blocking forever —
 /// an agent's shell call hung until its harness killed it, with no output
 /// and no way to tell "still working" from "dead".
@@ -368,7 +368,7 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
     use std::io::{Read, Write};
     use std::os::unix::net::UnixStream;
 
-    let timeout_secs: u64 = std::env::var("BLADE_CMD_TIMEOUT")
+    let timeout_secs: u64 = std::env::var("OBU_CMD_TIMEOUT")
         .ok()
         .and_then(|s| s.parse().ok())
         .filter(|&s| s > 0)
@@ -378,15 +378,15 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
     {
         use std::os::fd::AsRawFd;
         if !peer_uid_matches_self(stream.as_raw_fd()) {
-            return Err(BladeError::Other(
+            return Err(ObuError::Other(
                 "refusing the daemon channel: the socket peer is not this user".into(),
             )
             .into());
         }
     }
 
-    writeln!(stream, "{req}").map_err(BladeError::from)?;
-    stream.flush().map_err(BladeError::from)?;
+    writeln!(stream, "{req}").map_err(ObuError::from)?;
+    stream.flush().map_err(ObuError::from)?;
 
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(timeout_secs)));
 
@@ -397,16 +397,16 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
             if e.kind() == std::io::ErrorKind::WouldBlock
                 || e.kind() == std::io::ErrorKind::TimedOut =>
         {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "no daemon response after {timeout_secs}s — the command may still be running\n\
                  (the daemon runs one command at a time; others queue behind it). Raise the\n\
-                 client limit with BLADE_CMD_TIMEOUT=<seconds>, or cancel it with 'bladebro stop'\n\
+                 client limit with OBU_CMD_TIMEOUT=<seconds>, or cancel it with 'obu stop'\n\
                  (terminates the daemon; Chrome restarts on the next command, page state reset)."
             ))
             .into());
         }
         Err(e) => {
-            return Err(BladeError::Other(format!("failed to read daemon response: {e}")).into());
+            return Err(ObuError::Other(format!("failed to read daemon response: {e}")).into());
         }
     }
 
@@ -414,15 +414,15 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
     // the request — the command may have run, and the agent must look
     // before repeating it, not get a JSON parse error.
     if resp.trim().is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "the daemon closed the connection without replying — the command may have run.\n\
-             Check with 'bladebro state tabs' before repeating it."
+             Check with 'obu state tabs' before repeating it."
                 .into(),
         )
         .into());
     }
     let v: Value = serde_json::from_str(&resp)
-        .map_err(|e| BladeError::Other(format!("invalid daemon response: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("invalid daemon response: {e}")))?;
 
     let ok = v.get("ok").and_then(|o| o.as_bool()).unwrap_or(false);
     if !ok {
@@ -430,7 +430,7 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
             .get("error")
             .and_then(|e| e.as_str())
             .unwrap_or("unknown error");
-        return Err(BladeError::Other(err.to_string()).into());
+        return Err(ObuError::Other(err.to_string()).into());
     }
 
     let text = v
@@ -580,8 +580,8 @@ async fn run_cli_inner(
                 match command_help_text(&rest[0]) {
                     Some(t) => print!("{t}"),
                     None => {
-                        return Err(BladeError::Usage(format!(
-                            "unknown command '{}' — run 'bladebro help' for the command list",
+                        return Err(ObuError::Usage(format!(
+                            "unknown command '{}' — run 'obu help' for the command list",
                             rest[0]
                         )))
                     }
@@ -589,8 +589,8 @@ async fn run_cli_inner(
             }
             Ok(())
         }
-        _ => Err(BladeError::Usage(format!(
-            "unknown command: {cmd} — run 'bladebro help' for the command list"
+        _ => Err(ObuError::Usage(format!(
+            "unknown command: {cmd} — run 'obu help' for the command list"
         ))),
     }
 }
@@ -647,7 +647,7 @@ async fn run_tool(
                         // below clears a stale one itself, under its lock —
                         // an unlink from this unlocked client could hit a
                         // live daemon's socket and orphan it.
-                        eprintln!("[bladebro] daemon unreachable ({e}) — restarting it");
+                        eprintln!("[obu] daemon unreachable ({e}) — restarting it");
                     }
                     // Alive but the call failed: do not kill or bypass.
                     Err(DaemonCallError::Failed(e)) => return Err(e),
@@ -678,18 +678,18 @@ async fn run_tool(
                     }
                     // Never delivered: running it one-shot is its first run.
                     Err(DaemonCallError::Unreachable(e)) => eprintln!(
-                        "[bladebro] daemon unreachable after auto-start ({e}), falling back to one-shot"
+                        "[obu] daemon unreachable after auto-start ({e}), falling back to one-shot"
                     ),
                     // Delivered: the daemon may have acted (a click that
                     // landed before "outcome UNKNOWN", a command still
-                    // running past BLADE_CMD_TIMEOUT). A one-shot fallback
+                    // running past OBU_CMD_TIMEOUT). A one-shot fallback
                     // here would run it a second time.
                     Err(DaemonCallError::Failed(e)) => return Err(e),
                 }
             } else {
                 eprintln!(
-                    "[bladebro] daemon didn't come up within 10s — falling back to one-shot\n\
-                     (run 'bladebro daemon' in a terminal to see startup errors)"
+                    "[obu] daemon didn't come up within 10s — falling back to one-shot\n\
+                     (run 'obu daemon' in a terminal to see startup errors)"
                 );
             }
         }
@@ -701,7 +701,7 @@ async fn run_tool(
     // That includes Ctrl-C, a harness's or `timeout`'s SIGTERM and a closed
     // terminal's SIGHUP: caught from before the launch on, they end the run,
     // not the process, which would never close Chrome (it runs in its own
-    // process group); bladebro dies of the signal only once Chrome is closed
+    // process group); obu dies of the signal only once Chrome is closed
     // (`platform::reraise_termination_signal`, at exit). One that lands
     // mid-launch lets the launch finish (the launch paths are not all safe
     // to drop half-way) but stops its retries.
@@ -738,13 +738,13 @@ async fn run_tool(
 
 /// Attach to a page at `base`, run one tool call, return the result.
 ///
-/// `external=true` drives a browser Bladebro does not own (an already-running
+/// `external=true` drives a browser Obu does not own (an already-running
 /// Chrome reached via `--host`/`--port`): it must NOT re-inject saved logins,
 /// warm the profile (no surprise navigation away from the user's tab), or shut
 /// Chrome down. `external=false` owns the browser, so it restores logins,
 /// warms on first run, and the caller owns shutdown.
 ///
-/// `attached=true` is a browser Bladebro did not launch (`--host`/`--port`,
+/// `attached=true` is a browser Obu did not launch (`--host`/`--port`,
 /// `rb mode attach`): the command runs in the agent's own tab, never in the
 /// first tab — that one is whatever the user is looking at.
 async fn run_connected(
@@ -776,7 +776,7 @@ async fn run_connected(
     // external browser we don't own.
     if !external {
         if let Err(e) = crate::logins::snapshot(page.cdp_ref()).await {
-            eprintln!("[bladebro] login snapshot failed: {e}");
+            eprintln!("[obu] login snapshot failed: {e}");
         }
     }
 
@@ -836,7 +836,7 @@ fn render_result(result: &ToolResult, json_mode: bool) -> (String, i32) {
 /// Decode a base64 PNG and write it as an artifact; the path on success.
 fn save_png(b64: &str) -> Result<String> {
     let data = base64_decode(b64)
-        .ok_or_else(|| BladeError::Other("the PNG data is not valid base64".into()))?;
+        .ok_or_else(|| ObuError::Other("the PNG data is not valid base64".into()))?;
     crate::artifacts::write_artifact_bytes(&data, "png")
 }
 
@@ -907,10 +907,7 @@ async fn warm_profile(page: &mut Page) {
         }
     }
     if ok > 0 {
-        eprintln!(
-            "[bladebro] profile warmed ({ok}/{} sites visited)",
-            sites.len()
-        );
+        eprintln!("[obu] profile warmed ({ok}/{} sites visited)", sites.len());
     }
 }
 
@@ -931,13 +928,13 @@ mod tests {
     /// `vision --json | jq -r .image_path` read null for exactly those.
     #[test]
     fn vision_json_reports_a_handler_saved_path() {
-        let (out, code) = render_result(&vision(None, Some("/x/blade-1-0001.png")), true);
+        let (out, code) = render_result(&vision(None, Some("/x/obu-1-0001.png")), true);
         let v: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(code, 0);
         assert_eq!(v["ok"], true);
-        assert_eq!(v["image_path"], "/x/blade-1-0001.png");
-        let (out, _) = render_result(&vision(None, Some("/x/blade-1-0001.png")), false);
-        assert!(out.ends_with("\nsaved: /x/blade-1-0001.png"), "{out}");
+        assert_eq!(v["image_path"], "/x/obu-1-0001.png");
+        let (out, _) = render_result(&vision(None, Some("/x/obu-1-0001.png")), false);
+        assert!(out.ends_with("\nsaved: /x/obu-1-0001.png"), "{out}");
     }
 
     #[test]

@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::perception::JS_PREAMBLE;
 use crate::page::LivePageModel;
 
@@ -103,7 +103,7 @@ pub(super) struct FoundElement {
 pub(super) fn resolve_ref(lpm: &LivePageModel, ref_id: &str) -> Result<(String, Vec<usize>)> {
     lpm.element(ref_id)
         .map(|e| (e.raw.sig.clone(), e.raw.frame.clone()))
-        .ok_or_else(|| BladeError::StaleRef(format!(
+        .ok_or_else(|| ObuError::StaleRef(format!(
             "{ref_id} \u{2014} page may have navigated. Use see or text addressing (act click text=\"...\")"
         )))
 }
@@ -114,7 +114,7 @@ pub async fn read_text(cdp: &CdpSession, lpm: &LivePageModel, ref_id: &str) -> R
     let (sig, frame) = resolve_ref(lpm, ref_id)?;
     let found = find_by_sig(cdp, &sig, &frame, "read", None).await?;
     if !found.ok {
-        return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+        return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
     }
     Ok(found.text.unwrap_or_default())
 }
@@ -129,11 +129,11 @@ pub async fn inspect(
     let (sig, frame) = resolve_ref(lpm, ref_id)?;
     let found = find_by_sig(cdp, &sig, &frame, "inspect", None).await?;
     if !found.ok {
-        return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+        return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
     }
     found
         .inspection
-        .ok_or_else(|| BladeError::Other("element inspection returned no data".into()))
+        .ok_or_else(|| ObuError::Other("element inspection returned no data".into()))
 }
 
 /// Focus the addressed control and prove focus before dispatching keys.
@@ -141,7 +141,7 @@ pub async fn focus(cdp: &CdpSession, lpm: &LivePageModel, ref_id: &str) -> Resul
     let (sig, frame) = resolve_ref(lpm, ref_id)?;
     let found = find_by_sig(cdp, &sig, &frame, "focus", None).await?;
     if !found.ok || found.focused != Some(true) {
-        return Err(BladeError::NotInteractable(format!(
+        return Err(ObuError::NotInteractable(format!(
             "{ref_id}: focus did not land; no keys dispatched"
         )));
     }
@@ -154,12 +154,12 @@ pub async fn read_checked(cdp: &CdpSession, lpm: &LivePageModel, ref_id: &str) -
     let (sig, frame) = resolve_ref(lpm, ref_id)?;
     let found = find_by_sig(cdp, &sig, &frame, "state", None).await?;
     if !found.ok {
-        return Err(BladeError::ElementNotFound(ref_id.into()));
+        return Err(ObuError::ElementNotFound(ref_id.into()));
     }
     match found.state.as_deref() {
         Some("checked=true" | "aria-checked=true") => Ok(true),
         Some("checked=false" | "aria-checked=false") => Ok(false),
-        _ => Err(BladeError::NotInteractable(format!(
+        _ => Err(ObuError::NotInteractable(format!(
             "{ref_id}: check requires a checkbox, radio or switch with readable boolean state"
         ))),
     }
@@ -247,7 +247,7 @@ pub async fn find_by_text(
     include_hidden: bool,
 ) -> Result<Vec<TextMatch>> {
     if query.trim().is_empty() {
-        return Err(BladeError::Other("find query must not be empty".into()));
+        return Err(ObuError::Other("find query must not be empty".into()));
     }
     let expression = find_text_expr(query, role_filter, include_hidden)?;
 
@@ -268,13 +268,13 @@ pub async fn find_by_text(
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown find-by-text error");
-        return Err(BladeError::Other(format!("find-by-text failed: {msg}")));
+        return Err(ObuError::Other(format!("find-by-text failed: {msg}")));
     }
 
     let value = res
         .get("result")
         .and_then(|r| r.get("value"))
-        .ok_or_else(|| BladeError::Other("find-by-text returned no value".to_string()))?;
+        .ok_or_else(|| ObuError::Other("find-by-text returned no value".to_string()))?;
 
     let matches: Vec<TextMatch> = serde_json::from_value(value.clone())?;
     Ok(matches)
@@ -366,7 +366,7 @@ pub struct SelectorLookup {
 /// case, where the trigger exists but is desktop-hidden.
 pub async fn find_by_selector(cdp: &CdpSession, selector: &str) -> Result<SelectorLookup> {
     if selector.trim().is_empty() {
-        return Err(BladeError::Other("selector must not be empty".into()));
+        return Err(ObuError::Other("selector must not be empty".into()));
     }
     let expression = find_selector_expr(selector)?;
     let res = cdp
@@ -385,14 +385,14 @@ pub async fn find_by_selector(cdp: &CdpSession, selector: &str) -> Result<Select
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown selector-match error");
-        return Err(BladeError::Other(format!("selector match failed: {msg}")));
+        return Err(ObuError::Other(format!("selector match failed: {msg}")));
     }
     let value = res
         .get("result")
         .and_then(|r| r.get("value"))
-        .ok_or_else(|| BladeError::Other("selector match returned no value".to_string()))?;
+        .ok_or_else(|| ObuError::Other("selector match returned no value".to_string()))?;
     if let Some(inv) = value.get("invalid").and_then(|v| v.as_str()) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "invalid selector \"{selector}\": {inv}"
         )));
     }
@@ -793,7 +793,7 @@ async fn in_the_pages_world(
     node_mode: &str,
     function: &str,
 ) -> Option<Value> {
-    const GROUP: &str = "bladebro-node";
+    const GROUP: &str = "obu-node";
     let answer = async {
         let expression = find_sig_expr(sig, node_mode, None, frame).ok()?;
         let node = cdp
@@ -866,13 +866,13 @@ async fn find_once(
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown find error");
-        return Err(BladeError::Other(format!("find-by-sig failed: {msg}")));
+        return Err(ObuError::Other(format!("find-by-sig failed: {msg}")));
     }
 
     let value = res
         .get("result")
         .and_then(|r| r.get("value"))
-        .ok_or_else(|| BladeError::Other("find-by-sig returned no value".to_string()))?;
+        .ok_or_else(|| ObuError::Other("find-by-sig returned no value".to_string()))?;
 
     let found: FoundElement = serde_json::from_value(value.clone())?;
     Ok(found)
@@ -955,7 +955,7 @@ pub async fn find_label_route(
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown label-route error");
-        return Err(BladeError::Other(format!("label-route failed: {msg}")));
+        return Err(ObuError::Other(format!("label-route failed: {msg}")));
     }
     let value = res
         .get("result")

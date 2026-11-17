@@ -54,13 +54,13 @@ fn devtools_discovery_bypasses_environment_proxies() {
     // fast (502) instead of hanging the test on a timeout.
     let (proxy, proxy_hits) = serve(|_| http("502 Bad Gateway", ""));
     let proxy_url = format!("http://127.0.0.1:{proxy}");
-    let home = std::env::temp_dir().join(format!("blade-loopback-proxy-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("obu-loopback-proxy-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
 
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bladebro"))
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_obu"))
         .args(["probe", "--port", &devtools.to_string()])
-        .env("BLADE_HOME", &home)
-        .env("BLADE_NO_UPDATE_CHECK", "1")
+        .env("OBU_HOME", &home)
+        .env("OBU_NO_UPDATE_CHECK", "1")
         .env("HTTP_PROXY", &proxy_url)
         .env("http_proxy", &proxy_url)
         .env("ALL_PROXY", &proxy_url)

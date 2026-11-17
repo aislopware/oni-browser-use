@@ -456,16 +456,16 @@ pub(super) fn launch_args_real(cfg: &RealLaunchCfg<'_>) -> Vec<String> {
     merge_feature_lists(args)
 }
 
-/// `BLADE_CHROME_FLAGS` as arguments (empty when unset). Both lanes read it
+/// `OBU_CHROME_FLAGS` as arguments (empty when unset). Both lanes read it
 /// here so they split it identically.
 pub(crate) fn env_chrome_flags() -> crate::error::Result<Vec<String>> {
-    match std::env::var("BLADE_CHROME_FLAGS") {
-        Ok(raw) => split_chrome_flags(&raw).map_err(crate::error::BladeError::Other),
+    match std::env::var("OBU_CHROME_FLAGS") {
+        Ok(raw) => split_chrome_flags(&raw).map_err(crate::error::ObuError::Other),
         Err(_) => Ok(Vec::new()),
     }
 }
 
-/// Split BLADE_CHROME_FLAGS shell-style: whitespace separates arguments,
+/// Split OBU_CHROME_FLAGS shell-style: whitespace separates arguments,
 /// `'…'` and `"…"` group (quotes may start mid-word, as in
 /// `--user-agent="… (X11; …)"`). A plain whitespace split turned such a value
 /// into stray positional args that Chrome opened as URL tabs. Backslashes
@@ -498,7 +498,7 @@ pub(super) fn split_chrome_flags(raw: &str) -> Result<Vec<String>, String> {
     }
     if quote.is_some() {
         return Err(
-            "BLADE_CHROME_FLAGS has an unterminated quote (value not shown) — close it, \
+            "OBU_CHROME_FLAGS has an unterminated quote (value not shown) — close it, \
              e.g. --user-agent=\"Mozilla/5.0 (X11; Linux x86_64) ...\""
                 .into(),
         );
@@ -510,7 +510,7 @@ pub(super) fn split_chrome_flags(raw: &str) -> Result<Vec<String>, String> {
 }
 
 /// Chrome keeps only the LAST `--enable-features=` / `--disable-features=`
-/// on its command line, so a list appended from BLADE_CHROME_FLAGS silently
+/// on its command line, so a list appended from OBU_CHROME_FLAGS silently
 /// replaced the built-in `--disable-features=PdfPlugin` (PDFs opened inline
 /// instead of downloading). Fold every occurrence into one comma list at
 /// the first one's position, built-ins first, duplicates dropped.
@@ -733,7 +733,7 @@ mod launch_flag_tests {
     }
 
     /// Chrome keeps only the last `--disable-features=`, so a user list
-    /// appended from BLADE_CHROME_FLAGS silently dropped the built-in
+    /// appended from OBU_CHROME_FLAGS silently dropped the built-in
     /// PdfPlugin entry (PDFs opened inline instead of downloading). Both
     /// lanes must fold every list into one.
     #[test]

@@ -37,7 +37,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 mod net;
 mod search;
@@ -197,7 +197,7 @@ pub async fn fetch_comments(
     cap: usize,
 ) -> Result<CommentsPayload> {
     if !post_base.starts_with('/') || !post_base.contains("/comments/") {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "reddit: bad post path {post_base:?}"
         )));
     }
@@ -217,13 +217,13 @@ pub async fn fetch_comments(
     // Never send API paths without the loid token: without it reddit answers
     // with the network-security wall (guaranteed 403s) instead of JSON.
     if !ensure_loid(cdp).await {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: no loid session token yet (the page-load challenge has not resolved) — load the page once, then retry".into(),
         ));
     }
 
     if !budget.take(1) {
-        return Err(BladeError::Other("reddit: fetch budget exhausted".into()));
+        return Err(ObuError::Other("reddit: fetch budget exhausted".into()));
     }
     let raw = fetch_json(
         cdp,
@@ -1075,7 +1075,7 @@ mod tests {
             "reddit: GET /r/throttled/comments/1wn7jni/comment/k2xq.json?limit=500&raw_json=1&sort=new → HTTP 502",
             "reddit: non-JSON response from /comments/1x429/comment/a.json (expected value at line 1 column 1)",
         ] {
-            assert!(!is_rate_limit(&BladeError::Other(plain.into())), "{plain}");
+            assert!(!is_rate_limit(&ObuError::Other(plain.into())), "{plain}");
         }
         for limited in [
             "reddit: rate limited (HTTP 429)",
@@ -1083,10 +1083,7 @@ mod tests {
             "reddit: empty response (throttled?)",
             "empty response (throttled?)",
         ] {
-            assert!(
-                is_rate_limit(&BladeError::Other(limited.into())),
-                "{limited}"
-            );
+            assert!(is_rate_limit(&ObuError::Other(limited.into())), "{limited}");
         }
     }
 

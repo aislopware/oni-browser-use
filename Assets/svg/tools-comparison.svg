@@ -20,9 +20,9 @@
   <text x="400" y="32" text-anchor="middle" font-family="'SF Pro Display', system-ui, sans-serif"
         font-size="16" font-weight="700" fill="#8888a0" letter-spacing="2">FEWER TOOLS, MORE POWER</text>
 
-  <!-- Left: Bladebro (5 tools) -->
+  <!-- Left: Obu (5 tools) -->
   <g transform="translate(60, 60)">
-    <text x="140" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="800" fill="#00d4aa">Bladebro</text>
+    <text x="140" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="800" fill="#00d4aa">Obu</text>
     <text x="140" y="16" text-anchor="middle" font-family="monospace" font-size="10" fill="#8888a0">5 tools · ~1,900 tokens</text>
 
     <!-- 5 tool cards -->

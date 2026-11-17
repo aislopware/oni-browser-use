@@ -66,32 +66,32 @@ jobs:
             zig_target: x86_64-unknown-linux-gnu.2.28
             asset: linux-x64
             legacy: linux-x86_64
-            bin: target/x86_64-unknown-linux-gnu/release/bladebro
+            bin: target/x86_64-unknown-linux-gnu/release/obu
             zig: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             zig_target: aarch64-unknown-linux-gnu.2.28
             asset: linux-arm64
             legacy: linux-aarch64
-            bin: target/aarch64-unknown-linux-gnu/release/bladebro
+            bin: target/aarch64-unknown-linux-gnu/release/obu
             zig: true
           - os: ubuntu-latest
             target: x86_64-pc-windows-gnu
             zig_target: x86_64-pc-windows-gnu
             asset: windows-x64
             legacy: windows-x86_64
-            bin: target/x86_64-pc-windows-gnu/release/bladebro.exe
+            bin: target/x86_64-pc-windows-gnu/release/obu.exe
             zig: true
           - os: macos-26
             target: aarch64-apple-darwin
             asset: darwin-arm64
             legacy: macos-aarch64
-            bin: target/aarch64-apple-darwin/release/bladebro
+            bin: target/aarch64-apple-darwin/release/obu
           - os: macos-26
             target: x86_64-apple-darwin
             asset: darwin-x64
             legacy: macos-x86_64
-            bin: target/x86_64-apple-darwin/release/bladebro
+            bin: target/x86_64-apple-darwin/release/obu
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
@@ -124,10 +124,10 @@ jobs:
           ext=""
           [[ "$src" == *.exe ]] && ext=".exe"
           mkdir -p dist
-          cp "$src" "dist/bladebro-${{ matrix.asset }}$ext"
-          cp "$src" "dist/bladebro-${{ matrix.legacy }}$ext"
-          ( cd dist && sha256sum "bladebro-${{ matrix.asset }}$ext" > "bladebro-${{ matrix.asset }}$ext.sha256" )
-          ( cd dist && sha256sum "bladebro-${{ matrix.legacy }}$ext" > "bladebro-${{ matrix.legacy }}$ext.sha256" )
+          cp "$src" "dist/obu-${{ matrix.asset }}$ext"
+          cp "$src" "dist/obu-${{ matrix.legacy }}$ext"
+          ( cd dist && sha256sum "obu-${{ matrix.asset }}$ext" > "obu-${{ matrix.asset }}$ext.sha256" )
+          ( cd dist && sha256sum "obu-${{ matrix.legacy }}$ext" > "obu-${{ matrix.legacy }}$ext.sha256" )
       - uses: actions/upload-artifact@v7
         with:
           name: assets-${{ matrix.asset }}
@@ -153,12 +153,12 @@ jobs:
           sums=$(ls dist | grep -c '\.sha256$' || true)
           [[ "$bins" == "10" && "$sums" == "10" ]] || { echo "ERROR: $bins binaries, $sums checksums (want 10/10)" >&2; ls -l dist; exit 1; }
           ( cd dist && sha256sum -c --quiet ./*.sha256 )
-          python3 tools/reliability_probe/linux-abi.py dist/bladebro-linux-x64 dist/bladebro-linux-arm64
+          python3 tools/reliability_probe/linux-abi.py dist/obu-linux-x64 dist/obu-linux-arm64
       - name: Smoke the Linux artifact
         run: |
           set -euo pipefail
-          chmod +x dist/bladebro-linux-x64
-          ./dist/bladebro-linux-x64 --version
+          chmod +x dist/obu-linux-x64
+          ./dist/obu-linux-x64 --version
       - name: Create the draft release and upload the assets
         env:
           GH_TOKEN: ${{ github.token }}

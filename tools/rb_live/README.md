@@ -14,25 +14,25 @@ say what happened. Before the fix the drift check required an owned browser
 browser after the switch.
 
 Fully isolated: scratch `HOME` + scratch headless Chromium on an ephemeral
-debug port + scratch `BLADE_HOME`; no display leak; cleans up its own
+debug port + scratch `OBU_HOME`; no display leak; cleans up its own
 processes. Navigation uses an owned local HTTP fixture with distinct document
 markers and native page readback, so DNS/TLS failures cannot masquerade as
 attach drift. Exit 0 = the contract holds.
 
 ```bash
-python3 tools/rb_live/attach_drift.py          # uses target/release/bladebro
-BLADEBRO=/path/to/bladebro python3 tools/rb_live/attach_drift.py
+python3 tools/rb_live/attach_drift.py          # uses target/release/obu
+OBU=/path/to/obu python3 tools/rb_live/attach_drift.py
 ```
 
-Checks: the attach lands in the scratch browser (and launches no blade-owned
+Checks: the attach lands in the scratch browser (and launches no obu-owned
 browser); the flip's response carries the detach note; the attached browser
 was not navigated; a new agent browser came up on the current lane.
 
 ## `helium.py` — official Helium end to end
 
 Set `HELIUM_BINARY` to an official Linux Helium executable (tarball or installed
-binary). `BLADEBRO` optionally selects the driver under test. This uses a local
-HTTP fixture and disposable HOME/XDG/BLADE_HOME: PATH discovery, JSON listings,
+binary). `OBU` optionally selects the driver under test. This uses a local
+HTTP fixture and disposable HOME/XDG/OBU_HOME: PATH discovery, JSON listings,
 auto/attach ownership, all five MCP tools, Unicode input/storage, clone cookie
 and storage preservation, byte-for-byte source immutability, profile mode,
 and binary override/reset. Run twice; each invocation creates fresh profiles.

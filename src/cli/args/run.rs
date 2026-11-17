@@ -1,7 +1,7 @@
 //! The `run` command parser — `<json-steps> | @file | - (stdin) | `--steps <json>`.
 
 use super::{resolve_payload, take_value};
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 /// Parse `run` args: <json-steps> | @file | - (stdin) | --steps <json>.
@@ -18,22 +18,20 @@ pub(crate) fn parse_run_args(args: &[String]) -> Result<Value> {
                 "format" => {
                     format = take_value(args, &mut i, flag)?;
                     if !matches!(format.as_str(), "text" | "json") {
-                        return Err(BladeError::Usage(
-                            "run --format must be text or json".into(),
-                        ));
+                        return Err(ObuError::Usage("run --format must be text or json".into()));
                     }
                 }
                 "steps" => steps_raw = Some(take_value(args, &mut i, flag)?),
                 _ => {
-                    return Err(BladeError::Usage(format!(
-                        "unknown flag --{flag} for run — see 'bladebro help run'"
+                    return Err(ObuError::Usage(format!(
+                        "unknown flag --{flag} for run — see 'obu help run'"
                     )))
                 }
             }
         } else if steps_raw.is_none() {
             steps_raw = Some(a);
         } else {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "unexpected extra argument — pass steps once, or use @file / - for big payloads"
                     .into(),
             ));
@@ -42,20 +40,20 @@ pub(crate) fn parse_run_args(args: &[String]) -> Result<Value> {
     }
 
     let raw = steps_raw.ok_or_else(|| {
-        BladeError::Usage(
-            "run needs a JSON steps array, e.g. bladebro run '[{\"action\":\"click\",\"ref\":\"e5\"}]' \
+        ObuError::Usage(
+            "run needs a JSON steps array, e.g. obu run '[{\"action\":\"click\",\"ref\":\"e5\"}]' \
              (or @steps.json / - for stdin)"
                 .into(),
         )
     })?;
     let raw = resolve_payload(&raw)?;
     let steps: Value = serde_json::from_str(&raw)
-        .map_err(|e| BladeError::Usage(format!("invalid steps JSON: {e}")))?;
+        .map_err(|e| ObuError::Usage(format!("invalid steps JSON: {e}")))?;
     let arr = steps
         .as_array()
-        .ok_or_else(|| BladeError::Usage("steps must be a JSON array".into()))?;
+        .ok_or_else(|| ObuError::Usage("steps must be a JSON array".into()))?;
     if arr.is_empty() {
-        return Err(BladeError::Usage("steps must not be empty".into()));
+        return Err(ObuError::Usage("steps must not be empty".into()));
     }
     Ok(json!({ "steps": steps, "slim": slim, "format": format }))
 }

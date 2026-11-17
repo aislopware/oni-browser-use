@@ -6,7 +6,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::{DownloadInfo, Page};
 
 /// V20: export the current page as a PDF. Page.printToPDF → base64 → decode
@@ -41,12 +41,12 @@ pub async fn handle_pdf(page: &mut Page, args: &Value) -> Result<String> {
         .map(std::path::PathBuf::from);
     if let Some(pb) = &explicit {
         if let Err(e) = crate::platform::validate_write_path(pb) {
-            return Err(BladeError::Other(e));
+            return Err(ObuError::Other(e));
         }
-        ensure_new_output(pb).map_err(BladeError::Other)?;
+        ensure_new_output(pb).map_err(ObuError::Other)?;
         if let Some(parent) = pb.parent() {
             crate::platform::secure_create_dir_all(parent)
-                .map_err(|e| BladeError::Other(format!("pdf dir: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("pdf dir: {e}")))?;
         }
     }
 
@@ -68,25 +68,25 @@ pub async fn handle_pdf(page: &mut Page, args: &Value) -> Result<String> {
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("printToPDF failed");
-        return Err(BladeError::Other(format!("pdf failed: {msg}")));
+        return Err(ObuError::Other(format!("pdf failed: {msg}")));
     }
     let data = res.get("data").and_then(|d| d.as_str()).unwrap_or("");
     if data.is_empty() {
-        return Err(BladeError::Other("printToPDF returned no data".into()));
+        return Err(ObuError::Other("printToPDF returned no data".into()));
     }
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data)
-        .map_err(|e| BladeError::Other(format!("pdf base64 decode: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("pdf base64 decode: {e}")))?;
 
     let path = match explicit {
         Some(pb) => {
             // Re-check before the write: the target must not have appeared
             // between validation and render.
-            ensure_new_output(&pb).map_err(BladeError::Other)?;
-            // 0600 — consistent with every other bladebro-written file.
+            ensure_new_output(&pb).map_err(ObuError::Other)?;
+            // 0600 — consistent with every other obu-written file.
             crate::platform::secure_write_file(&pb, &bytes)
-                .map_err(|e| BladeError::Other(format!("pdf write: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("pdf write: {e}")))?;
             pb.display().to_string()
         }
         None => crate::artifacts::write_artifact_bytes(&bytes, "pdf")?,
@@ -114,7 +114,7 @@ mod pdf_output_tests {
 
     #[test]
     fn ensure_new_output_refuses_existing_files_dirs_and_symlinks() {
-        let dir = std::env::temp_dir().join(format!("blade-pdf-out-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-pdf-out-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let fresh = dir.join("fresh.pdf");
@@ -230,7 +230,7 @@ fn describe_download(d: &DownloadInfo) -> std::result::Result<String, String> {
         )),
         _ => Err(format!(
             "download not on disk: the browser reported {} complete ({} bytes), but {} does not exist — \
-             the browser saved it where bladebro cannot read it (a sandboxed browser without access \
+             the browser saved it where obu cannot read it (a sandboxed browser without access \
              to the downloads dir). For a URL that needs no login, retry with body=true.\nfrom: {}",
             d.filename, d.received_bytes, d.path, d.url
         )),
@@ -336,7 +336,7 @@ pub async fn handle_download(page: &mut Page, args: &Value) -> Result<String> {
         // navigating away from the current page. Direct navigation loads
         // PDFs in Chrome's viewer instead of downloading them.
         let js_url = serde_json::to_string(url)
-            .map_err(|_| crate::error::BladeError::Other("invalid URL for download".into()))?;
+            .map_err(|_| crate::error::ObuError::Other("invalid URL for download".into()))?;
         let js_expr = format!(
             r#"(async function() {{
                 try {{
@@ -410,13 +410,13 @@ pub async fn handle_download(page: &mut Page, args: &Value) -> Result<String> {
                     .await
                     .map_err(|error| {
                         if error.starts_with("no completed download") {
-                            BladeError::Other(format!(
+                            ObuError::Other(format!(
                                 "{error} The cross-origin fallback did not produce a completed attachment. \
                                  The server may serve content inline or require a different login. \
                                  Navigate to the page linking to the file and click its download link."
                             ))
                         } else {
-                            BladeError::Other(error)
+                            ObuError::Other(error)
                         }
                     })
                 }
@@ -432,9 +432,9 @@ pub async fn handle_download(page: &mut Page, args: &Value) -> Result<String> {
                     )
                     .await;
                 return waited
-                    .and_then(|download| describe_download(&download).map_err(BladeError::Other));
+                    .and_then(|download| describe_download(&download).map_err(ObuError::Other));
             }
-            return Err(crate::error::BladeError::Other(format!(
+            return Err(crate::error::ObuError::Other(format!(
                 "download failed: {err}"
             )));
         }
@@ -451,8 +451,8 @@ pub async fn handle_download(page: &mut Page, args: &Value) -> Result<String> {
     )
     .await
     {
-        Ok(d) => describe_download(&d).map_err(crate::error::BladeError::Other),
-        Err(e) => Err(crate::error::BladeError::Other(e)),
+        Ok(d) => describe_download(&d).map_err(crate::error::ObuError::Other),
+        Err(e) => Err(crate::error::ObuError::Other(e)),
     }
 }
 #[cfg(test)]
@@ -467,7 +467,7 @@ mod download_correlation_tests {
             state: state.into(),
             received_bytes: 10,
             total_bytes: 10,
-            path: format!("/tmp/bladebro-test/{name}"),
+            path: format!("/tmp/obu-test/{name}"),
         }
     }
 
@@ -605,7 +605,7 @@ mod download_correlation_tests {
     /// the file on disk, and a missing file must never read as complete.
     #[test]
     fn completed_download_missing_on_disk_is_not_reported_complete() {
-        let dir = std::env::temp_dir().join(format!("blade-dl-verdict-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-dl-verdict-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut present = dl("g1", "here.txt", "completed");
         present.path = dir.join("here.txt").display().to_string();
@@ -635,26 +635,26 @@ mod download_correlation_tests {
 pub(super) async fn handle_body_download(args: &Value) -> Result<String> {
     let url = args.get("url").and_then(Value::as_str).unwrap_or("");
     let parsed = reqwest::Url::parse(url).map_err(|_| {
-        BladeError::Usage("download body=true requires an absolute http(s) url".into())
+        ObuError::Usage("download body=true requires an absolute http(s) url".into())
     })?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "body download supports http(s) only".into(),
         ));
     }
     if args.get("path").is_some() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "body downloads return an artifact; omit path".into(),
         ));
     }
-    let proxy = crate::browser::proxy::env_blade_proxy()
-        .map_err(|e| BladeError::Usage(format!("body download proxy: {e}")))?;
+    let proxy = crate::browser::proxy::env_obu_proxy()
+        .map_err(|e| ObuError::Usage(format!("body download proxy: {e}")))?;
     let client = body_client(proxy)?;
     let mut response = client
         .get(parsed)
         .send()
         .await
-        .map_err(|e| BladeError::Other(format!("body download: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("body download: {e}")))?;
     let status = response.status().as_u16();
     let final_url = response.url().to_string();
     let kind = response
@@ -667,10 +667,10 @@ pub(super) async fn handle_body_download(args: &Value) -> Result<String> {
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|e| BladeError::Other(format!("body download: {e}")))?
+        .map_err(|e| ObuError::Other(format!("body download: {e}")))?
     {
         if bytes.len() + chunk.len() > 32 * 1024 * 1024 {
-            return Err(BladeError::Other(
+            return Err(ObuError::Other(
                 "body download exceeds 32 MiB; no artifact written".into(),
             ));
         }
@@ -693,7 +693,7 @@ fn body_client(proxy: Option<crate::browser::proxy::ProxySpec>) -> Result<reqwes
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30));
     if let Some(proxy) = proxy {
         if proxy.server.starts_with("socks") || proxy.server.starts_with("quic:") {
-            return Err(BladeError::Usage("body download supports HTTP(S) BLADE_PROXY only; use browser downloads for this proxy type".into()));
+            return Err(ObuError::Usage("body download supports HTTP(S) OBU_PROXY only; use browser downloads for this proxy type".into()));
         }
         let server = if proxy.server.contains("://") {
             proxy.server
@@ -701,15 +701,13 @@ fn body_client(proxy: Option<crate::browser::proxy::ProxySpec>) -> Result<reqwes
             format!("http://{}", proxy.server)
         };
         let configured = reqwest::Proxy::all(server).map_err(|_| {
-            BladeError::Usage(
-                "body download could not configure BLADE_PROXY; no request sent".into(),
-            )
+            ObuError::Usage("body download could not configure OBU_PROXY; no request sent".into())
         })?;
         builder = builder.proxy(configured);
     }
     builder
         .build()
-        .map_err(|_| BladeError::Other("body download HTTP client setup failed".into()))
+        .map_err(|_| ObuError::Other("body download HTTP client setup failed".into()))
 }
 
 #[cfg(test)]
@@ -736,7 +734,7 @@ mod body_proxy_tests {
                 .await
                 .unwrap();
         });
-        let proxy = crate::browser::proxy::parse_blade_proxy(&format!("http://{address}")).unwrap();
+        let proxy = crate::browser::proxy::parse_obu_proxy(&format!("http://{address}")).unwrap();
         let response = body_client(Some(proxy))
             .unwrap()
             .get("http://body-download.invalid/fixture")
@@ -746,7 +744,7 @@ mod body_proxy_tests {
         assert_eq!(response.text().await.unwrap(), "PROXIED");
         server.await.unwrap();
         let proxy =
-            crate::browser::proxy::parse_blade_proxy("socks5://user:secret@127.0.0.1:9").unwrap();
+            crate::browser::proxy::parse_obu_proxy("socks5://user:secret@127.0.0.1:9").unwrap();
         let error = body_client(Some(proxy)).unwrap_err().to_string();
         assert!(!error.contains("secret"));
         assert!(error.contains("HTTP(S)"));

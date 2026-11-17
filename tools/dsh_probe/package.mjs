@@ -9,7 +9,7 @@ import { runInNewContext } from 'node:vm';
 import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-const root = resolve('npm/bladebro');
+const root = resolve('npm/obu');
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const require = createRequire(join(root, 'package.json'));
 const scratch = mkdtempSync(join(tmpdir(), 'bb-package-'));
@@ -20,13 +20,13 @@ try {
   check('native bundle is included in published files', manifest.dsh.bundle.patch === './cordis.patch.yml' && ['binary.cjs','dsh-plugin.mjs','cordis.patch.yml'].every(f => manifest.files.includes(f)));
   const source = readFileSync(join(root, 'binary.cjs'), 'utf8');
   for (const [platform, arch, pkg] of [
-    ['linux','x64','bladebro-linux-x64'], ['linux','arm64','bladebro-linux-arm64'],
-    ['darwin','x64','bladebro-darwin-x64'], ['darwin','arm64','bladebro-darwin-arm64'],
-    ['win32','x64','bladebro-windows-x64'], ['win32','arm64',null],
+    ['linux','x64','obu-linux-x64'], ['linux','arm64','obu-linux-arm64'],
+    ['darwin','x64','obu-darwin-x64'], ['darwin','arm64','obu-darwin-arm64'],
+    ['win32','x64','obu-windows-x64'], ['win32','arm64',null],
   ]) {
     const base = join(scratch, `${platform} ${arch} Unicode 日本語`);
     mkdirSync(base);
-    const binary = join(base, platform === 'win32' ? 'bladebro.exe' : 'bladebro');
+    const binary = join(base, platform === 'win32' ? 'obu.exe' : 'obu');
     writeFileSync(binary, 'fixture'); chmodSync(binary, 0o755);
     const customRequire = name => require(name);
     customRequire.resolve = name => { assert.equal(name, pkg + '/package.json'); return join(base, 'package.json'); };
@@ -53,11 +53,11 @@ try {
   if (process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch)) {
     // ENOENT also means a present executable has no usable interpreter/ELF
     // loader (the glibc prebuild on Alpine/musl). Reinstalling cannot fix it.
-    const native = join(isolated, 'node_modules', 'bladebro-linux-' + process.arch);
+    const native = join(isolated, 'node_modules', 'obu-linux-' + process.arch);
     mkdirSync(native, { recursive: true });
-    writeFileSync(join(native, 'package.json'), JSON.stringify({ name: 'bladebro-linux-' + process.arch }));
-    writeFileSync(join(native, 'bladebro'), '#!/bladebro-fixture-missing-interpreter\n');
-    chmodSync(join(native, 'bladebro'), 0o755);
+    writeFileSync(join(native, 'package.json'), JSON.stringify({ name: 'obu-linux-' + process.arch }));
+    writeFileSync(join(native, 'obu'), '#!/obu-fixture-missing-interpreter\n');
+    chmodSync(join(native, 'obu'), 0o755);
     const loader = spawnSync(process.execPath, [join(isolated, 'bin.js'), '--version'], { encoding: 'utf8' });
     if (!loader.stderr.includes('glibc >= 2.28')) process.stderr.write(loader.stderr);
     check('missing Linux loader names glibc and source-build recovery', loader.status === 1 && loader.stdout === '' && loader.stderr.includes('glibc >= 2.28') && loader.stderr.includes('build from source'));
@@ -66,17 +66,17 @@ try {
   if (['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'].includes(host)) {
     // The launcher must be invisible to whoever runs it: the binary's exit
     // status or death signal comes back unchanged, and termination sent to the
-    // launcher reaches the binary (a harness stopping `npx bladebro mcp` with
+    // launcher reaches the binary (a harness stopping `npx obu mcp` with
     // SIGTERM must not orphan the MCP server and its browser).
-    const native = join(isolated, 'node_modules', 'bladebro-' + host);
+    const native = join(isolated, 'node_modules', 'obu-' + host);
     mkdirSync(native, { recursive: true });
-    writeFileSync(join(native, 'package.json'), JSON.stringify({ name: 'bladebro-' + host }));
-    const fake = body => { writeFileSync(join(native, 'bladebro'), '#!/bin/sh\n' + body); chmodSync(join(native, 'bladebro'), 0o755); };
+    writeFileSync(join(native, 'package.json'), JSON.stringify({ name: 'obu-' + host }));
+    const fake = body => { writeFileSync(join(native, 'obu'), '#!/bin/sh\n' + body); chmodSync(join(native, 'obu'), 0o755); };
     const launch = () => spawnSync(process.execPath, [join(isolated, 'bin.js')], { encoding: 'utf8' });
     fake('exit 7\n');
     check('binary exit status passes through the launcher', launch().status === 7);
     // Node ignores SIGPIPE, so re-raising it on the launcher is a no-op: the
-    // launcher must still not report success for `bladebro see | head`.
+    // launcher must still not report success for `obu see | head`.
     fake('kill -s PIPE $$\n');
     const pipe = launch();
     if (pipe.status !== 128 + osConstants.signals.SIGPIPE) process.stderr.write(`SIGPIPE death came back as status=${pipe.status} signal=${pipe.signal}\n`);

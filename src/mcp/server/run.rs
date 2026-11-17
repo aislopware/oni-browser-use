@@ -7,7 +7,7 @@
 use serde_json::Value;
 
 use crate::action::Action;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::act::handle_act;
@@ -24,7 +24,7 @@ pub async fn handle_run(args: &Value, page: &mut Page) -> Result<String> {
     let steps = args
         .get("steps")
         .and_then(|s| s.as_array())
-        .ok_or_else(|| crate::error::BladeError::Other("run requires 'steps' array".into()))?;
+        .ok_or_else(|| crate::error::ObuError::Other("run requires 'steps' array".into()))?;
 
     let mut observations = Vec::new();
     let mut results = Vec::new();
@@ -57,7 +57,7 @@ pub async fn handle_run(args: &Value, page: &mut Page) -> Result<String> {
                 prev_url = curr_url;
             }
             // Closed propagates unwrapped so serve() self-heals.
-            Err(BladeError::Closed) => return Err(BladeError::Closed),
+            Err(ObuError::Closed) => return Err(ObuError::Closed),
             Err(e) => {
                 if optional {
                     if json_out {
@@ -153,7 +153,7 @@ pub(super) fn resolve_condition_fields(
     let cond = cond.trim();
     if cond.is_empty() {
         return match (text.is_empty(), js.is_empty()) {
-            (false, false) => Err(crate::error::BladeError::Usage(
+            (false, false) => Err(crate::error::ObuError::Usage(
                 "wait: both 'text' and 'js' are set but condition= is empty - pass condition=\"js\" (js expression) or condition=\"text\" (page text), or drop one field".into(),
             )),
             (false, true) => Ok(("text".to_string(), text.to_string())),
@@ -169,12 +169,12 @@ pub(super) fn resolve_condition_fields(
                 if js == text {
                     Ok(("js".to_string(), js.to_string()))
                 } else {
-                    Err(crate::error::BladeError::Usage(
+                    Err(crate::error::ObuError::Usage(
                         "wait condition=js: 'js' and 'text' both carry an expression and they differ - pass the expression once (js= preferred; text= is the legacy alias)".into(),
                     ))
                 }
             }
-            (true, true) => Err(crate::error::BladeError::Usage(
+            (true, true) => Err(crate::error::ObuError::Usage(
                 "wait condition=js needs the expression in 'js' (or the legacy 'text' alias) - got neither".into(),
             )),
         };
@@ -183,15 +183,15 @@ pub(super) fn resolve_condition_fields(
         cond,
         "element" | "selector" | "title" | "url" | "text" | "settle" | "network" | "network-idle"
     ) {
-        return Err(BladeError::Usage(format!("unknown wait condition '{cond}' - use element, selector, text, title, url, js, settle or network")));
+        return Err(ObuError::Usage(format!("unknown wait condition '{cond}' - use element, selector, text, title, url, js, settle or network")));
     }
     if !js.is_empty() {
-        return Err(crate::error::BladeError::Usage(format!(
+        return Err(crate::error::ObuError::Usage(format!(
             "wait: a 'js' field is set but condition=\"{cond}\" does not evaluate JavaScript - use condition=\"js\", or drop the js field"
         )));
     }
     if matches!(cond, "element" | "selector" | "title" | "url" | "text") && text.is_empty() {
-        return Err(crate::error::BladeError::Usage(format!(
+        return Err(crate::error::ObuError::Usage(format!(
             "wait condition=\"{cond}\" needs a non-empty match value in 'text'"
         )));
     }
@@ -208,7 +208,7 @@ pub(super) fn condition_from_args(args: &Value, default: &str) -> Result<(String
         .filter(|s| !s.is_empty())
     {
         if !matches!(cond, "" | "selector") || !text.is_empty() || !js.is_empty() {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "selector wait cannot be combined with another condition/text/js".into(),
             ));
         }
@@ -224,7 +224,7 @@ pub(super) fn condition_from_args(args: &Value, default: &str) -> Result<(String
 pub(super) fn while_condition(step: &Value) -> Result<(String, String)> {
     let (condition, needle) = condition_from_args(step, "element")?;
     if condition == "element" && needle.is_empty() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "while needs an exit test: text= (loops while that element is visible), selector=, or condition=js with js= - without one it matches every page and runs max times".into(),
         ));
     }
@@ -240,12 +240,12 @@ pub(super) fn resolve_wait_timeout(step: &Value, default_secs: u64) -> Result<st
         return Ok(std::time::Duration::from_secs(default_secs));
     };
     let secs = t.as_u64().ok_or_else(|| {
-        crate::error::BladeError::Usage(
+        crate::error::ObuError::Usage(
             "timeout must be an integer number of seconds (0-3600)".into(),
         )
     })?;
     if secs > 3600 {
-        return Err(crate::error::BladeError::Usage(format!(
+        return Err(crate::error::ObuError::Usage(format!(
             "timeout {secs}s exceeds the 3600s cap - use shorter, iterative waits instead"
         )));
     }
@@ -260,7 +260,7 @@ async fn execute_nested_step(
     observations: &mut Vec<String>,
 ) -> Result<()> {
     match Box::pin(execute_step(page, step, path, observations)).await {
-        Err(BladeError::Closed) => Err(BladeError::Closed),
+        Err(ObuError::Closed) => Err(ObuError::Closed),
         Err(e) if step.get("optional").and_then(Value::as_bool) == Some(true) => {
             observations.push(format!("step {path} (optional): failed — {e} (continued)"));
             Ok(())
@@ -328,7 +328,7 @@ async fn execute_step(
                 crate::action::CondOutcome::Met => true,
                 crate::action::CondOutcome::Timeout => false,
                 crate::action::CondOutcome::Error(e) => {
-                    return Err(crate::error::BladeError::Other(format!(
+                    return Err(crate::error::ObuError::Other(format!(
                         "step {path} if: {e}"
                     )));
                 }
@@ -395,7 +395,7 @@ async fn execute_step(
                     crate::action::CondOutcome::Met => true,
                     crate::action::CondOutcome::Timeout => false,
                     crate::action::CondOutcome::Error(e) => {
-                        return Err(crate::error::BladeError::Other(format!(
+                        return Err(crate::error::ObuError::Other(format!(
                             "step {path} while: {e}"
                         )));
                     }
@@ -427,7 +427,7 @@ async fn execute_step(
                 .or_else(|| step.get("text").and_then(|t| t.as_str()))
                 .unwrap_or("");
             if js_code.is_empty() {
-                return Err(crate::error::BladeError::Other(
+                return Err(crate::error::ObuError::Other(
                     "js step requires 'js' field".into(),
                 ));
             }
@@ -441,11 +441,11 @@ async fn execute_step(
                     observations.push(format!("step {path}: js → {result}"));
                 }
                 // Closed propagates unwrapped so serve() self-heals.
-                Err(BladeError::Closed) => return Err(BladeError::Closed),
+                Err(ObuError::Closed) => return Err(ObuError::Closed),
                 Err(e) => {
                     let _ = page.recapture().await;
                     let view = page.view(2000);
-                    return Err(crate::error::BladeError::Other(format!(
+                    return Err(crate::error::ObuError::Other(format!(
                         "step {path} js failed: {e}\n\n--- current page state ---\n{view}"
                     )));
                 }
@@ -511,11 +511,11 @@ async fn execute_step(
                         observations.push(format!("step {path}: {result}"));
                     }
                 }
-                Err(BladeError::Closed) => return Err(BladeError::Closed),
+                Err(ObuError::Closed) => return Err(ObuError::Closed),
                 Err(e) => {
                     let _ = page.recapture().await;
                     let view = page.view(3000);
-                    return Err(crate::error::BladeError::Other(format!(
+                    return Err(crate::error::ObuError::Other(format!(
                         "step {path} state failed: {e}\n\n--- current page state ---\n{view}"
                     )));
                 }
@@ -548,11 +548,11 @@ async fn execute_step(
                             }
                         ));
                     }
-                    Err(BladeError::Closed) => return Err(BladeError::Closed),
+                    Err(ObuError::Closed) => return Err(ObuError::Closed),
                     Err(e) => {
                         let _ = page.recapture().await;
                         let view = page.view(3000);
-                        return Err(crate::error::BladeError::Other(format!(
+                        return Err(crate::error::ObuError::Other(format!(
                             "step {path} wait failed: {e}\n\n--- current page state ---\n{view}"
                         )));
                     }
@@ -562,7 +562,7 @@ async fn execute_step(
                 // only when the condition times out, and the outcome line says
                 // which path was taken.
                 if condition == "settle" {
-                    return Err(crate::error::BladeError::Other(
+                    return Err(crate::error::ObuError::Other(
                         "wait else: 'else' needs a real condition (element/text/title/url/js) — 'settle' always succeeds; use an 'if' step for plain branching".into(),
                     ));
                 }
@@ -578,7 +578,7 @@ async fn execute_step(
                     crate::action::CondOutcome::Met => true,
                     crate::action::CondOutcome::Timeout => false,
                     crate::action::CondOutcome::Error(e) => {
-                        return Err(crate::error::BladeError::Other(format!(
+                        return Err(crate::error::ObuError::Other(format!(
                             "step {path} wait: {e}"
                         )));
                     }
@@ -615,11 +615,11 @@ async fn execute_step(
                 Ok(result)
                     if action_str == "batch" && result.starts_with("batch stopped at step ") =>
                 {
-                    return Err(BladeError::Other(result));
+                    return Err(ObuError::Other(result));
                 }
                 Ok(result) => observations.push(format!("step {path}: {result}")),
-                Err(BladeError::Closed) => return Err(BladeError::Closed),
-                Err(e) => return Err(BladeError::Other(format!("step {path} failed: {e}"))),
+                Err(ObuError::Closed) => return Err(ObuError::Closed),
+                Err(e) => return Err(ObuError::Other(format!("step {path} failed: {e}"))),
             }
         }
     }

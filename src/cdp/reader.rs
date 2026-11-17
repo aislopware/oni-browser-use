@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use super::session::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// `Runtime.evaluate` parameters with the same meaning on
 /// `Runtime.callFunctionOn`. A call carrying anything else (a context id, the
@@ -67,10 +67,10 @@ impl Reader {
     }
 }
 
-/// `BLADE_MAIN_WORLD=1` keeps every read in the page's world — the behavior
+/// `OBU_MAIN_WORLD=1` keeps every read in the page's world — the behavior
 /// before the reader world, for telling a page-side difference apart.
 pub(super) fn enabled() -> bool {
-    std::env::var("BLADE_MAIN_WORLD").as_deref() != Ok("1")
+    std::env::var("OBU_MAIN_WORLD").as_deref() != Ok("1")
 }
 
 /// The caller's deadline, shared by every command a read takes.
@@ -92,7 +92,7 @@ impl Budget {
         let left = self.until.saturating_duration_since(Instant::now());
         if left.is_zero() {
             // Spent before the script could run: the page is not answering.
-            return Err(BladeError::Timeout(self.total));
+            return Err(ObuError::Timeout(self.total));
         }
         Ok(left)
     }
@@ -100,8 +100,8 @@ impl Budget {
 
 /// The anchor no longer resolves: its document is gone (navigation, a
 /// restore from the back/forward cache). Nothing ran.
-fn anchor_gone(e: &BladeError) -> bool {
-    matches!(e, BladeError::Cdp { message, .. }
+fn anchor_gone(e: &ObuError) -> bool {
+    matches!(e, ObuError::Cdp { message, .. }
         if message.contains("Cannot find context")
             || message.contains("Could not find object")
             || message.contains("Invalid remote object id"))
@@ -144,7 +144,7 @@ async fn anchor(cdp: &CdpSession, budget: Budget) -> Result<String> {
                 .to_string(),
         ))
     };
-    let no_frame = || BladeError::Other("reader world: the target has no frame".into());
+    let no_frame = || ObuError::Other("reader world: the target has no frame".into());
     for _ in 0..3 {
         let before = cdp.raw("Page.getFrameTree", None, budget.left()?).await?;
         let (frame_id, loader) = frame(&before).ok_or_else(no_frame)?;
@@ -184,7 +184,7 @@ async fn anchor(cdp: &CdpSession, budget: Budget) -> Result<String> {
             }
         }
     }
-    Err(BladeError::Other(
+    Err(ObuError::Other(
         "reader world: the document kept changing".into(),
     ))
 }
@@ -270,11 +270,11 @@ pub(super) async fn evaluate(
                     *reader.anchor.lock().unwrap_or_else(|e| e.into_inner()) = Some(object.clone());
                     object
                 }
-                Err(e @ (BladeError::Closed | BladeError::Timeout(_))) => return Err(e),
+                Err(e @ (ObuError::Closed | ObuError::Timeout(_))) => return Err(e),
                 Err(e) => {
                     // No Page domain on this target (a worker): there is one
                     // world, and asking again would cost two commands a read.
-                    if matches!(&e, BladeError::Cdp { code: -32601, .. }) {
+                    if matches!(&e, ObuError::Cdp { code: -32601, .. }) {
                         reader.unavailable.store(true, Ordering::Relaxed);
                     }
                     return in_page(params, budget.left()?).await;
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn only_a_missing_anchor_is_retried() {
-        let gone = |m: &str| BladeError::Cdp {
+        let gone = |m: &str| ObuError::Cdp {
             code: -32000,
             message: m.into(),
         };
@@ -371,7 +371,7 @@ mod tests {
         // The script started and its document went away: the caller's news,
         // never a silent second run.
         assert!(!anchor_gone(&gone("Execution context was destroyed.")));
-        assert!(!anchor_gone(&BladeError::Timeout(Duration::from_secs(1))));
-        assert!(!anchor_gone(&BladeError::Closed));
+        assert!(!anchor_gone(&ObuError::Timeout(Duration::from_secs(1))));
+        assert!(!anchor_gone(&ObuError::Closed));
     }
 }

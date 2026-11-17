@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Bladebro Stealth Vectors</title></head>
+<head><meta charset="utf-8"><title>Obu Stealth Vectors</title></head>
 <body>
-<h1>Bladebro Stealth Vector Suite</h1>
+<h1>Obu Stealth Vector Suite</h1>
 <pre id="out">RUNNING</pre>
 <script src="fixtures/native_behavior.js"></script>
 <script>
-// Bladebro local stealth vector suite. Results rendered as plain text so
+// Obu local stealth vector suite. Results rendered as plain text so
 // `see content=true` can read them. Format: "PASS name: detail" / "FAIL name: detail".
 // Summary line: "SCORE: X/Y pass".
 const lines = [];
@@ -167,7 +167,7 @@ async function run() {
     const x = c.getContext("2d");
     x.textBaseline = "top"; x.font = "16px Arial"; x.fillStyle = "#f60";
     x.fillRect(10, 10, 80, 20); x.fillStyle = "#069";
-    x.fillText("Bladebro,😀", 12, 24);
+    x.fillText("Obu,😀", 12, 24);
     return c.toDataURL();
   }
   const fp1 = h(draw()), fp2 = h(draw());

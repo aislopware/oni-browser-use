@@ -64,23 +64,23 @@ pub fn home_dir() -> PathBuf {
     }
 }
 
-/// The Bladebro data directory. Resolution order:
-/// 1. `BLADE_HOME` (explicit override, highest priority).
-/// 2. Unix: `$XDG_STATE_HOME/blade` when `XDG_STATE_HOME` is set.
-/// 3. Unix: `$HOME/.local/state/blade` when that parent exists or can be
+/// The Obu data directory. Resolution order:
+/// 1. `OBU_HOME` (explicit override, highest priority).
+/// 2. Unix: `$XDG_STATE_HOME/obu` when `XDG_STATE_HOME` is set.
+/// 3. Unix: `$HOME/.local/state/obu` when that parent exists or can be
 ///    created (a `.local` dir already present is enough).
-/// 4. Unix: `$HOME/.blade` (legacy default; kept for minimal setups).
-///    Windows: `%USERPROFILE%\.blade`.
+/// 4. Unix: `$HOME/.obu` (legacy default; kept for minimal setups).
+///    Windows: `%USERPROFILE%\.obu`.
 ///
 /// Migration-free upgrade: when a DEFAULT resolution (cases 2-4, not an
-/// explicit `BLADE_HOME`) lands somewhere other than the legacy dir while
-/// `~/.blade` already holds Bladebro state, the legacy dir wins. An
+/// explicit `OBU_HOME`) lands somewhere other than the legacy dir while
+/// `~/.obu` already holds Obu state, the legacy dir wins. An
 /// upgraded install must never silently split its state in two.
-pub fn blade_dir() -> PathBuf {
+pub fn obu_dir() -> PathBuf {
     let home = home_dir();
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
-    let legacy = home.join(".blade");
-    resolve_blade_dir(
+    let legacy = home.join(".obu");
+    resolve_obu_dir(
         &home,
         &env,
         dir_has_state(&legacy),
@@ -92,28 +92,28 @@ pub fn blade_dir() -> PathBuf {
 /// sandboxed launch (Flatpak) shares this exact dir into the sandbox, so
 /// both sides take it from here.
 pub fn downloads_dir() -> PathBuf {
-    blade_dir().join("downloads")
+    obu_dir().join("downloads")
 }
 
-/// Can `$HOME/.local/state/blade` be created? True when the parent exists
-/// or `.local` does (so `state`/`blade` only need a mkdir under it).
+/// Can `$HOME/.local/state/obu` be created? True when the parent exists
+/// or `.local` does (so `state`/`obu` only need a mkdir under it).
 fn local_state_creatable(home: &std::path::Path) -> bool {
     home.join(".local").join("state").exists() || home.join(".local").exists()
 }
 
 /// Pure resolution core (tested directly; no env mutation or FS checks in
 /// tests — the two FS facts are injected as flags).
-fn resolve_blade_dir(
+fn resolve_obu_dir(
     home: &std::path::Path,
     env: &dyn Fn(&str) -> Option<String>,
     legacy_has_state: bool,
     local_state_creatable: bool,
 ) -> PathBuf {
     // 1. Explicit override wins unconditionally.
-    if let Some(v) = env("BLADE_HOME").filter(|v| !v.trim().is_empty()) {
+    if let Some(v) = env("OBU_HOME").filter(|v| !v.trim().is_empty()) {
         return PathBuf::from(v);
     }
-    let legacy = home.join(".blade");
+    let legacy = home.join(".obu");
     #[cfg(windows)]
     {
         // Windows has no XDG fallbacks; the flags exist for the Unix path.
@@ -125,9 +125,9 @@ fn resolve_blade_dir(
         // 2. XDG_STATE_HOME, then 3. HOME/.local/state (existing or creatable).
         let mut resolved = None;
         if let Some(xdg) = env("XDG_STATE_HOME").filter(|v| !v.trim().is_empty()) {
-            resolved = Some(PathBuf::from(xdg).join("blade"));
+            resolved = Some(PathBuf::from(xdg).join("obu"));
         } else if local_state_creatable {
-            resolved = Some(home.join(".local").join("state").join("blade"));
+            resolved = Some(home.join(".local").join("state").join("obu"));
         }
         let resolved = resolved.unwrap_or_else(|| legacy.clone());
         // Migration-free fallback: an existing install keeps its legacy dir.
@@ -138,7 +138,7 @@ fn resolve_blade_dir(
     }
 }
 
-/// Does `~/.blade` hold Bladebro state? (Any known artifact, not just a
+/// Does `~/.obu` hold Obu state? (Any known artifact, not just a
 /// directory that happens to exist.)
 fn dir_has_state(legacy: &std::path::Path) -> bool {
     if !legacy.is_dir() {
@@ -207,7 +207,7 @@ pub fn secure_write_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
         .map_err(std::io::Error::other)?
         .as_nanos();
     let tmp = parent.join(format!(
-        ".blade-write-{}-{timestamp}-{}",
+        ".obu-write-{}-{timestamp}-{}",
         std::process::id(),
         NEXT_WRITE.fetch_add(1, Ordering::Relaxed)
     ));
@@ -481,7 +481,7 @@ pub fn validate_write_path(path: &std::path::Path) -> Result<(), String> {
 /// here is delivered to the page — an untrusted origin — so this is a
 /// disclosure sink, not a neutral file picker: a prompt-injected page
 /// steers the agent toward exactly the credential locations the write path
-/// blocks, plus bladebro's own cleartext credential stores under the data
+/// blocks, plus obu's own cleartext credential stores under the data
 /// dir (logins.json, sessions/, realbrowser templates). The artifacts dir
 /// stays uploadable — it is the sanctioned file-exchange zone.
 ///
@@ -489,7 +489,7 @@ pub fn validate_write_path(path: &std::path::Path) -> Result<(), String> {
 /// (they yield an unreadable File and crash the browser process), so
 /// refusing them here turns a crash into a clean error.
 pub fn validate_upload_path(path: &std::path::Path) -> Result<(), String> {
-    validate_upload_path_at(path, &blade_dir())
+    validate_upload_path_at(path, &obu_dir())
 }
 
 /// The system directory an upload source lies in, if any. Both spellings
@@ -601,7 +601,7 @@ pub fn validate_upload_path_at(
         }
     }
 
-    // Bladebro's own data stores — the complete session jar, saved
+    // Obu's own data stores — the complete session jar, saved
     // sessions, profile templates, the rb clone of the user's real profile.
     // The artifacts dir is the sanctioned exchange zone and stays
     // uploadable.
@@ -618,15 +618,15 @@ pub fn validate_upload_path_at(
     let artifacts_c = resolve_dir(&data_c.join("artifacts"));
     let in_data = resolved.starts_with(&data_c);
     let in_artifacts = resolved.starts_with(&artifacts_c);
-    // The legacy ~/.blade spelling can hold state even when the active dir
+    // The legacy ~/.obu spelling can hold state even when the active dir
     // resolves elsewhere (migration keeps one dir; a stale second copy is
     // exactly what an attacker would aim at).
-    let legacy_c = resolve_dir(&home_dir().join(".blade"));
+    let legacy_c = resolve_dir(&home_dir().join(".obu"));
     let in_legacy =
         resolved.starts_with(&legacy_c) && !resolved.starts_with(legacy_c.join("artifacts"));
     if (in_data && !in_artifacts) || in_legacy {
         return Err(format!(
-            "blocked: uploading from bladebro's data directory is not allowed ({} — use the artifacts dir)",
+            "blocked: uploading from obu's data directory is not allowed ({} — use the artifacts dir)",
             resolved.display()
         ));
     }
@@ -1219,7 +1219,7 @@ pub fn isolate_owned_child(cmd: &mut std::process::Command) {
 /// when this process dies, whatever kills it.
 ///
 /// Both halves are needed. Out of our group, the terminal's Ctrl-C to the
-/// foreground job no longer kills Xvfb while bladebro is still closing the
+/// foreground job no longer kills Xvfb while obu is still closing the
 /// browser (Chrome lost its display first, so the graceful close that lets it
 /// flush storage never happened). But out of our group a SIGKILL to it
 /// (`timeout -s KILL`, a harness's killpg, a cancelled CI job) no longer
@@ -1267,7 +1267,7 @@ pub fn spawn_tied_to_process(
         if spawner.is_none() {
             let (jobs, queue) = mpsc::channel::<Job>();
             std::thread::Builder::new()
-                .name("bladebro-spawner".into())
+                .name("obu-spawner".into())
                 .spawn(move || {
                     for (mut cmd, reply) in queue {
                         let _ = reply.send(cmd.spawn());
@@ -1277,21 +1277,21 @@ pub fn spawn_tied_to_process(
         }
         if let Some(jobs) = spawner.as_ref() {
             jobs.send((cmd, reply))
-                .map_err(|_| std::io::Error::other("bladebro spawner thread is gone"))?;
+                .map_err(|_| std::io::Error::other("obu spawner thread is gone"))?;
         }
     }
     result
         .recv()
-        .map_err(|_| std::io::Error::other("bladebro spawner thread is gone"))?
+        .map_err(|_| std::io::Error::other("obu spawner thread is gone"))?
 }
 
 /// Termination signals for a process that owns its browser in-process (the
 /// one-shot CLI, `probe`/`targets`/`audit`): SIGTERM, SIGINT and SIGHUP on
 /// Unix, Ctrl+C on Windows — the set the MCP server shuts down on. Without
-/// a handler the default action ended bladebro without ever closing the
+/// a handler the default action ended obu without ever closing the
 /// browser, which runs in its own process group (`isolate_owned_child`): a
 /// `timeout` SIGTERM orphaned it and Xvfb, and a Ctrl-C to the job's group
-/// took Xvfb down with bladebro and left Chrome to die on losing its display,
+/// took Xvfb down with obu and left Chrome to die on losing its display,
 /// unflushed (or orphaned it where there is no Xvfb).
 ///
 /// Listening starts in [`TerminationSignal::listen`]. From then on these
@@ -1394,7 +1394,7 @@ impl TerminationSignal {
     ) -> crate::error::Result<T> {
         tokio::select! {
             biased;
-            _ = self.recv() => Err(crate::error::BladeError::Other(
+            _ = self.recv() => Err(crate::error::ObuError::Other(
                 "interrupted by a termination signal before the command finished (outcome unverified)".into(),
             )),
             result = work => result,
@@ -1534,7 +1534,7 @@ mod tests {
     fn requested_browser_close_preserves_pending_storage_flush() {
         use std::os::unix::process::CommandExt;
         let marker = std::env::temp_dir().join(format!(
-            "blade-flush-{}-{}",
+            "obu-flush-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1544,9 +1544,9 @@ mod tests {
         let mut child = std::process::Command::new("sh")
             .args([
                 "-c",
-                "trap 'exit 23' TERM; sleep 0.15; printf flushed > \"$BLADE_TEST_FLUSH\"",
+                "trap 'exit 23' TERM; sleep 0.15; printf flushed > \"$OBU_TEST_FLUSH\"",
             ])
-            .env("BLADE_TEST_FLUSH", &marker)
+            .env("OBU_TEST_FLUSH", &marker)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .process_group(0)
@@ -1616,7 +1616,7 @@ mod tests {
         // `unshare --fork` mirrors bwrap's layout: launcher → namespace init
         // (pid 1) → the "browser" (pid 2 inside the namespace), a long-lived
         // shell whose own argv carries the profile flag.
-        let profile = std::env::temp_dir().join(format!("blade-ns-{}/sess-1", std::process::id()));
+        let profile = std::env::temp_dir().join(format!("obu-ns-{}/sess-1", std::process::id()));
         let flag = format!("--user-data-dir={}", profile.display());
         let spawned = Command::new("unshare")
             .args(["--user", "--map-root-user", "--pid", "--fork"])
@@ -1689,7 +1689,7 @@ mod tests {
 
         // setsid regroups the namespace launcher while it stays the wrapper's
         // child; both shells report a pid so the test can clean up and check.
-        let profile = std::env::temp_dir().join(format!("blade-ns-wrap-{}", std::process::id()));
+        let profile = std::env::temp_dir().join(format!("obu-ns-wrap-{}", std::process::id()));
         let flag = format!("--user-data-dir={}", profile.display());
         let script = "setsid unshare --user --map-root-user --pid --fork \
                       sh -c 'sh -c \"while :; do sleep 0.2; done\" browser \"$1\" & echo ns $!; wait' \
@@ -1769,15 +1769,15 @@ mod tests {
     }
 
     #[test]
-    fn blade_home_wins_unconditionally() {
+    fn obu_home_wins_unconditionally() {
         let home = std::path::Path::new("/home/u");
         let mut env = HashMap::new();
-        env.insert("BLADE_HOME", "/custom/blade");
+        env.insert("OBU_HOME", "/custom/obu");
         env.insert("XDG_STATE_HOME", "/xdg");
         // Even with legacy state present, an explicit override must win.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&env), true, true),
-            std::path::PathBuf::from("/custom/blade")
+            resolve_obu_dir(home, &env_of(&env), true, true),
+            std::path::PathBuf::from("/custom/obu")
         );
     }
 
@@ -1788,8 +1788,8 @@ mod tests {
         let mut env = HashMap::new();
         env.insert("XDG_STATE_HOME", "/xdg/state");
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&env), false, false),
-            std::path::PathBuf::from("/xdg/state/blade")
+            resolve_obu_dir(home, &env_of(&env), false, false),
+            std::path::PathBuf::from("/xdg/state/obu")
         );
     }
 
@@ -1800,8 +1800,8 @@ mod tests {
         let empty: HashMap<&str, &str> = HashMap::new();
         // A modern home (.local/state creatable) gets the XDG-style default.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&empty), false, true),
-            std::path::PathBuf::from("/home/u/.local/state/blade")
+            resolve_obu_dir(home, &env_of(&empty), false, true),
+            std::path::PathBuf::from("/home/u/.local/state/obu")
         );
     }
 
@@ -1809,11 +1809,11 @@ mod tests {
     fn legacy_dir_with_state_wins_over_new_default() {
         let home = std::path::Path::new("/home/u");
         let empty: HashMap<&str, &str> = HashMap::new();
-        // An existing ~/.blade install must not be silently split: the
+        // An existing ~/.obu install must not be silently split: the
         // migration-free fallback keeps the legacy dir.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&empty), true, true),
-            std::path::PathBuf::from("/home/u/.blade")
+            resolve_obu_dir(home, &env_of(&empty), true, true),
+            std::path::PathBuf::from("/home/u/.obu")
         );
     }
 
@@ -1822,35 +1822,35 @@ mod tests {
         let home = std::path::Path::new("/home/u");
         let mut env = HashMap::new();
         // Empty overrides count as unset.
-        env.insert("BLADE_HOME", "");
+        env.insert("OBU_HOME", "");
         env.insert("XDG_STATE_HOME", "");
         // No .local anywhere: fall all the way back to the legacy default.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&env), false, false),
-            std::path::PathBuf::from("/home/u/.blade")
+            resolve_obu_dir(home, &env_of(&env), false, false),
+            std::path::PathBuf::from("/home/u/.obu")
         );
         // And with legacy state present it stays put either way.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&env), true, true),
-            std::path::PathBuf::from("/home/u/.blade")
+            resolve_obu_dir(home, &env_of(&env), true, true),
+            std::path::PathBuf::from("/home/u/.obu")
         );
     }
 
     #[cfg(windows)]
     #[test]
-    fn windows_keeps_legacy_dir_unless_blade_home() {
+    fn windows_keeps_legacy_dir_unless_obu_home() {
         let home = std::path::Path::new("C:\\Users\\u");
         let env = HashMap::new();
         // XDG flags must not move the data dir on Windows.
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&env), false, true),
-            std::path::PathBuf::from("C:\\Users\\u\\.blade")
+            resolve_obu_dir(home, &env_of(&env), false, true),
+            std::path::PathBuf::from("C:\\Users\\u\\.obu")
         );
         let mut over = HashMap::new();
-        over.insert("BLADE_HOME", "D:\\blade");
+        over.insert("OBU_HOME", "D:\\obu");
         assert_eq!(
-            resolve_blade_dir(home, &env_of(&over), false, true),
-            std::path::PathBuf::from("D:\\blade")
+            resolve_obu_dir(home, &env_of(&over), false, true),
+            std::path::PathBuf::from("D:\\obu")
         );
     }
 }
@@ -1882,14 +1882,14 @@ mod write_path_tests {
     #[cfg(unix)]
     #[test]
     fn write_path_resolves_symlinked_ancestors() {
-        let dir = std::env::temp_dir().join(format!("blade-vwp-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-vwp-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let link = dir.join("drop");
         std::os::unix::fs::symlink("/etc", &link).unwrap();
         // Spelled through the symlink, this resolves into /etc — blocked.
         // The pre-fix check only saw the harmless-looking spelling.
-        assert!(validate_write_path(&link.join("bladebro-test")).is_err());
+        assert!(validate_write_path(&link.join("obu-test")).is_err());
         // A plain path under the same dir still passes.
         assert!(validate_write_path(&dir.join("ok.txt")).is_ok());
         // The platform's REAL spelling of a blocked directory is blocked
@@ -1897,7 +1897,7 @@ mod write_path_tests {
         // only knew the literal spelling let this through (CI red,
         // 2026-09-29).
         let real_etc = std::fs::canonicalize("/etc").expect("canonicalize /etc");
-        assert!(validate_write_path(&real_etc.join("bladebro-test")).is_err());
+        assert!(validate_write_path(&real_etc.join("obu-test")).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -1956,9 +1956,9 @@ mod security_hardening_tests {
     #[cfg(unix)]
     #[test]
     fn upload_path_blocks_credentials_and_data_dir_but_allows_artifacts() {
-        let base = std::env::temp_dir().join(format!("blade-upload-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("obu-upload-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
-        let data = base.join("blade");
+        let data = base.join("obu");
         let artifacts = data.join("artifacts");
         std::fs::create_dir_all(&artifacts).unwrap();
         let ok_file = artifacts.join("shot.png");
@@ -2005,7 +2005,7 @@ mod security_hardening_tests {
     #[test]
     fn reharden_state_tree_tightens_owned_loose_state() {
         use std::os::unix::fs::PermissionsExt;
-        let root = std::env::temp_dir().join(format!("blade-reharden-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-reharden-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("sessions")).unwrap();
         std::fs::create_dir_all(root.join("knowledge/domains")).unwrap();
@@ -2048,7 +2048,7 @@ mod security_hardening_tests {
     #[cfg(unix)]
     #[test]
     fn nofollow_reads_refuse_symlinked_sidecars() {
-        let dir = std::env::temp_dir().join(format!("blade-nofollow-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-nofollow-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let victim = dir.join("attacker.json");
@@ -2073,7 +2073,7 @@ mod security_hardening_tests {
     #[test]
     fn dir_ancestor_walk_rejects_writable_or_symlinked_paths() {
         use std::os::unix::fs::PermissionsExt;
-        let base = std::env::temp_dir().join(format!("blade-anc-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("obu-anc-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let safe = base.join("safe/target");
         std::fs::create_dir_all(&safe).unwrap();
@@ -2111,14 +2111,14 @@ mod security_hardening_tests {
                 .unwrap_or(false);
             if is_root_symlink {
                 assert!(
-                    validate_dir_ancestors(&path.join("blade-ancestor-probe")).is_ok(),
+                    validate_dir_ancestors(&path.join("obu-ancestor-probe")).is_ok(),
                     "{probe} is a root-owned system symlink and must be traversed"
                 );
             }
         }
-        // The real temp chain — what BLADE_FRESH creation walks — must
+        // The real temp chain — what OBU_FRESH creation walks — must
         // pass on every OS (this walk is what failed on macOS CI).
-        assert!(validate_dir_ancestors(&std::env::temp_dir().join("blade-ancestor-probe")).is_ok());
+        assert!(validate_dir_ancestors(&std::env::temp_dir().join("obu-ancestor-probe")).is_ok());
     }
 }
 
@@ -2239,7 +2239,7 @@ mod persistence_reliability_tests {
     }
     #[test]
     fn private_atomic_write_replaces_complete_contents() {
-        let dir = std::env::temp_dir().join(format!("blade-atomic-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-atomic-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("snapshot.json");
         secure_write_file(&path, b"old").unwrap();

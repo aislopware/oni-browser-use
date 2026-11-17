@@ -8,7 +8,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// Browser-level metadata from `/json/version`.
 #[derive(Debug, Clone, Deserialize)]
@@ -49,7 +49,7 @@ impl TargetInfo {
     pub fn ws_url(&self) -> Result<&str> {
         self.web_socket_debugger_url
             .as_deref()
-            .ok_or_else(|| BladeError::NoWebSocketUrl {
+            .ok_or_else(|| ObuError::NoWebSocketUrl {
                 id: self.id.clone(),
             })
     }
@@ -96,13 +96,13 @@ pub async fn list_page_targets(base: &str) -> Result<Vec<TargetInfo>> {
         .collect())
 }
 
-/// Pick the first page target with a WebSocket URL, or [`BladeError::NoTarget`].
+/// Pick the first page target with a WebSocket URL, or [`ObuError::NoTarget`].
 pub async fn first_page_target(base: &str) -> Result<TargetInfo> {
     list_page_targets(base)
         .await?
         .into_iter()
         .find(|t| t.web_socket_debugger_url.is_some())
-        .ok_or(BladeError::NoTarget)
+        .ok_or(ObuError::NoTarget)
 }
 
 /// Best-effort raw JSON dump of `/json` — used by the probe subcommand for

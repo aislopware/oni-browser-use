@@ -37,7 +37,7 @@ impl Page {
         // every navigation used to STACK another identical script each time
         // (N navigations = N document_start scripts). Locale changes are
         // handled by apply_domain_profile swapping the registration.
-        // S11: apply per-domain stealth settings from ~/.blade/profiles.json.
+        // S11: apply per-domain stealth settings from ~/.obu/profiles.json.
         self.apply_domain_profile(url).await;
         // Reset isolated world on navigation — old context is destroyed.
         self.reset_isolated();
@@ -59,7 +59,7 @@ impl Page {
         if let Some(spec) = stored_block.filter(|s| !s.is_empty()) {
             if self.block_rules() == 0 {
                 if let Err(e) = self.set_block_classes(&spec).await {
-                    eprintln!("[bladebro] stored block config failed to apply: {e}");
+                    eprintln!("[obu] stored block config failed to apply: {e}");
                 }
             }
         }
@@ -96,7 +96,7 @@ impl Page {
             Duration::from_secs(10)
         };
         if nav_res.get("isDownload").and_then(Value::as_bool) == Some(true) {
-            return Err(BladeError::Other(format!("navigation to {target} started a download — use act download url=... to retrieve the file")));
+            return Err(ObuError::Other(format!("navigation to {target} started a download — use act download url=... to retrieve the file")));
         }
         // CDP omits loaderId for same-document navigations; those emit
         // navigatedWithinDocument, never frameNavigated. Waiting for the
@@ -115,7 +115,7 @@ impl Page {
                 } else {
                     ""
                 };
-                return Err(crate::error::BladeError::Other(format!(
+                return Err(crate::error::ObuError::Other(format!(
                     "navigation to {target} failed: {err}{hint}"
                 )));
             }
@@ -130,16 +130,16 @@ impl Page {
         if let Some(err) = nav_error.as_deref() {
             let tree = self.cdp.send("Page.getFrameTree", None).await.ok();
             let frame = tree.as_ref().and_then(|t| t.pointer("/frameTree/frame"));
-            // Name BLADE_PROXY only when it is the proxy this browser was
+            // Name OBU_PROXY only when it is the proxy this browser was
             // launched with (the real lane runs the person's own Chrome).
-            let blade_proxy = !crate::realbrowser::real_lane()
-                && matches!(crate::browser::proxy::env_blade_proxy(), Ok(Some(_)));
-            if let Some(msg) = error_page_failure(&target, err, frame, blade_proxy) {
+            let obu_proxy = !crate::realbrowser::real_lane()
+                && matches!(crate::browser::proxy::env_obu_proxy(), Ok(Some(_)));
+            if let Some(msg) = error_page_failure(&target, err, frame, obu_proxy) {
                 // Recapture so the error's page state is the tab's real
                 // state (Chrome's error page), not the page we left.
                 let _ = wait_for_load(&self.cdp, Duration::from_secs(3)).await;
                 let _ = self.recapture().await;
-                return Err(crate::error::BladeError::Other(msg));
+                return Err(crate::error::ObuError::Other(msg));
             }
         }
         wait_for_load(&self.cdp, Duration::from_secs(10)).await?;
@@ -388,8 +388,7 @@ impl Page {
             if let Ok(mut a) = self.ambient.lock() {
                 a.push(format!(
                     "consent: {} ({})",
-                    if std::env::var("BLADE_CONSENT").unwrap_or_else(|_| "reject".into())
-                        != "accept"
+                    if std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".into()) != "accept"
                     {
                         "rejected"
                     } else {
@@ -436,7 +435,7 @@ impl Page {
         r
     }
 
-    /// S11: apply per-domain stealth settings from ~/.blade/profiles.json.
+    /// S11: apply per-domain stealth settings from ~/.obu/profiles.json.
     /// Stores timezone and locale overrides per-domain so the driver remembers
     /// which settings work for each site. The agent can edit the file directly.
     async fn apply_domain_profile(&mut self, url: &str) {
@@ -450,14 +449,14 @@ impl Page {
         if domain.is_empty() {
             return;
         }
-        let path = crate::platform::blade_dir().join("profiles.json");
+        let path = crate::platform::obu_dir().join("profiles.json");
         let profiles: std::collections::HashMap<String, DomainProfile> =
             std::fs::read_to_string(&path)
                 .ok()
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_default();
         // Every field resolves for EVERY domain: the profile's value, else the
-        // session baseline (BLADE_TZ / BLADE_LOCALE). Applying only what a
+        // session baseline (OBU_TZ / OBU_LOCALE). Applying only what a
         // profile set left the previous domain's tz/locale on every later
         // site, and a profile omitting `locale` swapped the injection back
         // while the CDP locale stayed - navigator.language and Intl then
@@ -468,7 +467,7 @@ impl Page {
             .filter(|l| crate::stealth::normalize_locale(l).is_none())
         {
             eprintln!(
-                "[bladebro] WARNING: {domain}: profiles.json locale {bad:?} is not a BCP-47 tag like en-US — ignored"
+                "[obu] WARNING: {domain}: profiles.json locale {bad:?} is not a BCP-47 tag like en-US — ignored"
             );
         }
         let want = Emulation::for_domain(profile, &Emulation::session());
@@ -487,12 +486,12 @@ impl Page {
             {
                 Ok(_) => {
                     eprintln!(
-                        "[bladebro] domain profile {domain}: tz={}",
+                        "[obu] domain profile {domain}: tz={}",
                         want.tz.as_deref().unwrap_or("(browser default)")
                     );
                     self.emulation.tz = want.tz.clone();
                 }
-                Err(e) => eprintln!("[bladebro] WARNING: {domain}: timezone override failed: {e}"),
+                Err(e) => eprintln!("[obu] WARNING: {domain}: timezone override failed: {e}"),
             }
         }
         if want.locale != self.emulation.locale {
@@ -523,12 +522,12 @@ impl Page {
             match applied {
                 Ok(_) => {
                     eprintln!(
-                        "[bladebro] domain profile {domain}: locale={}",
+                        "[obu] domain profile {domain}: locale={}",
                         want.locale.as_deref().unwrap_or("(browser default)")
                     );
                     self.emulation.locale = want.locale.clone();
                 }
-                Err(e) => eprintln!("[bladebro] WARNING: {domain}: locale override failed: {e}"),
+                Err(e) => eprintln!("[obu] WARNING: {domain}: locale override failed: {e}"),
             }
         }
 
@@ -552,7 +551,7 @@ impl Page {
                     self.stealth_script_id = Some(id);
                     self.active_locale = want.locale.clone();
                 }
-                Err(e) => eprintln!("[bladebro] WARNING: locale swap injection failed: {e}"),
+                Err(e) => eprintln!("[obu] WARNING: locale swap injection failed: {e}"),
             }
         }
     }
@@ -567,7 +566,7 @@ pub(crate) struct Emulation {
 }
 
 impl Emulation {
-    /// The session baseline attach applies: BLADE_TZ / BLADE_LOCALE.
+    /// The session baseline attach applies: OBU_TZ / OBU_LOCALE.
     /// The locale is BCP-47-normalized like the injection (`en_US` →
     /// `en-US`), so the CDP override, Accept-Language and the injected
     /// navigator.language name one tag, and the coherence check against
@@ -576,8 +575,8 @@ impl Emulation {
     pub(crate) fn session() -> Self {
         let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
         Self {
-            tz: env("BLADE_TZ"),
-            locale: env("BLADE_LOCALE").and_then(|l| crate::stealth::normalize_locale(&l)),
+            tz: env("OBU_TZ"),
+            locale: env("OBU_LOCALE").and_then(|l| crate::stealth::normalize_locale(&l)),
         }
     }
 
@@ -601,13 +600,13 @@ impl Emulation {
 /// L7: the error for a navigation whose main frame committed Chrome's own
 /// error page (`chrome-error://chromewebdata/`, `unreachableUrl` set) in
 /// place of the target, or None when a real document is showing.
-/// `blade_proxy`: the browser runs behind BLADE_PROXY (names the recovery
+/// `obu_proxy`: the browser runs behind OBU_PROXY (names the recovery
 /// path for a proxy/tunnel failure).
 fn error_page_failure(
     target: &str,
     err: &str,
     frame: Option<&Value>,
-    blade_proxy: bool,
+    obu_proxy: bool,
 ) -> Option<String> {
     let frame = frame?;
     let unreachable = frame
@@ -622,8 +621,8 @@ fn error_page_failure(
         return None;
     }
     let hint = if err.contains("PROXY") || err.contains("TUNNEL") {
-        if blade_proxy {
-            "; the proxy in BLADE_PROXY refused or is down"
+        if obu_proxy {
+            "; the proxy in OBU_PROXY refused or is down"
         } else {
             "; the browser's proxy refused or is down"
         }
@@ -639,7 +638,7 @@ fn error_page_failure(
     ))
 }
 
-/// S11: per-domain stealth settings stored in ~/.blade/profiles.json.
+/// S11: per-domain stealth settings stored in ~/.obu/profiles.json.
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 struct DomainProfile {
     tz: Option<String>,
@@ -858,7 +857,7 @@ pub(crate) fn with_scheme(url: &str) -> String {
 pub(crate) fn validate_nav_url(url: &str) -> Result<()> {
     let u = url.trim();
     if u.is_empty() {
-        return Err(crate::error::BladeError::Other(
+        return Err(crate::error::ObuError::Other(
             "navigate: empty URL - pass the page to open".into(),
         ));
     }
@@ -884,7 +883,7 @@ pub(crate) fn validate_nav_url(url: &str) -> Result<()> {
     if portish && !is_known_scheme_name(&s) {
         return Ok(()); // `localhost:3000`, `example.com:8080/x`
     }
-    Err(crate::error::BladeError::Other(format!(
+    Err(crate::error::ObuError::Other(format!(
         "unsupported URL scheme \"{s}:\" - navigable schemes are http(s), about, data, file and blob (this target was rejected before any browser work)"
     )))
 }
@@ -1112,10 +1111,10 @@ mod tests {
         )
         .expect("error document by url");
         assert!(
-            msg.contains("BLADE_PROXY"),
+            msg.contains("OBU_PROXY"),
             "a proxy failure names the proxy: {msg}"
         );
-        // Without BLADE_PROXY (the real lane, a system proxy) the hint must
+        // Without OBU_PROXY (the real lane, a system proxy) the hint must
         // not send the agent to a variable that is not in play.
         let msg = error_page_failure(
             "http://site.test/",
@@ -1125,7 +1124,7 @@ mod tests {
         )
         .expect("error document by url");
         assert!(
-            msg.contains("the browser's proxy") && !msg.contains("BLADE_PROXY"),
+            msg.contains("the browser's proxy") && !msg.contains("OBU_PROXY"),
             "{msg}"
         );
         // An error status with an empty body also lands on Chrome's page.
@@ -1181,7 +1180,7 @@ mod tests {
         let next = Emulation::for_domain(Some(&tz_only), &none);
         assert_eq!(next.tz.as_deref(), Some("Australia/Sydney"));
         assert_eq!(next.locale, None);
-        // The session baseline (BLADE_TZ / BLADE_LOCALE) is what "revert"
+        // The session baseline (OBU_TZ / OBU_LOCALE) is what "revert"
         // means when one is set.
         let session = Emulation {
             tz: Some("Europe/Paris".into()),

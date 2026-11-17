@@ -9,9 +9,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use bladebro::cdp::{CdpClient, CdpSession};
-use bladebro::page::intercept::{run_interception, InterceptState, BLOCK_IMAGES, BLOCK_TRACKERS};
 use futures_util::{SinkExt, StreamExt};
+use obu::cdp::{CdpClient, CdpSession};
+use obu::page::intercept::{run_interception, InterceptState, BLOCK_IMAGES, BLOCK_TRACKERS};
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;

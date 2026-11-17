@@ -107,7 +107,7 @@ fn shape_result(result: &mut Value, version: Option<&str>) {
         obj.entry("resultType").or_insert(json!("complete"));
         obj.entry("_meta").or_insert(json!({
             "io.modelcontextprotocol/serverInfo": {
-                "name": "bladebro",
+                "name": "obu",
                 "version": env!("CARGO_PKG_VERSION"),
             }
         }));

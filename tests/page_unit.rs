@@ -2,8 +2,8 @@
 //! browser. Proves the reliability core (refs survive re-renders, stale refs
 //! invalidate, state changes surface) against synthetic captures.
 
-use bladebro::page::model::LivePageModel;
-use bladebro::page::perception::RawElement;
+use obu::page::model::LivePageModel;
+use obu::page::perception::RawElement;
 
 fn el(role: &str, name: &str, sig: &str, value: Option<&str>, disabled: bool) -> RawElement {
     RawElement {
@@ -30,8 +30,8 @@ fn el(role: &str, name: &str, sig: &str, value: Option<&str>, disabled: bool) ->
     }
 }
 
-fn cap(url: &str, els: Vec<RawElement>) -> bladebro::page::PageCapture {
-    bladebro::page::PageCapture {
+fn cap(url: &str, els: Vec<RawElement>) -> obu::page::PageCapture {
+    obu::page::PageCapture {
         url: url.into(),
         title: String::new(),
         ready_state: "complete".into(),
@@ -198,7 +198,7 @@ fn fuzzy_rebind_when_ordinal_shifts() {
 /// must report its ref via `ref_id()`.
 #[test]
 fn ref_targeted_actions_report_ref_id() {
-    use bladebro::action::Action;
+    use obu::action::Action;
     let ref_actions = vec![
         Action::Click {
             ref_id: "e1".into(),
@@ -636,7 +636,7 @@ fn fingerprint_rebind_follows_an_editor_named_by_its_own_text() {
 /// replaced by an unrelated set is a different choice and gets a fresh ref.
 #[test]
 fn fingerprint_rebind_follows_a_select_named_by_its_selection() {
-    use bladebro::page::perception::SelectOptions;
+    use obu::page::perception::SelectOptions;
     let select = |name: &str, sel: i64, items: &[(&str, &str)], fp: u64| {
         let mut e = el_fp("combobox", name, &format!("|combobox|{name}|1"), fp);
         e.tag = "select".into();
@@ -916,7 +916,7 @@ assert.equal(!!isProductPage(),true,'cart text still marks a product page');
     );
 }
 
-fn titled(url: &str, title: &str, els: Vec<RawElement>) -> bladebro::page::PageCapture {
+fn titled(url: &str, title: &str, els: Vec<RawElement>) -> obu::page::PageCapture {
     let mut c = cap(url, els);
     c.title = title.into();
     c
@@ -990,7 +990,7 @@ fn unanswered_capture_is_not_a_navigation_and_keeps_refs() {
     let refs: Vec<String> = lpm.elements().iter().map(|e| e.ref_id.clone()).collect();
 
     // Exactly what `capture()` returns when the page does not answer.
-    let unanswered = bladebro::page::PageCapture {
+    let unanswered = obu::page::PageCapture {
         url: String::new(),
         title: String::new(),
         ready_state: "loading".into(),

@@ -5,7 +5,7 @@
 //! (byte-exact plain). Styling is ON only when it cannot corrupt a machine
 //! consumer — the order matters:
 //!
-//! 1. `BLADE_PLAIN` set (any non-empty value) → OFF. Our hard switch.
+//! 1. `OBU_PLAIN` set (any non-empty value) → OFF. Our hard switch.
 //! 2. `CLICOLOR_FORCE` set (non-empty, not `0`) → ON, even off-TTY (demos,
 //!    recordings, docs).
 //! 3. `NO_COLOR` set (the de-facto convention) → OFF.
@@ -13,14 +13,14 @@
 //! 5. otherwise ON exactly when the stream being written is a terminal.
 //!
 //! stdout and stderr decide separately: text bound for stderr uses the
-//! [`err`] painters. `bladebro nav x 2>err.log` on a terminal must not write
-//! ANSI codes into the log, and `bladebro nav x | jq` still colors the error
+//! [`err`] painters. `obu nav x 2>err.log` on a terminal must not write
+//! ANSI codes into the log, and `obu nav x | jq` still colors the error
 //! lines that reach the terminal.
 //!
 //! Nothing here is platform-specific: on Windows, Rust's std enables VT
 //! processing on the console when it is supported (Windows Terminal, modern
 //! conhost). A legacy console that would garble escape codes is one
-//! `BLADE_PLAIN=1` away from plain output.
+//! `OBU_PLAIN=1` away from plain output.
 
 use std::io::IsTerminal;
 use std::sync::OnceLock;
@@ -55,7 +55,7 @@ fn decide(tty: bool, plain: bool, forced: bool, no_color: bool, term_dumb: bool)
 fn decide_for(tty: bool) -> bool {
     decide(
         tty,
-        env_set("BLADE_PLAIN"),
+        env_set("OBU_PLAIN"),
         env_on("CLICOLOR_FORCE"),
         env_set("NO_COLOR"),
         std::env::var("TERM").map(|t| t == "dumb").unwrap_or(false),
@@ -243,7 +243,7 @@ mod tests {
     fn decide_respects_the_switches_in_order() {
         assert!(
             !decide(true, true, true, false, false),
-            "BLADE_PLAIN is absolute"
+            "OBU_PLAIN is absolute"
         );
         assert!(
             decide(false, false, true, false, false),
@@ -295,14 +295,11 @@ mod tests {
 
     #[test]
     fn help_styling_marks_only_headers() {
-        let text = "bladebro v1 — manual\n\nUSAGE\n  bladebro x\n\nEXIT CODES\n  0  ok\n";
+        let text = "obu v1 — manual\n\nUSAGE\n  obu x\n\nEXIT CODES\n  0  ok\n";
         let styled = style_help_impl(text, true);
         assert!(styled.contains("\x1b[1;36mUSAGE\x1b[0m"));
         assert!(styled.contains("\x1b[1;36mEXIT CODES\x1b[0m"));
-        assert!(
-            !styled.contains("\x1b[1;36mbladebro"),
-            "title line stays plain"
-        );
+        assert!(!styled.contains("\x1b[1;36mobu"), "title line stays plain");
         assert!(
             !styled.contains("\x1b[1;36m  0  ok"),
             "body lines stay plain"

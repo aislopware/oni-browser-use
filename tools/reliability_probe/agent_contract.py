@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Agent contract, preflight safety and sequence fidelity; owned MCP/live fixtures.
 
-BLADEBRO selects a binary, POLISH_OUT retains JSON-RPC + live readbacks.
+OBU selects a binary, POLISH_OUT retains JSON-RPC + live readbacks.
 --baseline records failures without aborting. Run under capped.
 """
 import http.server
@@ -16,7 +16,7 @@ import tempfile
 import threading
 import time
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 OUT = Path(os.environ.get('POLISH_OUT', 'work/agent-reliability-20261104/contract.json'))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 checks, receipts = [], []
@@ -50,9 +50,9 @@ def check(name, passed):
 
 # A malformed first call must return usage guidance even without Chrome.
 # This exercises the actual stdio boundary rather than a mocked validator.
-with tempfile.TemporaryDirectory(prefix='blade-contract-cold-') as cold_home:
-    cold_env=dict(os.environ,BLADE_HOME=cold_home,CHROME_PATH=str(Path(cold_home)/'missing-browser'),BLADE_NO_WARMING='1',BLADE_NO_UPDATE_CHECK='1',BLADE_LANE='agent')
-    for key in ('BLADE_PROFILE_DIR','BLADE_TRANSPORT','BLADE_PROXY','BLADE_FRESH'):
+with tempfile.TemporaryDirectory(prefix='obu-contract-cold-') as cold_home:
+    cold_env=dict(os.environ,OBU_HOME=cold_home,CHROME_PATH=str(Path(cold_home)/'missing-browser'),OBU_NO_WARMING='1',OBU_NO_UPDATE_CHECK='1',OBU_LANE='agent')
+    for key in ('OBU_PROFILE_DIR','OBU_TRANSPORT','OBU_PROXY','OBU_FRESH'):
         cold_env.pop(key,None)
     requests=[dict(jsonrpc='2.0',id=i,method='tools/call',params=dict(name=tool,arguments=args)) for i,(tool,args) in enumerate([
         ('act',dict(action='type',selector='#name')),('vision',dict(marks=7)),('missing',{})],1)]
@@ -68,12 +68,12 @@ server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 origin = 'http://127.0.0.1:' + str(server.server_port)
 try:
-    with tempfile.TemporaryDirectory(prefix='blade-contract-') as home:
-        env = dict(os.environ, BLADE_HOME=home, BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1', BLADE_LANE='agent')
-        for key in ('BLADE_PROFILE_DIR', 'BLADE_TRANSPORT', 'BLADE_PROXY', 'BLADE_FRESH'):
+    with tempfile.TemporaryDirectory(prefix='obu-contract-') as home:
+        env = dict(os.environ, OBU_HOME=home, OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1', OBU_LANE='agent')
+        for key in ('OBU_PROFILE_DIR', 'OBU_TRANSPORT', 'OBU_PROXY', 'OBU_FRESH'):
             env.pop(key, None)
         if os.environ.get('CONTRACT_TRANSPORT'):
-            env['BLADE_TRANSPORT']=os.environ['CONTRACT_TRANSPORT']
+            env['OBU_TRANSPORT']=os.environ['CONTRACT_TRANSPORT']
         with OUT.with_suffix('.stderr.log').open('w') as stderr:
             proc = subprocess.Popen([BINARY, 'mcp'], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, text=True, encoding='utf-8')
             identity = 0
@@ -177,9 +177,9 @@ try:
                     valid=payload.get('data')=='answer' and 'dialogs handled' in payload.get('note','')
                 except (ValueError,AttributeError): valid=False
                 check('JSON stays parseable with dialog notes',not error and valid)
-                evaluate("(()=>{let n=document.createElement('div');n.id='blade-marks';n.textContent='PRESERVE_SITE_NODE';document.body.append(n)})()")
+                evaluate("(()=>{let n=document.createElement('div');n.id='obu-marks';n.textContent='PRESERVE_SITE_NODE';document.body.append(n)})()")
                 text,error=call('vision',dict(marks=True))
-                check('vision marks preserve colliding site element',not error and evaluate("document.querySelector('#blade-marks')?.textContent")=='PRESERVE_SITE_NODE')
+                check('vision marks preserve colliding site element',not error and evaluate("document.querySelector('#obu-marks')?.textContent")=='PRESERVE_SITE_NODE')
                 text,error=call('vision',dict(marks='false'))
                 check('vision refuses wrong marks type',error and 'marks' in text)
                 text,error=call('act',dict(action='click',selector='#missing'))
@@ -195,10 +195,10 @@ try:
                     except subprocess.TimeoutExpired:
                         proc.kill(); proc.wait(timeout=10)
                 proc.stdout.close()
-        # Notes must be true: a first call made after BLADE_IDLE_TIMEOUT has
+        # Notes must be true: a first call made after OBU_IDLE_TIMEOUT has
         # elapsed must not claim an idle restart of a Chrome that never ran.
-        with tempfile.TemporaryDirectory(prefix='blade-contract-idle-') as idle_home:
-            idle = subprocess.Popen([BINARY, 'mcp'], env=dict(env, BLADE_HOME=idle_home, BLADE_IDLE_TIMEOUT='1'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+        with tempfile.TemporaryDirectory(prefix='obu-contract-idle-') as idle_home:
+            idle = subprocess.Popen([BINARY, 'mcp'], env=dict(env, OBU_HOME=idle_home, OBU_IDLE_TIMEOUT='1'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
             time.sleep(3)
             request = dict(jsonrpc='2.0', id=1, method='tools/call', params=dict(name='act', arguments=dict(action='navigate', url=origin + '/?idle')))
             try: out, _ = idle.communicate(json.dumps(request) + '\n', timeout=60)

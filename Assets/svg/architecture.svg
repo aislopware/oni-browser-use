@@ -42,10 +42,10 @@
   </g>
   <text x="240" y="72" text-anchor="middle" font-family="monospace" font-size="9" fill="#00d4aa" opacity="0.7">MCP stdio</text>
 
-  <!-- Layer 2: Bladebro MCP Server -->
+  <!-- Layer 2: Obu MCP Server -->
   <g transform="translate(310, 40)">
     <rect x="0" y="0" width="180" height="80" rx="10" fill="url(#mcp)" filter="url(#glow)"/>
-    <text x="90" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="800" fill="#fff">Bladebro</text>
+    <text x="90" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="800" fill="#fff">Obu</text>
     <text x="90" y="44" text-anchor="middle" font-family="monospace" font-size="9" fill="#c8fff0">5 tools · MCP server</text>
     <text x="90" y="58" text-anchor="middle" font-family="monospace" font-size="9" fill="#c8fff0">Rust · zero runtime</text>
     <text x="90" y="72" text-anchor="middle" font-family="monospace" font-size="8" fill="#9eebd0">~1,900 token tool defs</text>
@@ -91,7 +91,7 @@
     </g>
   </g>
 
-  <!-- Vertical connector from Bladebro to LPM -->
+  <!-- Vertical connector from Obu to LPM -->
   <line x1="400" y1="120" x2="400" y2="150" stroke="#00d4aa" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.4"/>
 
   <!-- Vertical connector from Chromium to LPM -->

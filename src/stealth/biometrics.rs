@@ -2,7 +2,7 @@
 //!
 //! Most stealth tools make the browser *look* like a non-bot (fingerprint
 //! masking, property overrides). Almost none make it *act* like a human.
-//! That's the gap Bladebro fills: every mouse movement traces a bezier curve
+//! That's the gap Obu fills: every mouse movement traces a bezier curve
 //! with overshoot-and-correct; every click has gaussian imprecision; every
 //! keystroke has log-normal cadence with natural pauses.
 //!

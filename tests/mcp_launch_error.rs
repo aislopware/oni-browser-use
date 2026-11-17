@@ -4,7 +4,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::test]
 async fn launch_errors_preserve_dialect_and_notification_silence() {
-    let root = std::env::temp_dir().join(format!("blade-mcp-launch-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("obu-mcp-launch-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     for version in [Some("2026-07-28"), None] {
         let mut params = json!({"name":"see","arguments":{"mode":"content"}});
@@ -16,17 +16,17 @@ async fn launch_errors_preserve_dialect_and_notification_silence() {
             json!({"jsonrpc":"2.0","method":"tools/call","params":params}),
             json!({"jsonrpc":"2.0","id":2,"method":"ping","params":{}}),
         ];
-        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_obu"))
             .arg("mcp")
             .env(
-                "BLADE_HOME",
+                "OBU_HOME",
                 root.join(if version.is_some() { "new" } else { "legacy" }),
             )
-            .env("BLADE_LANE", "agent")
-            .env("BLADE_NO_WARMING", "1")
-            .env("BLADE_NO_UPDATE_CHECK", "1")
+            .env("OBU_LANE", "agent")
+            .env("OBU_NO_WARMING", "1")
+            .env("OBU_NO_UPDATE_CHECK", "1")
             .env("CHROME_PATH", root.join("missing-chrome"))
-            .env_remove("BLADE_TRANSPORT")
+            .env_remove("OBU_TRANSPORT")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -62,7 +62,7 @@ async fn launch_errors_preserve_dialect_and_notification_silence() {
             assert_eq!(result["resultType"], "complete", "{responses:?}");
             assert_eq!(
                 result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
-                "bladebro"
+                "obu"
             );
         } else {
             assert!(result.get("resultType").is_none());

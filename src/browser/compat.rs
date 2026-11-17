@@ -31,17 +31,13 @@ fn affected_pi(os: &str, arch: &str, release: &str, model: &str) -> bool {
 }
 
 /// `0` disables automatic compatibility, `1` explicitly requests it. Raw
-/// BLADE_CHROME_FLAGS remain authoritative, including an explicit incognito.
+/// OBU_CHROME_FLAGS remain authoritative, including an explicit incognito.
 fn decide(setting: &str, affected: bool, custom_profile: bool, extra: &[String]) -> Result<bool> {
     let automatic = match setting.trim() {
         "" | "auto" => affected && !custom_profile,
         "0" => false,
         "1" => true,
-        _ => {
-            return Err(BladeError::Other(
-                "BLADE_INCOGNITO must be auto, 0 or 1".into(),
-            ))
-        }
+        _ => return Err(ObuError::Other("OBU_INCOGNITO must be auto, 0 or 1".into())),
     };
     Ok(automatic || extra.iter().any(|flag| flag == "--incognito"))
 }
@@ -63,9 +59,9 @@ pub(crate) fn incognito_policy() -> Result<bool> {
         false
     };
     decide(
-        &std::env::var("BLADE_INCOGNITO").unwrap_or_default(),
+        &std::env::var("OBU_INCOGNITO").unwrap_or_default(),
         affected,
-        std::env::var_os("BLADE_PROFILE_DIR").is_some_and(|p| !p.is_empty()),
+        std::env::var_os("OBU_PROFILE_DIR").is_some_and(|p| !p.is_empty()),
         &extra,
     )
 }
@@ -78,7 +74,7 @@ pub(super) fn agent_extra_flags() -> Result<Vec<String>> {
         if !extra.iter().any(|flag| flag == "--incognito") {
             extra.push("--incognito".into());
         }
-        eprintln!("[bladebro] incognito compatibility: cookies and named sessions remain supported; history/cache and automatic localStorage persistence are unavailable. BLADE_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility (restart the client/daemon).");
+        eprintln!("[obu] incognito compatibility: cookies and named sessions remain supported; history/cache and automatic localStorage persistence are unavailable. OBU_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility (restart the client/daemon).");
     }
     Ok(extra)
 }
@@ -99,7 +95,7 @@ pub(super) async fn prepare_incognito(client: &CdpClient) -> Result<()> {
         )
         .await?;
     let id = context["browserContextId"].as_str().ok_or_else(|| {
-        BladeError::Other("incognito compatibility: Chrome returned no browserContextId".into())
+        ObuError::Other("incognito compatibility: Chrome returned no browserContextId".into())
     })?;
     client
         .send(

@@ -9,7 +9,7 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::perception::{JS_PREAMBLE, JS_READ_TREE};
 use crate::page::{wait_for_settle, LivePageModel, PageDelta};
 
@@ -645,9 +645,9 @@ pub async fn eval_condition(
                         })),
                     )
                     .await;
-                if matches!(res, Err(BladeError::Closed)) {
+                if matches!(res, Err(ObuError::Closed)) {
                     // browser died — bail instead of spinning the full timeout
-                    return Err(BladeError::Closed);
+                    return Err(ObuError::Closed);
                 }
                 let title = res
                     .ok()
@@ -711,8 +711,8 @@ pub async fn eval_condition(
                         })),
                     )
                     .await;
-                if matches!(res, Err(BladeError::Closed)) {
-                    return Err(BladeError::Closed);
+                if matches!(res, Err(ObuError::Closed)) {
+                    return Err(ObuError::Closed);
                 }
                 let found = res
                     .ok()
@@ -748,8 +748,8 @@ pub async fn eval_condition(
                         })),
                     )
                     .await;
-                if matches!(res, Err(BladeError::Closed)) {
-                    return Err(BladeError::Closed);
+                if matches!(res, Err(ObuError::Closed)) {
+                    return Err(ObuError::Closed);
                 }
                 let url = res
                     .ok()
@@ -786,8 +786,8 @@ pub async fn eval_condition(
                         })),
                     )
                     .await;
-                if matches!(res, Err(BladeError::Closed)) {
-                    return Err(BladeError::Closed);
+                if matches!(res, Err(ObuError::Closed)) {
+                    return Err(ObuError::Closed);
                 }
                 let found = res
                     .ok()
@@ -829,8 +829,8 @@ pub async fn eval_condition(
                         })),
                     )
                     .await;
-                if matches!(res, Err(BladeError::Closed)) {
-                    return Err(BladeError::Closed);
+                if matches!(res, Err(ObuError::Closed)) {
+                    return Err(ObuError::Closed);
                 }
                 let resp = res.ok();
                 match resp

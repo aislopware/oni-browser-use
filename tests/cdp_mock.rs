@@ -13,9 +13,9 @@
 
 use std::time::Duration;
 
-use bladebro::cdp::{CdpClient, CdpSession};
-use bladebro::BladeError;
 use futures_util::{SinkExt, StreamExt};
+use obu::cdp::{CdpClient, CdpSession};
+use obu::ObuError;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
@@ -53,7 +53,7 @@ async fn event_between_wait_creation_and_command_response_is_not_lost() {
     assert_eq!(event.params["frame"]["url"], "http://fixture/");
     assert!(root_navigation.await.is_ok());
     assert!(
-        matches!(unrelated.await, Err(BladeError::Timeout(_))),
+        matches!(unrelated.await, Err(ObuError::Timeout(_))),
         "session filters must still reject root events"
     );
     drop(client);
@@ -152,7 +152,7 @@ async fn command_timeout_fires() {
         .send_with_timeout("Page.getFrameTree", None, Duration::from_millis(200))
         .await
         .expect_err("should time out");
-    assert!(matches!(err, BladeError::Timeout(_)), "got {err:?}");
+    assert!(matches!(err, ObuError::Timeout(_)), "got {err:?}");
 }
 
 #[tokio::test]
@@ -177,7 +177,7 @@ async fn server_close_fails_pending() {
         .send_with_timeout("Page.getFrameTree", None, Duration::from_secs(3))
         .await
         .expect_err("should fail with Closed");
-    assert!(matches!(err, BladeError::Closed), "got {err:?}");
+    assert!(matches!(err, ObuError::Closed), "got {err:?}");
 }
 
 #[tokio::test]
@@ -214,7 +214,7 @@ async fn protocol_error_is_typed() {
         .await
         .expect_err("should surface CDP error");
     match err {
-        BladeError::Cdp { code, message } => {
+        ObuError::Cdp { code, message } => {
             assert_eq!(code, -32000);
             assert_eq!(message, "Cannot find context");
         }
@@ -263,10 +263,10 @@ async fn rejected_scroll_stops_at_first_dispatch_without_claiming_success() {
     let cdp = CdpSession::root(client);
     let result = tokio::time::timeout(
         Duration::from_secs(3),
-        bladebro::action::perform(
+        obu::action::perform(
             &cdp,
-            &mut bladebro::page::LivePageModel::new(),
-            &bladebro::action::Action::Scroll { dx: 0, dy: 500 },
+            &mut obu::page::LivePageModel::new(),
+            &obu::action::Action::Scroll { dx: 0, dy: 500 },
             &Arc::new(Mutex::new(None)),
         ),
     )
@@ -298,14 +298,11 @@ async fn capture_surfaces_a_dead_connection_instead_of_an_empty_page() {
     });
     let client = CdpClient::connect(&format!("ws://{addr}")).await.unwrap();
     let cdp = CdpSession::root(client);
-    let res = tokio::time::timeout(
-        Duration::from_secs(5),
-        bladebro::page::perception::capture(&cdp),
-    )
-    .await
-    .expect("capture must not hang on a closed connection");
+    let res = tokio::time::timeout(Duration::from_secs(5), obu::page::perception::capture(&cdp))
+        .await
+        .expect("capture must not hang on a closed connection");
     match res {
-        Err(BladeError::Closed) => {}
+        Err(ObuError::Closed) => {}
         Err(e) => panic!("expected Closed, got {e:?}"),
         Ok(cap) => panic!(
             "a dead connection was reported as a page: url={:?} phase={} elements={}",
@@ -400,14 +397,14 @@ async fn scripted_page_with(
 }
 
 /// A model holding one element, as a capture would mint it.
-fn one_element_model(tag: &str, role: &str, name: &str) -> (bladebro::page::LivePageModel, String) {
-    let mut lpm = bladebro::page::LivePageModel::new();
-    lpm.ingest(bladebro::page::PageCapture {
+fn one_element_model(tag: &str, role: &str, name: &str) -> (obu::page::LivePageModel, String) {
+    let mut lpm = obu::page::LivePageModel::new();
+    lpm.ingest(obu::page::PageCapture {
         url: "http://fixture.test/".into(),
         title: String::new(),
         ready_state: "complete".into(),
         muts: 0,
-        elements: vec![bladebro::page::perception::RawElement {
+        elements: vec![obu::page::perception::RawElement {
             tag: tag.into(),
             role: role.into(),
             name: name.into(),
@@ -484,10 +481,10 @@ async fn type_never_presses_keys_when_the_target_cannot_take_them() {
         let (mut lpm, ref_id) = one_element_model("input", "textbox", "Locked password");
         let result = tokio::time::timeout(
             Duration::from_secs(20),
-            bladebro::action::perform(
+            obu::action::perform(
                 &cdp,
                 &mut lpm,
-                &bladebro::action::Action::Type {
+                &obu::action::Action::Type {
                     ref_id,
                     text: "hunter2".into(),
                 },
@@ -536,10 +533,10 @@ async fn hover_that_cannot_re_resolve_after_a_failed_move_is_an_error() {
     let (mut lpm, ref_id) = one_element_model("button", "button", "Hover me");
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        bladebro::action::perform(
+        obu::action::perform(
             &cdp,
             &mut lpm,
-            &bladebro::action::Action::Hover {
+            &obu::action::Action::Hover {
                 ref_id: ref_id.clone(),
             },
             &std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -557,7 +554,7 @@ async fn hover_that_cannot_re_resolve_after_a_failed_move_is_an_error() {
         Err(e) => e,
     };
     assert!(
-        matches!(err, BladeError::ElementNotFound(_)) && err.to_string().contains(&ref_id),
+        matches!(err, ObuError::ElementNotFound(_)) && err.to_string().contains(&ref_id),
         "{err}"
     );
     server.abort();
@@ -584,10 +581,10 @@ async fn clear_of_a_vanished_target_touches_no_other_field() {
     let (mut lpm, ref_id) = one_element_model("div", "textbox", "Notes");
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        bladebro::action::perform(
+        obu::action::perform(
             &cdp,
             &mut lpm,
-            &bladebro::action::Action::Clear { ref_id },
+            &obu::action::Action::Clear { ref_id },
             &std::sync::Arc::new(std::sync::Mutex::new(None)),
         ),
     )
@@ -601,7 +598,7 @@ async fn clear_of_a_vanished_target_touches_no_other_field() {
         .count();
     assert_eq!(keys, 0, "keys were dispatched; result {result:?}");
     assert!(
-        matches!(result, Err(BladeError::ElementNotFound(_))),
+        matches!(result, Err(ObuError::ElementNotFound(_))),
         "{result:?}"
     );
     server.abort();
@@ -628,10 +625,10 @@ async fn select_on_a_text_combobox_types_instead_of_assigning() {
     let (mut lpm, ref_id) = one_element_model("input", "combobox", "City search");
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        bladebro::action::perform(
+        obu::action::perform(
             &cdp,
             &mut lpm,
-            &bladebro::action::Action::Select {
+            &obu::action::Action::Select {
                 ref_id,
                 option: "Paris".into(),
             },
@@ -691,10 +688,10 @@ async fn clear_never_presses_keys_when_the_target_cannot_take_focus() {
         let (mut lpm, ref_id) = one_element_model("input", "textbox", "Locked name");
         let result = tokio::time::timeout(
             Duration::from_secs(20),
-            bladebro::action::perform(
+            obu::action::perform(
                 &cdp,
                 &mut lpm,
-                &bladebro::action::Action::Clear { ref_id },
+                &obu::action::Action::Clear { ref_id },
                 &std::sync::Arc::new(std::sync::Mutex::new(None)),
             ),
         )
@@ -712,7 +709,7 @@ async fn clear_never_presses_keys_when_the_target_cannot_take_focus() {
         );
         let err = result.expect_err(want);
         assert!(
-            matches!(err, BladeError::NotInteractable(_)) && err.to_string().contains(want),
+            matches!(err, ObuError::NotInteractable(_)) && err.to_string().contains(want),
             "{want}: {err}"
         );
         server.abort();
@@ -764,10 +761,10 @@ async fn a_field_that_trims_its_value_is_typed_once() {
     let (mut lpm, ref_id) = one_element_model("input", "textbox", "Search");
     let result = tokio::time::timeout(
         Duration::from_secs(30),
-        bladebro::action::perform(
+        obu::action::perform(
             &cdp,
             &mut lpm,
-            &bladebro::action::Action::Type {
+            &obu::action::Action::Type {
                 ref_id,
                 text: "  x".into(),
             },

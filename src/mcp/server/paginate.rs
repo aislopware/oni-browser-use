@@ -1,6 +1,6 @@
 //! Bounded pagination composed from the ordinary extraction and click paths.
 use crate::{
-    error::{BladeError, Result},
+    error::{ObuError, Result},
     page::Page,
 };
 use serde_json::{json, Value};
@@ -11,13 +11,13 @@ pub(super) async fn handle_paginate(args: &Value, page: &mut Page) -> Result<Str
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
-            BladeError::Usage(
+            ObuError::Usage(
                 "paginate requires next=selector or next=text=Next (also label=/ref=)".into(),
             )
         })?;
     let max = args.get("max").and_then(Value::as_u64).unwrap_or(5);
     if !(1..=100).contains(&max) {
-        return Err(BladeError::Usage("paginate max must be 1-100 pages".into()));
+        return Err(ObuError::Usage("paginate max must be 1-100 pages".into()));
     }
     let (field, target) = next
         .split_once('=')
@@ -34,7 +34,7 @@ pub(super) async fn handle_paginate(args: &Value, page: &mut Page) -> Result<Str
         let result = super::see::handle_see(&read, page).await;
         let text = match result {
             Ok(text) => text,
-            Err(BladeError::Closed) => return Err(BladeError::Closed),
+            Err(ObuError::Closed) => return Err(ObuError::Closed),
             Err(e) if pages.is_empty() => return Err(e),
             Err(e) => {
                 stop = format!("extract failed after advance: {e}; prior effects remain applied");
@@ -58,7 +58,7 @@ pub(super) async fn handle_paginate(args: &Value, page: &mut Page) -> Result<Str
         click[field] = json!(target);
         match Box::pin(super::act::handle_act(&click, page)).await {
             Ok(_) => {}
-            Err(BladeError::Closed) => return Err(BladeError::Closed),
+            Err(ObuError::Closed) => return Err(ObuError::Closed),
             Err(e) => {
                 let message = e.to_string();
                 complete = message.contains("no element matching")

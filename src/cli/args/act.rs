@@ -1,7 +1,7 @@
 //! The `act` command parser — universal `--field` flags + terse positionals, 1:1 with the MCP schema.
 
 use super::{is_ref, normalize_fields, resolve_payload, take_num, take_value};
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 /// Parse `act` args. Universal `--field` flags mirror the MCP schema exactly
@@ -12,16 +12,16 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
     if args.is_empty() {
         // Derived from ACT_ACTIONS: the hand-written list had drifted (it
         // omitted dialog and paginate).
-        return Err(BladeError::Usage(format!(
-            "act needs an action — {} (see 'bladebro help act')",
+        return Err(ObuError::Usage(format!(
+            "act needs an action — {} (see 'obu help act')",
             crate::action::ACT_ACTIONS.join(", ")
         )));
     }
 
     let action = args[0].as_str();
     if !crate::action::ACT_ACTIONS.contains(&action) {
-        return Err(BladeError::Usage(format!(
-            "{} (see 'bladebro help act')",
+        return Err(ObuError::Usage(format!(
+            "{} (see 'obu help act')",
             crate::action::unknown_action_message(action)
         )));
     }
@@ -43,7 +43,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 "template" => {
                     let raw = resolve_payload(&take_value(args, &mut i, flag)?)?;
                     let tpl: Value = serde_json::from_str(&raw).map_err(|e| {
-                        BladeError::Usage(format!("--template must be valid JSON: {e}"))
+                        ObuError::Usage(format!("--template must be valid JSON: {e}"))
                     })?;
                     j["template"] = tpl;
                 }
@@ -61,7 +61,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                         "true" | "1" | "yes" => j["accept"] = json!(true),
                         "false" | "0" | "no" => j["accept"] = json!(false),
                         _ => {
-                            return Err(BladeError::Usage(format!(
+                            return Err(ObuError::Usage(format!(
                                 "--accept takes true or false, got '{v}'"
                             )))
                         }
@@ -79,7 +79,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 "extract" => {
                     let v = take_value(args, &mut i, flag)?;
                     if !matches!(v.as_str(), "auto" | "links" | "forms" | "json") {
-                        return Err(BladeError::Usage(format!(
+                        return Err(ObuError::Usage(format!(
                             "--extract must be auto|links|forms|json, got '{v}'"
                         )));
                     }
@@ -99,8 +99,8 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 "landscape" => j["landscape"] = json!(true),
                 "print-background" => j["printBackground"] = json!(true),
                 _ => {
-                    return Err(BladeError::Usage(format!(
-                        "unknown flag --{flag} for act — see 'bladebro help act'"
+                    return Err(ObuError::Usage(format!(
+                        "unknown flag --{flag} for act — see 'obu help act'"
                     )))
                 }
             }
@@ -120,7 +120,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 if is_ref(&pos[0]) {
                     j["ref"] = json!(pos[0].clone());
                     if pos.len() > 1 {
-                        return Err(BladeError::Usage(format!(
+                        return Err(ObuError::Usage(format!(
                             "unexpected extra argument '{}' after a ref — use --label/--nth, or quote the label",
                             pos[1]
                         )));
@@ -146,13 +146,13 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["text"] = json!(pos[pi..].join(" "));
             }
             if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "type needs a target — `act type <ref|label> <text>` or --ref/--label/--selector/--text"
                         .into(),
                 ));
             }
             if j.get("text").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "type needs text — `act type <target> <text>` or --text <value>".into(),
                 ));
             }
@@ -161,23 +161,23 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             if let Some(v) = j.get("fields").and_then(|f| f.as_str()).map(String::from) {
                 let raw = resolve_payload(&v)?;
                 let parsed: Value = serde_json::from_str(&raw)
-                    .map_err(|e| BladeError::Usage(format!("invalid fields JSON: {e}")))?;
+                    .map_err(|e| ObuError::Usage(format!("invalid fields JSON: {e}")))?;
                 j["fields"] = normalize_fields(parsed)?;
             } else if j.get("fields").is_none() {
                 let raw_arg = pos.first().ok_or_else(|| {
-                    BladeError::Usage(
-                        "fill needs fields — bladebro act fill '{\"e3\":\"John\",\"e5\":\"Doe\"}' \
+                    ObuError::Usage(
+                        "fill needs fields — obu act fill '{\"e3\":\"John\",\"e5\":\"Doe\"}' \
                          [--submit <ref|text>] (or @file / - for big payloads)"
                             .into(),
                     )
                 })?;
                 let raw = resolve_payload(raw_arg)?;
                 let parsed: Value = serde_json::from_str(&raw)
-                    .map_err(|e| BladeError::Usage(format!("invalid fields JSON: {e}")))?;
+                    .map_err(|e| ObuError::Usage(format!("invalid fields JSON: {e}")))?;
                 j["fields"] = normalize_fields(parsed)?;
             }
             if pos.len() > 1 {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}'",
                     pos[1]
                 )));
@@ -199,12 +199,12 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["option"] = json!(pos[pi..].join(" "));
             }
             if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "select needs a target — `act select <ref|label|--selector> <option>`".into(),
                 ));
             }
             if j.get("option").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "select needs an option — `act select <target> <option text|value>`".into(),
                 ));
             }
@@ -223,7 +223,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 }
             }
             if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "{action} needs a ref, label or --selector — `act {action} e5` or `act {action} \"Search\"` (refs come from see model / nav)"
                 )));
             }
@@ -233,7 +233,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["key"] = json!(pos[0].clone());
             }
             if j.get("key").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "press needs a key — `act press Enter` (Enter, Tab, Escape, ArrowDown, …)"
                         .into(),
                 ));
@@ -242,18 +242,18 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         "scroll" => {
             if j.get("dx").is_none() && !pos.is_empty() {
                 let v: i64 = pos[0].parse().map_err(|_| {
-                    BladeError::Usage(format!("scroll dx must be a number, got '{}'", pos[0]))
+                    ObuError::Usage(format!("scroll dx must be a number, got '{}'", pos[0]))
                 })?;
                 j["dx"] = json!(v);
             }
             if j.get("dy").is_none() && pos.len() > 1 {
                 let v: i64 = pos[1].parse().map_err(|_| {
-                    BladeError::Usage(format!("scroll dy must be a number, got '{}'", pos[1]))
+                    ObuError::Usage(format!("scroll dy must be a number, got '{}'", pos[1]))
                 })?;
                 j["dy"] = json!(v);
             }
             if j.get("dx").is_none() && j.get("dy").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "scroll needs a distance — `act scroll 0 500` or --dy <px> (negative scrolls up)"
                         .into(),
                 ));
@@ -264,12 +264,12 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["url"] = json!(pos[0].clone());
             }
             if j.get("url").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "navigate needs a URL — `act navigate example.com`".into(),
                 ));
             }
             if pos.len() > 1 {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}'",
                     pos[1]
                 )));
@@ -302,7 +302,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                     }
                 })
                 .ok_or_else(|| {
-                    BladeError::Usage(
+                    ObuError::Usage(
                         "upload needs a file path — `act upload e5 /path/file.pdf`".into(),
                     )
                 })?;
@@ -311,7 +311,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             }
             j["text"] = json!(path);
             if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "upload needs a target — `act upload <ref|label|--selector> <path>`".into(),
                 ));
             }
@@ -321,7 +321,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["url"] = json!(pos[0].clone());
             }
             if j.get("url").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "download needs a URL — `act download https://x/file.pdf [--path <dir>]`"
                         .into(),
                 ));
@@ -335,7 +335,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["condition"] = json!("selector");
             }
             if j.get("condition").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "wait needs a condition — element, title, url, text, settle, or js \
                      (e.g. `act wait settle`, `act wait js \"document.title\"`)"
                         .into(),
@@ -354,7 +354,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                     | "network"
                     | "network-idle"
             ) {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unknown wait condition '{cond}' — element, title, url, text, settle, js"
                 )));
             }
@@ -368,7 +368,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             // the clearly-missing case early.
             if cond == "js" {
                 if j.get("js").is_none() && j.get("text").is_none() {
-                    return Err(BladeError::Usage(
+                    return Err(ObuError::Usage(
                         "wait js needs an expression — `act wait js \"window.ready\"` (or --js \"…\")".into(),
                     ));
                 }
@@ -376,7 +376,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 && j.get("text").is_none()
                 && j.get("selector").is_none()
             {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "wait {cond} needs a match value — `act wait {cond} --text \"…\"`"
                 )));
             }
@@ -389,7 +389,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["js"] = json!(resolve_payload(&v)?);
             }
             if j.get("js").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "eval needs JS — `act eval \"document.title\"` (or @script.js / - for stdin)"
                         .into(),
                 ));
@@ -400,7 +400,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["url"] = json!(pos[0].clone());
             }
             if j.get("url").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "collect needs a URL — `act collect <url> [--max N]`".into(),
                 ));
             }
@@ -412,7 +412,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             if j.get("extract").is_none() && !pos.is_empty() {
                 let t = pos[0].clone();
                 if !matches!(t.as_str(), "auto" | "links" | "forms" | "json") {
-                    return Err(BladeError::Usage(format!(
+                    return Err(ObuError::Usage(format!(
                         "extract type must be auto|links|forms|json, got '{t}'"
                     )));
                 }
@@ -422,7 +422,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["extract"] = json!("auto");
             }
             if j["extract"].as_str() == Some("json") && j.get("template").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "extract json needs --template '<json>' (or use `extract auto`)".into(),
                 ));
             }
@@ -432,13 +432,13 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["next"] = json!(pos[0]);
             }
             if pos.len() > 1 || j.get("next").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "paginate needs --next CSS or text=Next, with optional --max/--extract/--limit"
                         .into(),
                 ));
             }
             if j["extract"].as_str() == Some("json") && j.get("template").is_none() {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "paginate --extract json needs --template '<json>' (or use --extract auto)"
                         .into(),
                 ));
@@ -446,7 +446,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         }
         "pdf" => {
             if !pos.is_empty() {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}' for pdf — use --path/--landscape",
                     pos[0]
                 )));
@@ -454,7 +454,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         }
         "back" | "forward" | "reload" => {
             if !pos.is_empty() {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "{action} takes no arguments, got '{}'",
                     pos[0]
                 )));
@@ -465,7 +465,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["name"] = json!(pos[0].clone());
             }
             if j.get("name").is_none() {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "{action} needs a name — `act {action} my-session`"
                 )));
             }
@@ -476,20 +476,20 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             } else if let Some(first) = pos.first() {
                 first.clone()
             } else {
-                return Err(BladeError::Usage(
-                    "batch needs steps — bladebro act batch '[{\"action\":\"click\",\"ref\":\"e5\"}]' \
+                return Err(ObuError::Usage(
+                    "batch needs steps — obu act batch '[{\"action\":\"click\",\"ref\":\"e5\"}]' \
                      (or @steps.json / - for stdin)"
                         .into(),
                 ));
             };
             let raw = resolve_payload(&raw)?;
             let steps: Value = serde_json::from_str(&raw)
-                .map_err(|e| BladeError::Usage(format!("invalid steps JSON: {e}")))?;
+                .map_err(|e| ObuError::Usage(format!("invalid steps JSON: {e}")))?;
             let arr = steps
                 .as_array()
-                .ok_or_else(|| BladeError::Usage("steps must be a JSON array".into()))?;
+                .ok_or_else(|| ObuError::Usage("steps must be a JSON array".into()))?;
             if arr.is_empty() {
-                return Err(BladeError::Usage("batch needs at least one step".into()));
+                return Err(ObuError::Usage("batch needs at least one step".into()));
             }
             j["steps"] = steps;
         }
@@ -498,7 +498,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["url"] = json!(pos[0].clone());
             }
             if pos.len() > 1 {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}'",
                     pos[1]
                 )));
@@ -509,8 +509,8 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["target_id"] = json!(pos[0].clone());
             }
             if j.get("target_id").is_none() {
-                return Err(BladeError::Usage(format!(
-                    "{action} needs a tab id — `act {action} <id>` (ids come from `bladebro state tabs`)"
+                return Err(ObuError::Usage(format!(
+                    "{action} needs a tab id — `act {action} <id>` (ids come from `obu state tabs`)"
                 )));
             }
         }
@@ -523,7 +523,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 j["expect"] = json!(pos[0].clone());
             }
             if pos.len() > 1 {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}' for dialog — quote --prompt-text/--message values",
                     pos[1]
                 )));
@@ -531,12 +531,12 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             match j.get("expect").and_then(|e| e.as_str()) {
                 Some("alert" | "confirm" | "prompt" | "beforeunload" | "any" | "clear") => {}
                 Some(other) => {
-                    return Err(BladeError::Usage(format!(
+                    return Err(ObuError::Usage(format!(
                         "dialog kind must be alert, confirm, prompt, beforeunload, any (or clear to disarm), got '{other}'"
                     )))
                 }
                 None => {
-                    return Err(BladeError::Usage(
+                    return Err(ObuError::Usage(
                         "dialog needs a kind — `act dialog <alert|confirm|prompt|beforeunload|any> \
                          [--accept true|false] [--prompt-text <text>] [--message <match>]` \
                          before the click that opens it; `act dialog clear` disarms"

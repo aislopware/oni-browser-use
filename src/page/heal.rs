@@ -37,7 +37,7 @@ impl Page {
             return Ok(None);
         };
         if name.is_empty() {
-            return Err(crate::error::BladeError::StaleRef(format!(
+            return Err(crate::error::ObuError::StaleRef(format!(
                 "{ref_id} was an unnamed {role} — cannot re-resolve. Use see to view the current page."
             )));
         }
@@ -66,7 +66,7 @@ impl Page {
             }
         }
         match matches.len() {
-            0 => Err(crate::error::BladeError::StaleRef(format!(
+            0 => Err(crate::error::ObuError::StaleRef(format!(
                 "{ref_id} was '{role} \"{name}\"' — gone from the current page. Use see to view it."
             ))),
             1 => {
@@ -92,7 +92,7 @@ impl Page {
                     lines.push(format!("  …and {} more", n - 6));
                 }
                 lines.push("retry with ref=<id> from the list above".to_string());
-                Err(crate::error::BladeError::StaleRef(lines.join("\n")))
+                Err(crate::error::ObuError::StaleRef(lines.join("\n")))
             }
         }
     }

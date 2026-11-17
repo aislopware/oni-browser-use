@@ -46,7 +46,7 @@ cargo = Path("Cargo.toml").read_text()
 cargo = re.sub(r'^version = ".*"', f'version = "{version}"', cargo, count=1, flags=re.MULTILINE)
 Path("Cargo.toml").write_text(cargo)
 lock = Path("Cargo.lock").read_text()
-lock = re.sub(r'(\[\[package\]\]\nname = "bladebro"\nversion = )"[^"]+"', rf'\g<1>"{version}"', lock, count=1)
+lock = re.sub(r'(\[\[package\]\]\nname = "obu"\nversion = )"[^"]+"', rf'\g<1>"{version}"', lock, count=1)
 Path("Cargo.lock").write_text(lock)
 
 # 3. Every npm manifest: its own version and its optionalDependencies.

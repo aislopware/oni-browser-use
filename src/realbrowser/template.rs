@@ -1,13 +1,13 @@
 //! Clone-lane template management: atomic import of a user profile root,
 //! provenance metadata, stats, forget.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 use std::path::{Path, PathBuf};
 
 /// `<data-dir>/realbrowser/<browser-id>/`.
 pub fn root_for(id: &str) -> PathBuf {
-    platform::blade_dir().join("realbrowser").join(id)
+    platform::obu_dir().join("realbrowser").join(id)
 }
 
 /// The imported profile template for a browser id.
@@ -38,17 +38,17 @@ pub struct ImportStats {
 /// tab set. The SOURCE is only ever read.
 pub fn import_template(id: &str, src: &Path) -> Result<ImportStats> {
     if !src.is_dir() {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "profile dir not found: {}",
             src.display()
         )));
     }
     let root = root_for(id);
     platform::secure_create_dir_all(&root)
-        .map_err(|e| BladeError::Other(format!("cannot create {}: {e}", root.display())))?;
+        .map_err(|e| ObuError::Other(format!("cannot create {}: {e}", root.display())))?;
     let _lock =
         crate::session_profile::SessionProfile::acquire_lock_at(&root).ok_or_else(|| {
-            BladeError::Other(
+            ObuError::Other(
                 "browser template is busy; retry import after the current session finishes syncing"
                     .into(),
             )
@@ -68,9 +68,7 @@ pub fn import_template(id: &str, src: &Path) -> Result<ImportStats> {
         ],
     );
     if !tmp.is_dir() {
-        return Err(BladeError::Other(
-            "profile copy produced no directory".into(),
-        ));
+        return Err(ObuError::Other("profile copy produced no directory".into()));
     }
     // A fresh import generation: sessions cloned from an EARLIER import
     // carry the old value, and their sync-back refuses to overwrite this
@@ -87,7 +85,7 @@ pub fn import_template(id: &str, src: &Path) -> Result<ImportStats> {
         &tmp.join(crate::session_profile::IMPORT_MARKER),
         generation.as_bytes(),
     )
-    .map_err(|e| BladeError::Other(format!("cannot mark the imported template: {e}")))?;
+    .map_err(|e| ObuError::Other(format!("cannot mark the imported template: {e}")))?;
 
     // Atomic-ish swap (same discipline as the agent-lane template).
     let template = root.join("template");
@@ -95,13 +93,13 @@ pub fn import_template(id: &str, src: &Path) -> Result<ImportStats> {
     let _ = std::fs::remove_dir_all(&old);
     if template.exists() {
         std::fs::rename(&template, &old)
-            .map_err(|e| BladeError::Other(format!("cannot move old template aside: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot move old template aside: {e}")))?;
     }
     if let Err(e) = std::fs::rename(&tmp, &template) {
         if old.exists() {
             let _ = std::fs::rename(&old, &template);
         }
-        return Err(BladeError::Other(format!("cannot install template: {e}")));
+        return Err(ObuError::Other(format!("cannot install template: {e}")));
     }
     let _ = std::fs::remove_dir_all(&old);
 
@@ -144,7 +142,7 @@ pub fn template_matches(id: &str, root: &Path) -> bool {
         && template_source(id).is_some_and(|src| super::same_dir(Path::new(&src), root))
 }
 
-/// Pids of live bladebro processes running a clone session of `id`. Refreshing
+/// Pids of live obu processes running a clone session of `id`. Refreshing
 /// under one gets its stale copy synced back over the import; wiping under
 /// one deletes the profile its browser is running on.
 pub fn live_clone_sessions(id: &str) -> Vec<u32> {
@@ -160,8 +158,8 @@ pub fn forget(id: &str) -> Result<bool> {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
     {
-        return Err(BladeError::Other(format!(
-            "invalid browser id `{id}` — select a browser with `bladebro rb use <id>`"
+        return Err(ObuError::Other(format!(
+            "invalid browser id `{id}` — select a browser with `obu rb use <id>`"
         )));
     }
     let root = root_for(id);
@@ -169,7 +167,7 @@ pub fn forget(id: &str) -> Result<bool> {
         return Ok(false);
     }
     std::fs::remove_dir_all(&root)
-        .map_err(|e| BladeError::Other(format!("cannot remove {}: {e}", root.display())))?;
+        .map_err(|e| ObuError::Other(format!("cannot remove {}: {e}", root.display())))?;
     Ok(true)
 }
 

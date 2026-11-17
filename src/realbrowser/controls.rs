@@ -2,22 +2,20 @@
 //! touch the browser at all right now, and whether idle may close it.
 
 use super::*;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 use std::path::PathBuf;
 
 /// The single pause-refusal error, so every gate speaks identically.
-pub fn paused_error() -> BladeError {
-    BladeError::Other(
-        "paused — manual control is claimed (`bladebro rb resume` to hand it back)".into(),
-    )
+pub fn paused_error() -> ObuError {
+    ObuError::Other("paused — manual control is claimed (`obu rb resume` to hand it back)".into())
 }
 
 /// `<data-dir>/realbrowser-pause` — while this file exists, input-
 /// dispatching actions refuse to run and the idle hum stays silent, so the
 /// user can use the browser without the agent fighting them.
 pub fn pause_path() -> PathBuf {
-    platform::blade_dir().join("realbrowser-pause")
+    platform::obu_dir().join("realbrowser-pause")
 }
 
 /// True while manual control is claimed. Honored on every lane (harmless
@@ -31,10 +29,10 @@ pub fn set_paused(paused: bool) -> Result<()> {
     if paused {
         if let Some(parent) = path.parent() {
             platform::secure_create_dir_all(parent)
-                .map_err(|e| BladeError::Other(format!("cannot create data dir: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot create data dir: {e}")))?;
         }
         platform::secure_write_file(&path, b"paused")
-            .map_err(|e| BladeError::Other(format!("cannot write pause marker: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot write pause marker: {e}")))?;
     } else {
         let _ = std::fs::remove_file(&path);
     }

@@ -4,7 +4,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::BladeError;
+use crate::error::ObuError;
 use crate::mcp::tools::tools_to_json;
 use crate::page::Page;
 
@@ -29,7 +29,7 @@ pub(super) fn handle_initialize(id: Option<Value>, params: &Value) -> Value {
                 "tools": { "listChanged": false }
             },
             "serverInfo": {
-                "name": "bladebro",
+                "name": "obu",
                 "version": env!("CARGO_PKG_VERSION"),
             },
             "instructions": INSTRUCTIONS,
@@ -83,7 +83,7 @@ pub async fn handle_tools_call(
     id: Option<Value>,
     params: &Value,
     page: &mut Page,
-) -> std::result::Result<Value, BladeError> {
+) -> std::result::Result<Value, ObuError> {
     // An attached browser's tab outlives this server: its ref table is kept
     // for the next process on that tab (no-ops everywhere else).
     page.refs_sync().await;
@@ -96,7 +96,7 @@ async fn tools_call(
     id: Option<Value>,
     params: &Value,
     page: &mut Page,
-) -> std::result::Result<Value, BladeError> {
+) -> std::result::Result<Value, ObuError> {
     let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -115,7 +115,7 @@ async fn tools_call(
         "see" => handle_see_tool(&args, page).await,
         "state" => handle_state(&args, page).await,
         "run" => handle_run(&args, page).await,
-        _ => Err(crate::error::BladeError::Other(format!(
+        _ => Err(crate::error::ObuError::Other(format!(
             "unknown tool: {name}"
         ))),
     };
@@ -179,10 +179,10 @@ async fn tools_call(
 /// serve() can self-heal.
 async fn tool_error(
     id: Option<Value>,
-    e: BladeError,
+    e: ObuError,
     page: &mut Page,
-) -> std::result::Result<Value, BladeError> {
-    if matches!(e, BladeError::Closed) {
+) -> std::result::Result<Value, ObuError> {
+    if matches!(e, ObuError::Closed) {
         return Err(e);
     }
     // Dead-tab errors propagate as-is so serve()'s tab-recovery

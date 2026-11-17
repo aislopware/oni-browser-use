@@ -46,12 +46,12 @@ impl Page {
     /// macOS — every click and navigation used to raise it above whatever the
     /// person was working in (issue #89). It is only needed when input would
     /// otherwise go to a background tab (a popup took the foreground, #49).
-    /// `BLADE_NO_ACTIVATE=1` never raises the window, accepting that trade.
+    /// `OBU_NO_ACTIVATE=1` never raises the window, accepting that trade.
     /// An attached browser is never raised at all (see [`Page::activate`]),
     /// so the visibility probe is skipped there too.
     pub async fn activate_if_needed(&self) -> Result<()> {
         if crate::browser::attached_browser()
-            || std::env::var("BLADE_NO_ACTIVATE")
+            || std::env::var("OBU_NO_ACTIVATE")
                 .map(|v| v == "1")
                 .unwrap_or(false)
         {
@@ -83,9 +83,9 @@ impl Page {
         if !minimized_from_window(window.as_ref()) {
             return Ok(());
         }
-        Err(BladeError::Other(
+        Err(ObuError::Other(
             "the agent's browser window is minimized — a minimized page is not rendered, so \
-             clicks and keys cannot be delivered reliably, and bladebro never raises a window \
+             clicks and keys cannot be delivered reliably, and obu never raises a window \
              in a browser it attached to. Continue in a fresh background window (`state \
              open-tab <url>`), or have the window restored (it may stay behind other windows)."
                 .into(),
@@ -265,7 +265,7 @@ impl Page {
             if let Err(e) =
                 super::agent_tab::remember_opened(&super::agent_tab::record_path(), &self.base, &id)
             {
-                eprintln!("[bladebro] {e} — the new tab is not remembered as the agent's own");
+                eprintln!("[obu] {e} — the new tab is not remembered as the agent's own");
             }
         }
         Ok(id)
@@ -280,7 +280,7 @@ impl Page {
             target_id,
             created,
         ) {
-            eprintln!("[bladebro] {e} — the next command may resume on another tab");
+            eprintln!("[obu] {e} — the next command may resume on another tab");
         }
     }
 
@@ -298,7 +298,7 @@ impl Page {
                 .get("sessionId")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| {
-                    BladeError::Other("Target.attachToTarget returned no sessionId".into())
+                    ObuError::Other("Target.attachToTarget returned no sessionId".into())
                 })?;
             CdpSession::child(client.clone(), sid)
         } else {
@@ -314,7 +314,7 @@ impl Page {
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
-            let t = t.ok_or_else(|| BladeError::Other(format!("tab not found: {target_id}")))?;
+            let t = t.ok_or_else(|| ObuError::Other(format!("tab not found: {target_id}")))?;
             let client = CdpClient::connect(t.ws_url()?).await?;
             CdpSession::root(client)
         };

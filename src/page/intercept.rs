@@ -488,10 +488,7 @@ pub async fn run_interception(
         // A Closed session means the browser died; the serve() loop
         // relaunches and this task is dropped with the old session.
         if verdict.is_err() {
-            let is_closed = matches!(
-                verdict.as_ref().err(),
-                Some(crate::error::BladeError::Closed)
-            );
+            let is_closed = matches!(verdict.as_ref().err(), Some(crate::error::ObuError::Closed));
             if is_closed {
                 return;
             }

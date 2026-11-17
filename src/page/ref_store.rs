@@ -8,7 +8,7 @@
 //!
 //! `<data-dir>/refs/<targetId>.json` holds the [`RefSnapshot`] of each tab,
 //! written after a command and read back by the next `Page::attach` on that
-//! tab. Only attached browsers get one: a browser bladebro launched dies with
+//! tab. Only attached browsers get one: a browser obu launched dies with
 //! the session, and its target ids with it.
 //!
 //! The file names page elements (roles, accessible names) — never field
@@ -31,7 +31,7 @@ const STALE_AFTER: Duration = Duration::from_secs(7 * 24 * 3600);
 const STAMP_EVERY: Duration = Duration::from_secs(24 * 3600);
 
 pub(super) fn dir() -> PathBuf {
-    crate::platform::blade_dir().join("refs")
+    crate::platform::obu_dir().join("refs")
 }
 
 /// A target id becomes a file name: only the shape Chrome mints is accepted.
@@ -185,7 +185,7 @@ impl Page {
             self.lpm.raise_ref_floor(floor);
             snap.next_ref = snap.next_ref.max(floor);
             eprintln!(
-                "[bladebro] another bladebro process used this tab during this command — refs printed by either may not match; re-read the page (`see`) before acting by ref"
+                "[obu] another obu process used this tab during this command — refs printed by either may not match; re-read the page (`see`) before acting by ref"
             );
         }
         let now = digest(&snap);
@@ -194,7 +194,7 @@ impl Page {
             // Said once per change, on stderr: the command itself succeeded,
             // but the refs it printed will not resolve in a later process.
             Err(e) => eprintln!(
-                "[bladebro] could not save this tab's refs ({e}) — refs printed by this command will not carry over to the next one-shot command; re-read the page there"
+                "[obu] could not save this tab's refs ({e}) — refs printed by this command will not carry over to the next one-shot command; re-read the page there"
             ),
         }
     }
@@ -236,7 +236,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("blade-refs-{tag}-{}-{nanos}", std::process::id()))
+        std::env::temp_dir().join(format!("obu-refs-{tag}-{}-{nanos}", std::process::id()))
     }
 
     /// The bug: process A reads the page and prints refs; process B (the next

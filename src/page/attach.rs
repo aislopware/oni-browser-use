@@ -22,9 +22,7 @@ impl Page {
             let context = info["targetInfo"]["browserContextId"]
                 .as_str()
                 .ok_or_else(|| {
-                    BladeError::Other(
-                        "incognito compatibility: target has no browser context".into(),
-                    )
+                    ObuError::Other("incognito compatibility: target has no browser context".into())
                 })?
                 .to_string();
             let browser = match &browser_client {
@@ -32,7 +30,7 @@ impl Page {
                 None => {
                     let version = crate::cdp::version(base).await?;
                     let ws = version.web_socket_debugger_url.ok_or_else(|| {
-                        BladeError::Other("Chrome returned no browser WebSocket URL".into())
+                        ObuError::Other("Chrome returned no browser WebSocket URL".into())
                     })?;
                     CdpClient::connect(&ws).await?
                 }
@@ -83,7 +81,7 @@ impl Page {
         // a browser armed with an EPHEMERAL `--remote-debugging-port=0` (or
         // via Chrome's chrome://inspect approval flow) reports
         // `navigator.webdriver === true` natively — Chromium's own behavior,
-        // not a bladebro patch (fixed-port arms report false). The lane's
+        // not a obu patch (fixed-port arms report false). The lane's
         // contract forbids masking it, so surface it once instead of letting
         // the agent discover it from a page.
         if crate::realbrowser::real_lane()
@@ -139,16 +137,16 @@ impl Page {
                 .await
             {
                 crate::browser::set_ua_override_failed();
-                eprintln!("[bladebro] WARNING: UA override failed: {e}");
+                eprintln!("[obu] WARNING: UA override failed: {e}");
             }
         }
         // S6: geo-consistent identity — timezone and locale must match the
         // proxy's geographic location. Without a proxy, the system timezone
-        // is already correct. BLADE_TZ and BLADE_LOCALE override explicitly.
+        // is already correct. OBU_TZ and OBU_LOCALE override explicitly.
         // Real-browser lane: skipped — both are page-visible masks, and this
         // lane's contract is that nothing page-visible is manufactured.
         if !crate::realbrowser::real_lane() {
-            if let Ok(tz) = std::env::var("BLADE_TZ") {
+            if let Ok(tz) = std::env::var("OBU_TZ") {
                 if !tz.is_empty() {
                     if let Err(e) = cdp
                         .send(
@@ -157,18 +155,18 @@ impl Page {
                         )
                         .await
                     {
-                        eprintln!("[bladebro] WARNING: timezone override failed: {e}");
+                        eprintln!("[obu] WARNING: timezone override failed: {e}");
                     } else {
-                        eprintln!("[bladebro] timezone override: {tz}");
+                        eprintln!("[obu] timezone override: {tz}");
                     }
                 }
-            } else if std::env::var("BLADE_PROXY").is_ok() {
-                eprintln!("[bladebro] WARNING: BLADE_PROXY set but BLADE_TZ not set — timezone/IP mismatch will be detected");
+            } else if std::env::var("OBU_PROXY").is_ok() {
+                eprintln!("[obu] WARNING: OBU_PROXY set but OBU_TZ not set — timezone/IP mismatch will be detected");
             }
             // The same BCP-47 normalization as the injection (`en_US` →
             // `en-US`): Intl, navigator.language and Accept-Language must
             // name one tag. An unusable value is reported by the injection.
-            if let Some(locale) = std::env::var("BLADE_LOCALE")
+            if let Some(locale) = std::env::var("OBU_LOCALE")
                 .ok()
                 .and_then(|l| crate::stealth::normalize_locale(&l))
             {
@@ -187,7 +185,7 @@ impl Page {
                         })),
                     )
                     .await;
-                eprintln!("[bladebro] locale override: {locale}");
+                eprintln!("[obu] locale override: {locale}");
             }
         }
         // Inject the stealth script before any page loads. This runs at
@@ -196,13 +194,13 @@ impl Page {
             Ok(id) => Some(id),
             Err(e) => {
                 crate::browser::set_stealth_inject_failed();
-                eprintln!("[bladebro] WARNING: stealth injection failed: {e}");
+                eprintln!("[obu] WARNING: stealth injection failed: {e}");
                 None
             }
         };
         // Normalized like the page injection: this value is baked into the
         // worker scripts' WorkerNavigator.language.
-        let active_locale = std::env::var("BLADE_LOCALE")
+        let active_locale = std::env::var("OBU_LOCALE")
             .ok()
             .and_then(|l| crate::stealth::normalize_locale(&l));
         // What the S6 block above put on this target (none on the real lane).
@@ -240,16 +238,16 @@ impl Page {
                     &cdp,
                     worker_gl,
                     crate::stealth::full_script(),
-                    std::env::var("BLADE_DBG_WORKERS").is_ok(),
+                    std::env::var("OBU_DBG_WORKERS").is_ok(),
                 )
                 .await,
             );
         }
 
         // M17: Set download behavior so downloads don't hang the browser.
-        // SECURITY: ~/.blade/downloads (0700) instead of a shared predictable
+        // SECURITY: ~/.obu/downloads (0700) instead of a shared predictable
         // /tmp dir — downloads can contain private documents, and a shared
-        // /tmp/bladebro-downloads leaked them across local users (and was a
+        // /tmp/obu-downloads leaked them across local users (and was a
         // symlink pre-placement target). The absolute path is returned to
         // the agent in the download result, so nothing depends on /tmp.
         let download_dir = crate::platform::downloads_dir();
@@ -765,8 +763,7 @@ impl Page {
             if let Ok(mut a) = ambient.lock() {
                 a.push(format!(
                     "consent: {} ({})",
-                    if std::env::var("BLADE_CONSENT").unwrap_or_else(|_| "reject".into())
-                        != "accept"
+                    if std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".into()) != "accept"
                     {
                         "rejected"
                     } else {
@@ -841,7 +838,7 @@ impl Page {
             isolated_ctx: Arc::new(std::sync::Mutex::new(None)),
             act_count: std::sync::atomic::AtomicU32::new(0),
             compress_enabled: std::sync::atomic::AtomicBool::new(
-                std::env::var("BLADE_NO_COMPRESS").as_deref() != Ok("1"),
+                std::env::var("OBU_NO_COMPRESS").as_deref() != Ok("1"),
             ),
             ref_target,
             refs_saved,

@@ -1,7 +1,7 @@
 //! Stable semantic refs — the #1 reliability win (decision D4).
 //!
 //! Other tools hand the agent a positional index (`ref=e5`) that silently
-//! points at the *wrong* element after a re-render. Bladebro's refs are
+//! points at the *wrong* element after a re-render. Obu's refs are
 //! **semantic anchors**: the stabilizer matches the new capture against the
 //! previous Live Page Model by signature (`role|name|ordinal`) and persists the
 //! ref number for matched elements. When an element is truly gone, we report

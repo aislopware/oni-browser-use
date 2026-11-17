@@ -14,8 +14,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  BLADE_NO_WARMING: "1"
-  BLADE_NO_UPDATE_CHECK: "1"
+  OBU_NO_WARMING: "1"
+  OBU_NO_UPDATE_CHECK: "1"
 
 jobs:
   build:
@@ -30,8 +30,8 @@ jobs:
       - run: cargo build --profile gate
       - uses: actions/upload-artifact@v7
         with:
-          name: bladebro-gate
-          path: target/gate/bladebro
+          name: obu-gate
+          path: target/gate/obu
           retention-days: 3
 
   audit:
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -55,9 +55,9 @@ jobs:
           echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
       - name: Stealth vectors
         run: |
-          chmod +x target/gate/bladebro
-          BLADE_HOME=$(mktemp -d) ./target/gate/bladebro audit
-          BLADE_HOME=$(mktemp -d) BLADE_PERMS=patch BLADE_MEDIA=patch BLADE_INCOGNITO=1 ./target/gate/bladebro audit
+          chmod +x target/gate/obu
+          OBU_HOME=$(mktemp -d) ./target/gate/obu audit
+          OBU_HOME=$(mktemp -d) OBU_PERMS=patch OBU_MEDIA=patch OBU_INCOGNITO=1 ./target/gate/obu audit
 
   oracle:
     needs: build
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -85,8 +85,8 @@ jobs:
           echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
       - name: Differential oracle (divergent must be 0)
         run: |
-          chmod +x target/gate/bladebro
-          BLADEBRO=$PWD/target/gate/bladebro python3 tools/diff_oracle/oracle.py | tee oracle.log
+          chmod +x target/gate/obu
+          OBU=$PWD/target/gate/obu python3 tools/diff_oracle/oracle.py | tee oracle.log
           grep -q "divergent: 0" oracle.log
 
   qol:
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -109,8 +109,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
       - name: Input/action behavior suite
         run: |
-          chmod +x target/gate/bladebro
-          BLADEBRO=$PWD/target/gate/bladebro python3 tools/qol_probe/run.py
+          chmod +x target/gate/obu
+          OBU=$PWD/target/gate/obu python3 tools/qol_probe/run.py
 
   lanes:
     needs: build
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -132,8 +132,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
       - name: Cold start, five lanes
         run: |
-          chmod +x target/gate/bladebro
-          BLADEBRO=$PWD/target/gate/bladebro python3 tools/lane_matrix.py all 5
+          chmod +x target/gate/obu
+          OBU=$PWD/target/gate/obu python3 tools/lane_matrix.py all 5
 
   gap44:
     needs: build
@@ -143,7 +143,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -155,8 +155,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
       - name: Acceptance probes
         run: |
-          chmod +x target/gate/bladebro
-          export BLADEBRO=$PWD/target/gate/bladebro
+          chmod +x target/gate/obu
+          export OBU=$PWD/target/gate/obu
           python3 tools/gap44/probe.py 1
           python3 tools/gap44/probe.py 2
 
@@ -168,7 +168,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
-          name: bladebro-gate
+          name: obu-gate
           path: target/gate
       - name: Install Chrome and the virtual display
         run: |
@@ -180,8 +180,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
       - name: Agent contracts, persistence, downloads
         run: |
-          chmod +x target/gate/bladebro
-          export BLADEBRO=$PWD/target/gate/bladebro
+          chmod +x target/gate/obu
+          export OBU=$PWD/target/gate/obu
           python3 tools/reliability_probe/agent_contract.py
           python3 tools/reliability_probe/persistence.py
           python3 tools/reliability_probe/download.py

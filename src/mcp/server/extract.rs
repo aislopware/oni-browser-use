@@ -8,7 +8,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::artifact_hint;
@@ -45,12 +45,12 @@ use super::artifact_hint;
 pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<String> {
     let obj = template
         .as_object()
-        .ok_or_else(|| BladeError::Other("template must be a JSON object".into()))?;
+        .ok_or_else(|| ObuError::Other("template must be a JSON object".into()))?;
     let mut list_builders = Vec::new();
     for (list_name, spec) in obj {
         let container = spec.get("container").and_then(|c| c.as_str()).unwrap_or("");
         if container.is_empty() {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "template list '{list_name}' needs a 'container' selector"
             )));
         }
@@ -58,7 +58,7 @@ pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<St
             .get("fields")
             .and_then(Value::as_object)
             .ok_or_else(|| {
-                BladeError::Usage(format!("template list '{list_name}' needs a fields object"))
+                ObuError::Usage(format!("template list '{list_name}' needs a fields object"))
             })?;
         // Field value: a string (rendered text, or css@attr) or an object
         // {"sel": "...", "raw": true} for intentional hidden-text reads.
@@ -68,7 +68,7 @@ pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<St
                 Value::String(s) => (s.clone(), false),
                 Value::Object(o) => {
                     if o.get("raw").is_some_and(|r| !r.is_boolean()) {
-                        return Err(BladeError::Usage(format!(
+                        return Err(ObuError::Usage(format!(
                             "template field '{fname}' raw must be a boolean"
                         )));
                     }
@@ -76,7 +76,7 @@ pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<St
                         .get("sel")
                         .and_then(|s| s.as_str())
                         .ok_or_else(|| {
-                            BladeError::Other(format!(
+                            ObuError::Other(format!(
                                 "template field '{fname}' object needs a 'sel' selector string"
                             ))
                         })?
@@ -84,7 +84,7 @@ pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<St
                     (sel, o.get("raw").and_then(|r| r.as_bool()).unwrap_or(false))
                 }
                 _ => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "template field '{fname}' must be a selector string (\".css\" or \".css@attr\") or {{\"sel\": \"...\", \"raw\": true}}"
                     )));
                 }
@@ -104,7 +104,7 @@ pub(super) fn template_extract_expr(template: &Value, limit: usize) -> Result<St
             field_code.join("")
         ));
     }
-    list_builders.push("__blade_meta:{cross:st.cross,budget:st.hit,omitted:st.om}".to_string());
+    list_builders.push("__obu_meta:{cross:st.cross,budget:st.hit,omitted:st.om}".to_string());
     Ok(TEMPLATE_EXTRACT_EXPR.replace("__LISTS__", &list_builders.join(",")))
 }
 
@@ -137,7 +137,7 @@ pub async fn handle_template_extract(
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("template extraction failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "extract failed: {}",
             crate::platform::truncate_utf8(msg.lines().next().unwrap_or(msg), 200)
         )));
@@ -151,7 +151,7 @@ pub async fn handle_template_extract(
     let json_str = serde_json::to_string_pretty(&value)?;
 
     // W2: JSON mode returns a parseable payload only — caveats live in
-    // __blade_meta, and an oversized payload is an artifact envelope, not
+    // __obu_meta, and an oversized payload is an artifact envelope, not
     // a truncated page.
     if json_mode {
         if json_str.len() > 6000 {
@@ -178,7 +178,7 @@ pub async fn handle_template_extract(
 
     // Explicit omissions: rendered-skips, unsearched frames and any budget
     // exhaustion are reported instead of looking like clean data.
-    let meta = value.get("__blade_meta");
+    let meta = value.get("__obu_meta");
     let omitted = meta
         .and_then(|m| m.get("omitted"))
         .and_then(|o| o.as_u64())
@@ -293,7 +293,7 @@ async fn auto_extract_eval(page: &Page, expr: &str) -> Result<serde_json::Value>
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("auto-extract eval failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "auto-extract: {}",
             crate::platform::truncate_utf8(msg.lines().next().unwrap_or(msg), 200)
         )));
@@ -567,7 +567,7 @@ pub async fn handle_auto_extract(
     if sort_override.is_some()
         && val.get("container").and_then(Value::as_str) != Some("reddit-post-page")
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "sort applies to extract=auto on Reddit post pages only".into(),
         ));
     }
@@ -896,8 +896,7 @@ mod extract_script_tests {
                 eprintln!("node not available — skipping extract script syntax check");
                 return;
             }
-            let path =
-                std::env::temp_dir().join(format!("bladebro-js-check-extract-{post_marker}.js"));
+            let path = std::env::temp_dir().join(format!("obu-js-check-extract-{post_marker}.js"));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -1017,7 +1016,7 @@ mod extract_script_tests {
         });
         let js = super::template_extract_expr(&tpl, 25).expect("template expr");
         assert!(!js.contains("__LISTS__"), "placeholder substituted");
-        assert!(js.contains("__blade_meta"), "meta block present");
+        assert!(js.contains("__obu_meta"), "meta block present");
         assert!(js.contains("NODE_BUDGET"), "bounded walker present");
         assert!(js.contains("read(c,\".hidden\",true)"), "raw flag threaded");
         assert!(js.contains("slice(0,25)"), "item limit threaded");
@@ -1032,7 +1031,7 @@ mod extract_script_tests {
             eprintln!("node not available — skipping template script syntax check");
             return;
         }
-        let path = std::env::temp_dir().join("bladebro-js-check-template.js");
+        let path = std::env::temp_dir().join("obu-js-check-template.js");
         std::fs::write(&path, &js).expect("write js fixture");
         let out = std::process::Command::new("node")
             .arg("--check")

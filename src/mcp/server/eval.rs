@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::artifact_hint;
@@ -51,7 +51,7 @@ pub async fn handle_eval(
             let el = page
                 .model()
                 .element(ref_id)
-                .ok_or_else(|| BladeError::StaleRef(ref_id.to_string()))?;
+                .ok_or_else(|| ObuError::StaleRef(ref_id.to_string()))?;
             (el.raw.sig.clone(), el.raw.frame.clone())
         };
         ref_eval_expressions(&[&wrappers[0], &wrappers[1]], &sig, &frame)?
@@ -144,11 +144,11 @@ pub async fn handle_eval(
                 }
             }
             if msg.contains("EvalError") && msg.contains("unsafe-eval") {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "eval failed: page CSP blocks eval(). Use a plain expression instead of statements on this page.".into(),
                 ));
             }
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "eval failed: {}",
                 crate::platform::truncate_utf8(&msg, 200)
             )));
@@ -156,16 +156,16 @@ pub async fn handle_eval(
 
         let value = res.get("result").and_then(|r| r.get("value")).cloned();
         if let Some(ref v) = value {
-            if v.get("__blade_not_found").and_then(|b| b.as_bool()) == Some(true) {
-                return Err(BladeError::ElementNotFound(format!(
+            if v.get("__obu_not_found").and_then(|b| b.as_bool()) == Some(true) {
+                return Err(ObuError::ElementNotFound(format!(
                     "{ref_id} not found in live DOM"
                 )));
             }
             if !ref_id.is_empty() {
-                if v.get("__blade_undef").and_then(|b| b.as_bool()) == Some(true) {
+                if v.get("__obu_undef").and_then(|b| b.as_bool()) == Some(true) {
                     return format_eval_undefined(json_out);
                 }
-                if let Some(inner) = v.get("__blade_result") {
+                if let Some(inner) = v.get("__obu_result") {
                     let inner = inner.clone();
                     return format_eval_value(&inner, json_out).await;
                 }
@@ -243,10 +243,10 @@ fn ref_eval_expressions(candidates: &[&str], sig: &str, frame: &[usize]) -> Resu
     // Then invoke the user's JS with `el` in scope.
     let head = "((sig,frame)=>{ ".to_string()
         + &crate::page::perception::JS_PREAMBLE
-        + "let doc=document;for(const idx of frame){const ifr=[...doc.querySelectorAll('iframe')][idx];if(!ifr)return{__blade_not_found:true};try{doc=ifr.contentDocument;if(!doc)return{__blade_not_found:true};}catch(e){return{__blade_not_found:true};}}"
+        + "let doc=document;for(const idx of frame){const ifr=[...doc.querySelectorAll('iframe')][idx];if(!ifr)return{__obu_not_found:true};try{doc=ifr.contentDocument;if(!doc)return{__obu_not_found:true};}catch(e){return{__obu_not_found:true};}}"
         + "const all=deepAll(doc,sel);const fps=frame.join(',');const counts={};let el=null;"
         + "for(const n of all){const r=role(n);if(r==='hidden')continue;const nm=name(n,false);const key=r+'\\u0000'+nm;counts[key]=(counts[key]||0)+1;const s=fps+'|'+r+'|'+nm+'|'+counts[key];if(s===sig){el=n;break}}"
-        + "if(!el)return{__blade_not_found:true};"
+        + "if(!el)return{__obu_not_found:true};"
         + "const result=((el)=>{return(";
     // Concatenate around the candidate instead of substituting a placeholder:
     // sig is page-controlled (an accessible name), and a literal
@@ -256,7 +256,7 @@ fn ref_eval_expressions(candidates: &[&str], sig: &str, frame: &[usize]) -> Resu
     // the envelope serialized as {}. Await it here (an async function uses
     // the intrinsic Promise, never a page-replaced window.Promise), and flag
     // undefined, which JSON cannot carry, so it reads like the no-ref path.
-    let tail = ");})(el);return(async()=>{const r=await result;return{__blade_result:r===undefined?null:r,__blade_undef:r===undefined};})();})(".to_string()
+    let tail = ");})(el);return(async()=>{const r=await result;return{__obu_result:r===undefined?null:r,__obu_undef:r===undefined};})();})(".to_string()
         + &sig_js
         + ","
         + &frame_js
@@ -405,7 +405,7 @@ mod ref_eval_tests {
         // eval-with-ref could never find that element.
         let label = "Insert {candidate} here";
         let out = eval_on_button("el.getAttribute('aria-label')", label);
-        assert_eq!(out["__blade_result"], label, "{out}");
+        assert_eq!(out["__obu_result"], label, "{out}");
     }
 
     #[test]
@@ -414,16 +414,16 @@ mod ref_eval_tests {
         // envelope it serialized as {} (the same JS without ref returned the
         // value), and undefined came back as a plain null.
         let out = eval_on_button("Promise.resolve(el.getAttribute('aria-label'))", "Go");
-        assert_eq!(out["__blade_result"], "Go", "{out}");
+        assert_eq!(out["__obu_result"], "Go", "{out}");
         let out = eval_on_button("new Promise(r=>setTimeout(()=>r(7),5))", "Go");
-        assert_eq!(out["__blade_result"], 7, "{out}");
+        assert_eq!(out["__obu_result"], 7, "{out}");
         for undefined in ["undefined", "Promise.resolve()"] {
             let out = eval_on_button(undefined, "Go");
-            assert_eq!(out["__blade_undef"], true, "{undefined}: {out}");
+            assert_eq!(out["__obu_undef"], true, "{undefined}: {out}");
         }
         let out = eval_on_button("null", "Go");
         assert!(
-            out["__blade_result"].is_null() && out["__blade_undef"] != true,
+            out["__obu_result"].is_null() && out["__obu_undef"] != true,
             "{out}"
         );
         let out = eval_on_button("Promise.reject(new Error('boom'))", "Go");

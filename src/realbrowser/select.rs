@@ -2,7 +2,7 @@
 //! and the drift decision shared by the long-lived surfaces.
 
 use super::*;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 use std::path::{Path, PathBuf};
 
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 /// operate on the root.
 fn resolve_abs_profile(path: &Path) -> Result<ProfileInfo> {
     if !path.is_dir() {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "profile dir not found: {}",
             path.display()
         )));
@@ -58,7 +58,7 @@ fn resolve_abs_profile(path: &Path) -> Result<ProfileInfo> {
 pub fn validate_binary_override(path: &str) -> Result<PathBuf> {
     let p = PathBuf::from(path);
     if !p.is_file() {
-        return Err(BladeError::Other(format!("binary not found: {path}")));
+        return Err(ObuError::Other(format!("binary not found: {path}")));
     }
     // Store ABSOLUTE: a relative override resolved against the spawning
     // shell's cwd would silently break in another process (daemon, MCP) that
@@ -73,9 +73,7 @@ pub fn validate_binary_override(path: &str) -> Result<PathBuf> {
             .map(|m| m.permissions().mode() & 0o111 != 0)
             .unwrap_or(false);
         if !exec {
-            return Err(BladeError::Other(format!(
-                "binary is not executable: {path}"
-            )));
+            return Err(ObuError::Other(format!("binary is not executable: {path}")));
         }
     }
     Ok(p)
@@ -85,7 +83,7 @@ pub fn validate_binary_override(path: &str) -> Result<PathBuf> {
 /// `rb forget` after the browser itself was uninstalled still needs a
 /// target, and at that point discovery cannot name one.
 pub fn sole_root_id() -> Option<String> {
-    let dir = platform::blade_dir().join("realbrowser");
+    let dir = platform::obu_dir().join("realbrowser");
     let mut ids: Vec<String> = std::fs::read_dir(dir)
         .ok()?
         .flatten()
@@ -104,8 +102,8 @@ pub fn sole_root_id() -> Option<String> {
 pub fn resolve_selection(cfg: &Config) -> Result<(BrowserSpec, ProfileInfo)> {
     let browsers = discover();
     if browsers.is_empty() {
-        return Err(BladeError::Other(
-            "no Chromium-family browser found. Install one (Chromium, Chrome, Brave, Helium, Edge, Vivaldi, Opera) or set a custom binary via `bladebro rb use --binary <path>`.".into(),
+        return Err(ObuError::Other(
+            "no Chromium-family browser found. Install one (Chromium, Chrome, Brave, Helium, Edge, Vivaldi, Opera) or set a custom binary via `obu rb use --binary <path>`.".into(),
         ));
     }
 
@@ -116,7 +114,7 @@ pub fn resolve_selection(cfg: &Config) -> Result<(BrowserSpec, ProfileInfo)> {
             .cloned()
             .ok_or_else(|| {
                 let avail: Vec<&str> = browsers.iter().map(|b| b.id.as_str()).collect();
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "browser `{id}` not found. Available: {}",
                     avail.join(", ")
                 ))
@@ -163,7 +161,7 @@ pub fn resolve_selection(cfg: &Config) -> Result<(BrowserSpec, ProfileInfo)> {
             .cloned()
             .ok_or_else(|| {
                 let avail: Vec<&str> = profiles.iter().map(|p| p.key.as_str()).collect();
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "profile `{key}` not found in {}. Available: {}",
                     spec.profile_root.display(),
                     if avail.is_empty() {
@@ -175,14 +173,14 @@ pub fn resolve_selection(cfg: &Config) -> Result<(BrowserSpec, ProfileInfo)> {
             })?,
         None => profiles.first().cloned().ok_or_else(|| {
             if spec.profile_root.is_dir() {
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "no profiles found under {}",
                     spec.profile_root.display()
                 ))
             } else {
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "profile root {} does not exist yet — launch {} once so it creates one, \
-                     or point `bladebro rb profile <absolute path>` at an existing profile",
+                     or point `obu rb profile <absolute path>` at an existing profile",
                     spec.profile_root.display(),
                     spec.name
                 ))
@@ -211,7 +209,7 @@ pub(super) fn pick_recency_index(values: &[u64]) -> Option<usize> {
 /// session (`session_live` — a page attached, owned or not) whose lane or
 /// launch inputs changed since its launch must be switched at the next
 /// action. Attach sessions have no owned browser but are still driven by
-/// bladebro — `rb off` must detach them, not keep steering the user's browser.
+/// obu — `rb off` must detach them, not keep steering the user's browser.
 /// Settled sessions (nothing changed) and sessions with no live page are
 /// exempt, so agent-lane sessions never pay a pointless relaunch.
 pub fn session_drifted(
@@ -296,7 +294,7 @@ pub fn ensure_import(spec: &BrowserSpec, profile: &ProfileInfo) -> Result<Import
         eprintln!(
             "{} your browser ({owner}) is open — importing its profile now. The \
              copy may miss the last few writes (SQLite snapshot); the source is never written \
-             to. `bladebro rb refresh` with the browser closed gives a clean copy.",
+             to. `obu rb refresh` with the browser closed gives a clean copy.",
             crate::ui::err::dim("[realbrowser]")
         );
     }

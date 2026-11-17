@@ -147,19 +147,19 @@ const PERMISSIONS_PATCH: &str = include_str!("js/permissions_patch.js");
 /// → 33% headless) is superseded. `Emulation.setAutomationOverride{enabled:false}`
 /// does NOT clear the flag (accepted, no effect — measured 2026-09-26, page-
 /// and browser-level), and that is why the MCP still defaults to WS: this
-/// patch serves only the explicit `BLADE_TRANSPORT=pipe` opt-in.
+/// patch serves only the explicit `OBU_TRANSPORT=pipe` opt-in.
 const WEBDRIVER_PATCH: &str = include_str!("js/webdriver_patch.js");
 
-/// Locale override — navigator.language/languages must match BLADE_LOCALE.
-/// Applied when BLADE_LOCALE is set (S6: geo-consistent identity).
+/// Locale override — navigator.language/languages must match OBU_LOCALE.
+/// Applied when OBU_LOCALE is set (S6: geo-consistent identity).
 const LOCALE_OVERRIDE: &str = include_str!("js/locale_override.js");
 
-/// Seeded canvas+audio noise block — opt-in via BLADE_NOISE=1 (D14: noise
+/// Seeded canvas+audio noise block — opt-in via OBU_NOISE=1 (D14: noise
 /// injection is ML-detectable as browser tampering on FingerprintJS-class
 /// detectors; real hardware fingerprints are stable and coherent without it).
 const NOISE: &str = include_str!("js/noise.js");
 
-/// WebRTC ICE filtering — applied ONLY when BLADE_PROXY is set. Without a
+/// WebRTC ICE filtering — applied ONLY when OBU_PROXY is set. Without a
 /// proxy, stripping candidates breaks legit WebRTC for zero privacy gain
 /// (the page learns the same IP from HTTP; host candidates are mDNS-
 /// obfuscated by Chrome itself). With a proxy, three layers keep the real IP
@@ -389,7 +389,7 @@ fn assemble_page_script(plan: &ScriptPlan<'_>) -> String {
         // cross-tab/cross-frame hub a SharedWorker exists for never formed),
         // and relative importScripts/fetch inside it resolved against blob:.
         // Correctness wins: shared workers run native. Known mask gap: they
-        // report the real GL renderer and, with BLADE_LOCALE, the real
+        // report the real GL renderer and, with OBU_LOCALE, the real
         // WorkerNavigator.language(s), while the page and dedicated workers
         // report the spoofed values. Page-level auto-attach never reports
         // shared_worker targets (Chromium 156); browser-level
@@ -431,7 +431,7 @@ fn assemble_page_script(plan: &ScriptPlan<'_>) -> String {
 /// WebGL spoof — a real GPU is reported honestly (no mask), software GL
 /// gets the spoof (D14 — coherence over noise). Externally-attached
 /// browsers fall back to a live probe here. Canvas/audio noise is opt-in
-/// via BLADE_NOISE=1. BLADE_WEBGL=spoof|real forces the GL decision.
+/// via OBU_NOISE=1. OBU_WEBGL=spoof|real forces the GL decision.
 /// Returns the script identifier.
 pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<ScriptId> {
     // Real-browser lane: the injection layer is OFF by design. The user's
@@ -444,7 +444,7 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
     }
 
     // Persistent seed: stable across sessions (canvas/audio fingerprint
-    // consistency). Generated once, stored in ~/.blade/.fingerprint.json.
+    // consistency). Generated once, stored in ~/.obu/.fingerprint.json.
     let seed: u32 = crate::fingerprint::load_or_create_seed();
 
     // One environment probe drives every adaptive decision (S8/S15).
@@ -452,12 +452,12 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
 
     // Adaptive GL decision, reconciled against the live page on every
     // attach (see `adaptive_gl_spoof`). The launch healthcheck (browser.rs)
-    // probes the real backend when Bladebro launches the browser itself, but
+    // probes the real backend when Obu launches the browser itself, but
     // a GPU process can degrade mid-session (crash → Chrome restarts it with
     // GL disabled → every context is null). Trusting the launch verdict
     // alone served pages a null-GL browser with the spoof inert and no
     // warning; the live reconcile closes that.
-    let gl_mode = std::env::var("BLADE_WEBGL").unwrap_or_else(|_| "auto".to_string());
+    let gl_mode = std::env::var("OBU_WEBGL").unwrap_or_else(|_| "auto".to_string());
     let spoof_gl = match gl_mode.as_str() {
         "spoof" => true,
         "real" => false,
@@ -471,7 +471,7 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
     // page-side gate passes real devices through untouched, so installing it
     // when the count is unreadable is behavior-neutral on machines that have
     // devices.
-    let patch_media = match std::env::var("BLADE_MEDIA").as_deref() {
+    let patch_media = match std::env::var("OBU_MEDIA").as_deref() {
         Ok("patch") => true,
         Ok("real") => false,
         _ => env.media_devices <= 0,
@@ -479,24 +479,24 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
     if patch_media {
         eprintln!("[stealth] registering mediaDevices patch");
     }
-    let noise = std::env::var("BLADE_NOISE")
+    let noise = std::env::var("OBU_NOISE")
         .map(|v| v == "1")
         .unwrap_or(false);
     // Explicit override (per-domain profile, S11) beats the env var.
     let raw_locale = locale_override
         .map(String::from)
-        .or_else(|| std::env::var("BLADE_LOCALE").ok())
+        .or_else(|| std::env::var("OBU_LOCALE").ok())
         .filter(|s| !s.is_empty());
     let locale = raw_locale.as_deref().and_then(normalize_locale);
     if raw_locale.is_some() && locale.is_none() {
-        eprintln!("[stealth] WARNING: locale rejected (BLADE_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped");
+        eprintln!("[stealth] WARNING: locale rejected (OBU_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped");
     }
     if let Some(ref l) = locale {
         eprintln!("[stealth] registering locale override: {l}");
     }
 
     // WebRTC candidate filtering only under a proxy (see RTC_PATCH docs).
-    let rtc = std::env::var("BLADE_PROXY")
+    let rtc = std::env::var("OBU_PROXY")
         .map(|v| !v.is_empty())
         .unwrap_or(false);
     GL_SPOOFED.store(spoof_gl, Ordering::Relaxed);
@@ -512,8 +512,8 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
     // while a headful lane reports the honest state (verified against stock
     // on the same display: headful-on-Xvfb says 'prompt'). Installing it
     // otherwise is both a lie on honest desktops and a patched function a
-    // lie engine can inspect. BLADE_PERMS=patch|real overrides.
-    let patch_perms = match std::env::var("BLADE_PERMS").as_deref() {
+    // lie engine can inspect. OBU_PERMS=patch|real overrides.
+    let patch_perms = match std::env::var("OBU_PERMS").as_deref() {
         Ok("patch") => true,
         Ok("real") => false,
         _ => crate::browser::launched_headless(),
@@ -536,11 +536,11 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
         *guard = script.clone();
     }
 
-    // BLADE_DUMP_INJECT=<path>: write the exact assembled script to a file.
+    // OBU_DUMP_INJECT=<path>: write the exact assembled script to a file.
     // Used by the release checklist / regression work to syntax-lint the
     // injection (`node --check`): a parse error silently disables EVERY patch
     // (the audit's vector score drops, but a lint catches it before it ships).
-    if let Ok(path) = std::env::var("BLADE_DUMP_INJECT") {
+    if let Ok(path) = std::env::var("OBU_DUMP_INJECT") {
         let _ = std::fs::write(&path, &script);
         if let Some(w) = worker_gl_spoof(locale.as_deref()) {
             let _ = std::fs::write(format!("{path}.worker.js"), w);
@@ -553,7 +553,7 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
             Some(json!({
                 "source": script,
                 // Also run in the CURRENT document. Without this, a
-                // bladebro attaching to an already-loaded page (the
+                // obu attaching to an already-loaded page (the
                 // --port connect path, or a daemon attach mid-session)
                 // drives an UNPATCHED document until the first navigation.
                 "runImmediately": true,
@@ -573,7 +573,7 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
 /// Worker GL spoof script — the same proxy architecture as the page
 /// (PROXY_HELPERS is the shared helper block, so the two realms cannot
 /// drift). Returns None when neither the GL spoof is active nor a locale
-/// override is set (M11: with BLADE_LOCALE, WorkerNavigator.language must
+/// override is set (M11: with OBU_LOCALE, WorkerNavigator.language must
 /// match the main frame or the mismatch is itself a fingerprint).
 /// D22: injected via CDP Target.setAutoAttach into each worker target.
 pub fn worker_gl_spoof(locale: Option<&str>) -> Option<String> {
@@ -633,10 +633,8 @@ mod tests {
             eprintln!("node not available — skipping the {scenario} script check");
             return;
         }
-        let path = std::env::temp_dir().join(format!(
-            "bladebro-inject-{scenario}-{}.js",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("obu-inject-{scenario}-{}.js", std::process::id()));
         std::fs::write(&path, script).expect("write assembled script");
         let out = std::process::Command::new("node")
             .arg(concat!(

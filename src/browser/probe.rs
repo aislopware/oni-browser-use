@@ -321,7 +321,7 @@ mod probe_tests {
     fn once_expr_is_valid_js() {
         // A syntax break here silently degrades every health check to
         // Unknown — the same class the assembled-injection node checks guard.
-        let dir = std::env::temp_dir().join("bladebro-probe-tests");
+        let dir = std::env::temp_dir().join("obu-probe-tests");
         if std::fs::create_dir_all(&dir).is_err() {
             return;
         }

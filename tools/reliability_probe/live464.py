@@ -2,7 +2,7 @@
 """Agent-facing parity and mutation-honesty checks, with owned fixtures only.
 
 Use --baseline to retain every failed check instead of stopping on failure.
-BLADEBRO chooses the actual binary under test; POLISH_OUT retains receipts.
+OBU chooses the actual binary under test; POLISH_OUT retains receipts.
 """
 import http.server
 import json
@@ -16,7 +16,7 @@ import tempfile
 import threading
 import time
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 OUT = Path(os.environ.get('POLISH_OUT', 'work/release464/live.json'))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 checks = []
@@ -69,9 +69,9 @@ server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 origin = 'http://127.0.0.1:' + str(server.server_port)
 try:
-    with tempfile.TemporaryDirectory(prefix='blade-polish-') as home:
-        env = dict(os.environ, BLADE_HOME=home, BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1', BLADE_LANE='agent')
-        for key in ('BLADE_PROFILE_DIR', 'BLADE_TRANSPORT', 'BLADE_PROXY', 'BLADE_FRESH'):
+    with tempfile.TemporaryDirectory(prefix='obu-polish-') as home:
+        env = dict(os.environ, OBU_HOME=home, OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1', OBU_LANE='agent')
+        for key in ('OBU_PROFILE_DIR', 'OBU_TRANSPORT', 'OBU_PROXY', 'OBU_FRESH'):
             env.pop(key, None)
         with OUT.with_suffix('.stderr.log').open('w') as stderr:
             proc = subprocess.Popen([BINARY, 'mcp'], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, text=True, encoding='utf-8')

@@ -15,11 +15,11 @@ node_modules/
 .env.*
 v2.md
 v3.md
-npm/bladebro-linux-x64/bladebro
-npm/bladebro-windows-x64/bladebro.exe
-npm/bladebro-darwin-x64/bladebro
-npm/bladebro-darwin-arm64/bladebro
-npm/bladebro-linux-arm64/bladebro
+npm/obu-linux-x64/obu
+npm/obu-windows-x64/obu.exe
+npm/obu-darwin-x64/obu
+npm/obu-darwin-arm64/obu
+npm/obu-linux-arm64/obu
 bench/stealthbench_run/
 speed/
 __pycache__/

@@ -8,7 +8,7 @@ use tokio::io::BufReader;
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 use crate::platform::ShutdownSignals;
 
@@ -36,8 +36,8 @@ use super::{request_version, shape_result, SUPPORTED_VERSIONS};
 ///   first (cancelling it could orphan the half-started Chrome).
 /// - SIGKILL/panic → the next launch's orphan reaper kills
 ///   the leaked Chrome/Xvfb and removes the session profile.
-/// - A second bladebro NEVER touches this session's Chrome:
-///   profiles are per-process (`~/.blade/profiles/sess-<pid>`).
+/// - A second obu NEVER touches this session's Chrome:
+///   profiles are per-process (`~/.obu/profiles/sess-<pid>`).
 pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
     // First, before anything can keep us busy: a signal that lands while
     // a request is being handled must be buffered for the loop below.
@@ -64,7 +64,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
     let mut relaunch_note: Option<String> = None;
     // Set only when the idle timer actually closed Chrome. Inferring it
     // from "no page + idle time elapsed" also matched a client whose first
-    // call came after BLADE_IDLE_TIMEOUT, telling it Chrome "was restarted"
+    // call came after OBU_IDLE_TIMEOUT, telling it Chrome "was restarted"
     // when it had never run.
     let mut idle_closed = false;
     // Fingerprint of the launch inputs the live browser started with; the
@@ -93,7 +93,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
             // fires right after it (MissedTickBehavior::Delay).
             biased;
             _ = signals.recv() => {
-                eprintln!("[bladebro] termination signal — shutting down Chrome gracefully");
+                eprintln!("[obu] termination signal — shutting down Chrome gracefully");
                 break;
             }
             line = crate::framing::read_until_limited(&mut reader, b'\n', &mut input, 8 * 1024 * 1024) => {
@@ -108,7 +108,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                         }
                     },
                     Err(e) => {
-                        eprintln!("[bladebro] stdin read error: {e}");
+                        eprintln!("[obu] stdin read error: {e}");
                         break;
                     }
                 };
@@ -122,7 +122,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                         // response with id null. The old silent-drop left a
                         // client whose request was truncated mid-write
                         // waiting for a response forever.
-                        eprintln!("[bladebro] invalid JSON: {e}");
+                        eprintln!("[obu] invalid JSON: {e}");
                         let resp = json!({
                             "jsonrpc": "2.0",
                             "id": null,
@@ -223,7 +223,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                             if browser.is_some() {
                                 if drifted {
                                     eprintln!(
-                                        "[bladebro] lane/settings changed — relaunching Chrome"
+                                        "[obu] lane/settings changed — relaunching Chrome"
                                     );
                                     if let Some(b) = browser.take() {
                                         shutdown_browser(b).await;
@@ -236,7 +236,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     });
                                 } else {
                                     // Chrome crashed or is dead, kill it first.
-                                    eprintln!("[bladebro] browser connection lost, relaunching...");
+                                    eprintln!("[obu] browser connection lost, relaunching...");
                                     if let Some(b) = browser.take() {
                                         shutdown_browser(b).await;
                                     }
@@ -252,13 +252,13 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                 // ours to close. The launch below opens the
                                 // browser the current lane/settings call for.
                                 eprintln!(
-                                    "[bladebro] lane/settings changed — detaching from the attached browser"
+                                    "[obu] lane/settings changed — detaching from the attached browser"
                                 );
                                 page = None;
                                 relaunch_note = Some(if crate::realbrowser::real_lane() {
-                                    "note: the real-browser lane settings changed — bladebro detached from the attached browser (left running, untouched) and reopened per the current settings. Page state reset to about:blank; navigate to continue.".into()
+                                    "note: the real-browser lane settings changed — obu detached from the attached browser (left running, untouched) and reopened per the current settings. Page state reset to about:blank; navigate to continue.".into()
                                 } else {
-                                    "note: the real-browser lane is now OFF — bladebro detached from the attached browser (left running, untouched) and relaunched as the isolated agent browser. Page state reset to about:blank; navigate to continue.".into()
+                                    "note: the real-browser lane is now OFF — obu detached from the attached browser (left running, untouched) and relaunched as the isolated agent browser. Page state reset to about:blank; navigate to continue.".into()
                                 });
                             } else if idle_closed && relaunch_note.is_none() {
                                 // Post-idle relaunch: the agent's refs
@@ -268,7 +268,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     "note: Chrome was restarted after idle shutdown — page state reset to about:blank. Navigate to continue.".into()
                                 );
                             } else {
-                                eprintln!("[bladebro] launching Chrome (first tool call)...");
+                                eprintln!("[obu] launching Chrome (first tool call)...");
                             }
                             match launch_browser(use_pipe, host, port).await {
                                 Ok((new_page, new_browser)) => {
@@ -312,7 +312,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("[bladebro] Chrome launch failed: {e}");
+                                    eprintln!("[obu] Chrome launch failed: {e}");
                                     if !is_notification {
                                         let mut result = json!({
                                             "content": [{ "type": "text", "text":
@@ -344,12 +344,12 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                             eprintln!("[nav-timing] handle_tools_call total: {:?}", _hc_t.elapsed());
                         }
 
-                        // handle_tools_call returns Result<Value, BladeError>:
+                        // handle_tools_call returns Result<Value, ObuError>:
                         // Ok(Value) = normal response. Err(Closed) = browser
                         // died during the call, need to relaunch + retry.
                         let resp = match res {
                             Ok(Ok(v)) => v,
-                            Ok(Err(BladeError::Closed)) => {
+                            Ok(Err(ObuError::Closed)) => {
                                 // Self-heal: relaunch, then retry — but ONLY
                                 // idempotent reads. Blindly re-running a
                                 // click/type/submit after a crash can
@@ -360,7 +360,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     params.get("name").and_then(Value::as_str).unwrap_or(""),
                                     &params["arguments"],
                                 );
-                                eprintln!("[bladebro] browser closed during tool call, reconnecting...");
+                                eprintln!("[obu] browser closed during tool call, reconnecting...");
                                 if let Some(b) = browser.take() {
                                     shutdown_browser(b).await;
                                 }
@@ -396,13 +396,13 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                                 Some(Err(_)) => panicked(id_retry),
                                                 Some(Ok(Ok(v))) => v,
                                                 Some(Ok(Err(e))) => {
-                                                    eprintln!("[bladebro] retry after reconnect failed: {e}");
+                                                    eprintln!("[obu] retry after reconnect failed: {e}");
                                                     json!({
                                                         "jsonrpc": "2.0",
                                                         "id": id_retry,
                                                         "result": {
                                                             "content": [{ "type": "text", "text":
-                                                                format!("\u{2717} Browser connection lost. Bladebro reconnected but the retry failed: {e}. Try the tool call again.") }],
+                                                                format!("\u{2717} Browser connection lost. Obu reconnected but the retry failed: {e}. Try the tool call again.") }],
                                                             "isError": true,
                                                         }
                                                     })
@@ -421,13 +421,13 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                         }
                                     }
                                     Err(e) => {
-                                        eprintln!("[bladebro] reconnect failed: {e}");
+                                        eprintln!("[obu] reconnect failed: {e}");
                                         json!({
                                             "jsonrpc": "2.0",
                                             "id": id_retry,
                                             "result": {
                                                 "content": [{ "type": "text", "text":
-                                                    format!("\u{2717} Browser connection lost. Bladebro tried to reconnect but failed: {e}. The server is still running, try again in a moment.") }],
+                                                    format!("\u{2717} Browser connection lost. Obu tried to reconnect but failed: {e}. The server is still running, try again in a moment.") }],
                                                 "isError": true,
                                             }
                                         })
@@ -446,7 +446,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     || msg.contains("Session closed")
                                     || msg.contains("Target.detachedFromTarget");
                                 if tab_died {
-                                    eprintln!("[bladebro] attached tab died, opening a fresh tab...");
+                                    eprintln!("[obu] attached tab died, opening a fresh tab...");
                                     let p = page.as_mut().unwrap();
                                     match recover_dead_tab(p).await {
                                         Ok(()) if super::retry_safe(
@@ -586,7 +586,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                 if browser.is_some() && last_sync.elapsed() >= sync_interval {
                     if let Some(ref p) = page {
                         if !p.cdp_ref().is_closed() && !crate::realbrowser::real_lane() {
-                            if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[bladebro] login snapshot failed: {e}"); }
+                            if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
                         }
                     }
                     // Sync knowledge base to disk (prune + write).
@@ -619,7 +619,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                     && crate::realbrowser::should_idle_shutdown()
                 {
                     eprintln!(
-                        "[bladebro] idle timeout ({}s), shutting down Chrome to save memory",
+                        "[obu] idle timeout ({}s), shutting down Chrome to save memory",
                         idle_secs
                     );
                     if let Some(b) = browser.take() {
@@ -628,7 +628,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                         // (Never on the real lane — not our cookie store.)
                         if let Some(ref p) = page {
                             if !crate::realbrowser::real_lane() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[bladebro] login snapshot failed: {e}"); }
+                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
                             }
                         }
                         shutdown_browser(b).await;
@@ -648,7 +648,7 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
         if let Some(ref p) = page {
             if !crate::realbrowser::real_lane() {
                 if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await {
-                    eprintln!("[bladebro] login snapshot failed: {e}");
+                    eprintln!("[obu] login snapshot failed: {e}");
                 }
             }
         }
@@ -687,7 +687,7 @@ fn send(out: &mut impl Write, msg: &Value) -> bool {
             // and a panic here would skip the teardown all the same.
             let _ = writeln!(
                 std::io::stderr(),
-                "[bladebro] stdout write failed ({e}) — client gone, shutting down Chrome gracefully"
+                "[obu] stdout write failed ({e}) — client gone, shutting down Chrome gracefully"
             );
             false
         }
@@ -706,13 +706,13 @@ fn cancelled_by_signal(
     // Not eprintln!: a SIGHUP can mean the host (and its stderr) is gone.
     let _ = writeln!(
         std::io::stderr(),
-        "[bladebro] termination signal during a tool call — cancelled it; shutting down Chrome gracefully"
+        "[obu] termination signal during a tool call — cancelled it; shutting down Chrome gracefully"
     );
     if is_notification {
         return;
     }
     let mut result = json!({
-        "content": [{ "type": "text", "text": "\u{2717} bladebro is shutting down (termination signal): this call was cancelled mid-flight and its outcome is UNKNOWN. After the restart, inspect the destination before repeating it." }],
+        "content": [{ "type": "text", "text": "\u{2717} obu is shutting down (termination signal): this call was cancelled mid-flight and its outcome is UNKNOWN. After the restart, inspect the destination before repeating it." }],
         "isError": true,
     });
     shape_result(&mut result, version);
