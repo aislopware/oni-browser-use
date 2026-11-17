@@ -41,9 +41,9 @@
     <line x1="700" y1="0" x2="700" y2="200"/>
   </g>
 
-  <!-- Katana logo (left side, vertical, centered, wide blade) -->
+  <!-- Katana logo (left side, vertical, centered, wide obu) -->
   <g transform="translate(35, 8)" filter="url(#glow)">
-    <!-- Blade (pointing up, wide, slight curve, centered on x=28) -->
+    <!-- Obu (pointing up, wide, slight curve, centered on x=28) -->
     <path d="M 41 4
              Q 37 50 43 110
              L 13 110
@@ -61,10 +61,10 @@
     <!-- Hamon line (temper line) -->
     <path d="M 35 8 Q 28 50 22 105" fill="none" stroke="#00d4aa" stroke-width="0.5" opacity="0.3" stroke-dasharray="3,2"/>
 
-    <!-- Guard (tsuba) — wider than blade, centered on x=28 -->
+    <!-- Guard (tsuba) — wider than obu, centered on x=28 -->
     <rect x="2" y="110" width="52" height="8" rx="2" fill="#2a2a3a" stroke="#ff9f43" stroke-width="1" opacity="0.9"/>
 
-    <!-- Handle (tsuka) — centered on x=28, matches blade width -->
+    <!-- Handle (tsuka) — centered on x=28, matches obu width -->
     <rect x="14" y="118" width="28" height="56" rx="3" fill="#1a1a25" stroke="#3a3a4a" stroke-width="1"/>
 
     <!-- Handle wrap (diamond cross pattern) -->
@@ -84,7 +84,7 @@
   <!-- Title -->
   <text x="165" y="68" font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
         font-size="38" font-weight="800" fill="#f0f0f5" letter-spacing="-1">
-    Bladebro
+    Obu
   </text>
 
   <!-- Tagline -->

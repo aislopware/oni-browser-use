@@ -1,7 +1,7 @@
 //! Binary download and verification.
 
 use super::version;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use std::path::PathBuf;
 
 /// A downloaded binary, ready to be installed. It owns its temp file:
@@ -26,7 +26,7 @@ impl Drop for DownloadedBinary {
 /// dir (e.g. group-writable /usr/local/bin) let a local attacker pre-place
 /// a symlink and have the "downloaded binary" written over an arbitrary
 /// victim file — which the updater then EXECUTES during verification.
-const TMP_PREFIX: &str = ".bladebro-update";
+const TMP_PREFIX: &str = ".obu-update";
 
 /// The first release tag whose assets MUST ship .sha256 checksums.
 /// Targets at or above this version fail the update when no checksum can
@@ -78,18 +78,18 @@ pub fn parse_checksum(text: &str) -> Option<String> {
 async fn verify_sha256(binary_path: &std::path::Path, asset_url: &str, tag: &str) -> Result<()> {
     let checksum_url = format!("{asset_url}.sha256");
     let client = reqwest::Client::builder()
-        .user_agent("bladebro-updater")
+        .user_agent("obu-updater")
         .timeout(std::time::Duration::from_secs(15))
         .build()
-        .map_err(|e| BladeError::Other(format!("http client: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("http client: {e}")))?;
 
     let required = checksum_required(tag);
-    let fetch_failed = |why: &str| -> BladeError {
-        BladeError::Other(format!(
+    let fetch_failed = |why: &str| -> ObuError {
+        ObuError::Other(format!(
             "cannot verify update integrity: {why}.\n\
              Release {tag} must ship a .sha256 checksum next to every binary.\n\
              The download was NOT installed. Update via npm instead:\n\
-             npm install -g bladebro"
+             cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
         ))
     };
 
@@ -180,7 +180,7 @@ async fn verify_sha256(binary_path: &std::path::Path, asset_url: &str, tag: &str
         if required {
             fetch_failed(&format!("cannot read checksum: {e}"))
         } else {
-            BladeError::Other(format!("cannot read checksum: {e}"))
+            ObuError::Other(format!("cannot read checksum: {e}"))
         }
     })?;
 
@@ -198,14 +198,14 @@ async fn verify_sha256(binary_path: &std::path::Path, asset_url: &str, tag: &str
     // Compute SHA256 of the downloaded binary.
     use sha2::{Digest, Sha256};
     let mut file = std::fs::File::open(binary_path)
-        .map_err(|e| BladeError::Other(format!("cannot read binary for hash: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot read binary for hash: {e}")))?;
     let mut hash = Sha256::new();
     use std::io::Read;
     let mut buffer = [0; 64 * 1024];
     loop {
         let count = file
             .read(&mut buffer)
-            .map_err(|e| BladeError::Other(format!("cannot hash binary: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot hash binary: {e}")))?;
         if count == 0 {
             break;
         }
@@ -214,7 +214,7 @@ async fn verify_sha256(binary_path: &std::path::Path, asset_url: &str, tag: &str
     let actual_hash: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
 
     if actual_hash != expected_hash {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "SHA256 mismatch! Expected {expected_hash}, got {actual_hash}.\n\
              The downloaded binary may be corrupted or tampered with.\n\
              Aborting update for safety."
@@ -235,10 +235,10 @@ pub async fn download_binary(release: &version::Release) -> Result<DownloadedBin
         } else {
             available.join(", ")
         };
-        BladeError::Other(format!(
+        ObuError::Other(format!(
             "no binary for {} in release {}. Available assets: {}\n\n\
-             To update via npm:  npm install -g bladebro\n\
-             Or build from source:  git clone https://github.com/dondai44423/bladebro.git && cd bladebro && cargo build --release",
+             To update via npm:  cargo install --locked --git https://github.com/aislopware/oni-browser-use obu\n\
+             Or build from source:  git clone https://github.com/aislopware/oni-browser-use.git && cd oni-browser-use && cargo build --release",
             version::platform_label(),
             release.tag_name,
             avail_str,
@@ -246,7 +246,7 @@ pub async fn download_binary(release: &version::Release) -> Result<DownloadedBin
     })?;
 
     let current = std::env::current_exe()
-        .map_err(|e| BladeError::Other(format!("cannot find current exe: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot find current exe: {e}")))?;
     let dir = current.parent().unwrap_or(std::path::Path::new("."));
     // Unique, unpredictable temp name + O_EXCL create: a predictable
     // fixed name allowed a local attacker to pre-place a symlink at the
@@ -264,7 +264,7 @@ pub async fn download_binary(release: &version::Release) -> Result<DownloadedBin
     // Pre-flight: check available disk space if we know the asset size.
     if asset.size > 0 {
         if let Err(e) = check_disk_space(dir, asset.size) {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "insufficient disk space for download (~{} MB needed): {e}\n\
                  Free space in {} and try again.",
                 asset.size / 1_000_000,
@@ -298,7 +298,7 @@ pub async fn download_binary(release: &version::Release) -> Result<DownloadedBin
             }
         }
     }
-    Err(BladeError::Other(format!(
+    Err(ObuError::Other(format!(
         "download failed after 3 attempts: {last_err}"
     )))
 }
@@ -376,11 +376,11 @@ pub fn create_secure_tmp(dir: &std::path::Path) -> Result<std::path::PathBuf> {
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => {
-                return Err(BladeError::Other(format!("cannot create temp file: {e}")));
+                return Err(ObuError::Other(format!("cannot create temp file: {e}")));
             }
         }
     }
-    Err(BladeError::Other(
+    Err(ObuError::Other(
         "cannot create temp file: name collisions".into(),
     ))
 }
@@ -416,11 +416,11 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
         expected_size
     };
     if limit > MAX_BINARY_SIZE {
-        return Err(BladeError::Other("download size exceeds 500 MB".into()));
+        return Err(ObuError::Other("download size exceeds 500 MB".into()));
     }
     let existing = std::fs::metadata(tmp).map(|m| m.len()).unwrap_or(0);
     if existing > limit {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "partial download exceeds expected size".into(),
         ));
     }
@@ -430,10 +430,10 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
         return Ok(existing);
     }
     let client = reqwest::Client::builder()
-        .user_agent("bladebro-updater")
+        .user_agent("obu-updater")
         .timeout(std::time::Duration::from_secs(180))
         .build()
-        .map_err(|e| BladeError::Other(format!("http client: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("http client: {e}")))?;
     let mut req = client.get(url);
     if existing > 0 {
         req = req.header("Range", format!("bytes={existing}-"));
@@ -441,10 +441,10 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
     let mut resp = req
         .send()
         .await
-        .map_err(|e| BladeError::Other(format!("download failed: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("download failed: {e}")))?;
     let partial = resp.status() == reqwest::StatusCode::PARTIAL_CONTENT;
     if resp.status() != reqwest::StatusCode::OK && !partial {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "download failed: HTTP {}",
             resp.status()
         )));
@@ -482,7 +482,7 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
                 response_limit = end + 1;
             }
             _ => {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "download returned an invalid content range (Content-Range)".into(),
                 ))
             }
@@ -492,29 +492,29 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
         .content_length()
         .is_some_and(|len| len > response_limit - offset)
     {
-        return Err(BladeError::Other("download exceeds expected size".into()));
+        return Err(ObuError::Other("download exceeds expected size".into()));
     }
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .append(partial)
         .truncate(!partial)
         .open(tmp)
-        .map_err(|e| BladeError::Other(format!("cannot open temp file: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot open temp file: {e}")))?;
     let mut size = offset;
     while let Some(chunk) = resp
         .chunk()
         .await
-        .map_err(|e| BladeError::Other(format!("download interrupted: {e}")))?
+        .map_err(|e| ObuError::Other(format!("download interrupted: {e}")))?
     {
         if chunk.len() as u64 > response_limit - size {
-            return Err(BladeError::Other("download exceeds expected size".into()));
+            return Err(ObuError::Other("download exceeds expected size".into()));
         }
         file.write_all(&chunk)
-            .map_err(|e| BladeError::Other(format!("cannot write temp file: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot write temp file: {e}")))?;
         size += chunk.len() as u64;
     }
     if size == 0 || (target_size > 0 && size != target_size) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "incomplete download: {size} bytes, expected {target_size}"
         )));
     }
@@ -549,7 +549,7 @@ fn check_disk_space(dir: &std::path::Path, needed: u64) -> Result<()> {
                     if let Ok(avail_kb) = fields[idx].parse::<u64>() {
                         let avail = avail_kb * 1024;
                         if avail < needed + 10_000_000 {
-                            return Err(BladeError::Other(format!(
+                            return Err(ObuError::Other(format!(
                                 "only {:.1} MB available on disk",
                                 avail as f64 / 1_000_000.0
                             )));
@@ -575,7 +575,7 @@ fn check_disk_space(_dir: &std::path::Path, _needed: u64) -> Result<()> {
 /// (MH_CIGAM_64), which is what every darwin asset in this repo starts
 /// with. The pre-fix check compared a big-endian u32 against only the
 /// big-endian spellings, so it rejected every real darwin binary: macOS
-/// `bladebro -u` and `--rollback` failed with "not a valid binary for this
+/// `obu -u` and `--rollback` failed with "not a valid binary for this
 /// platform". Split from `binary_magic_ok` so the bytes stay unit-testable
 /// on every OS.
 pub(crate) fn macho_magic_ok(data: &[u8]) -> bool {
@@ -611,15 +611,15 @@ pub(crate) fn binary_magic_ok(data: &[u8]) -> bool {
 pub fn verify_binary(dl: &DownloadedBinary) -> Result<()> {
     use std::io::Read;
     let mut file = std::fs::File::open(&dl.path)
-        .map_err(|e| BladeError::Other(format!("cannot read downloaded file: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot read downloaded file: {e}")))?;
     let metadata = file.metadata()?;
     if !metadata.is_file() || metadata.len() != dl.size {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "downloaded file size changed after download — refusing verification".into(),
         ));
     }
     if metadata.len() < 4 {
-        return Err(BladeError::Other("downloaded file too small".into()));
+        return Err(ObuError::Other("downloaded file too small".into()));
     }
 
     let mut magic = [0; 4];
@@ -627,19 +627,19 @@ pub fn verify_binary(dl: &DownloadedBinary) -> Result<()> {
     let magic_ok = binary_magic_ok(&magic);
 
     if !magic_ok {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "downloaded file is not a valid binary for this platform".into(),
         ));
     }
 
     if dl.size < 1_000_000 {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "downloaded file suspiciously small ({} bytes)",
             dl.size
         )));
     }
     if dl.size > MAX_BINARY_SIZE {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "downloaded file suspiciously large ({} bytes)",
             dl.size
         )));
@@ -650,7 +650,7 @@ pub fn verify_binary(dl: &DownloadedBinary) -> Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dl.path, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| BladeError::Other(format!("cannot set executable permission: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot set executable permission: {e}")))?;
     }
 
     Ok(())
@@ -667,20 +667,20 @@ pub async fn verify_binary_runs(dl: &DownloadedBinary) -> Result<()> {
     let mut child = tokio::process::Command::new(&dl.path)
         .arg("--version")
         // Startup verification must not wait for GitHub/npm connectivity.
-        .env("BLADE_NO_UPDATE_CHECK", "1")
+        .env("OBU_NO_UPDATE_CHECK", "1")
         .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| BladeError::Other(format!("cannot execute downloaded binary: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot execute downloaded binary: {e}")))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| BladeError::Other("missing version stdout".into()))?;
+        .ok_or_else(|| ObuError::Other("missing version stdout".into()))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| BladeError::Other("missing version stderr".into()))?;
+        .ok_or_else(|| ObuError::Other("missing version stderr".into()))?;
     let output = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let (stdout, stderr, status) = tokio::try_join!(
             read_version_output(stdout),
@@ -698,14 +698,14 @@ pub async fn verify_binary_runs(dl: &DownloadedBinary) -> Result<()> {
         Ok(Ok(output)) => output,
         error => {
             let _ = child.kill().await;
-            return Err(BladeError::Other(match error {
+            return Err(ObuError::Other(match error {
                 Ok(Err(error)) => format!("downloaded binary version probe failed: {error}"),
                 _ => "downloaded binary --version did not finish within 5s".into(),
             }));
         }
     };
     if !output.status.success() {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "downloaded binary failed to start (exit {:?})\n  stdout: {}\n  stderr: {}",
             output.status.code(),
             String::from_utf8_lossy(&output.stdout).trim(),
@@ -717,9 +717,9 @@ pub async fn verify_binary_runs(dl: &DownloadedBinary) -> Result<()> {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    if !combined.to_lowercase().contains("bladebro") {
-        return Err(BladeError::Other(
-            "downloaded binary ran but doesn't identify as bladebro".into(),
+    if !combined.to_lowercase().contains("obu") {
+        return Err(ObuError::Other(
+            "downloaded binary ran but doesn't identify as obu".into(),
         ));
     }
     Ok(())
@@ -762,7 +762,7 @@ mod tests {
         std::fs::write(&marker, b"owned").unwrap();
         std::fs::write(
             &path,
-            "#!/bin/sh\nwhile [ -e \"$0.waiting\" ]; do :; done\nprintf 'bladebro fixture\\n'\n",
+            "#!/bin/sh\nwhile [ -e \"$0.waiting\" ]; do :; done\nprintf 'obu fixture\\n'\n",
         )
         .unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -793,13 +793,12 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         for (body, accepted) in [
             (
-                "[ \"$BLADE_NO_UPDATE_CHECK\" = 1 ] || exit 7\nprintf 'bladebro fixture\\n'"
-                    .to_string(),
+                "[ \"$OBU_NO_UPDATE_CHECK\" = 1 ] || exit 7\nprintf 'obu fixture\\n'".to_string(),
                 true,
             ),
-            ("printf 'bladebro fixture\\n'\nexit 9".to_string(), false),
+            ("printf 'obu fixture\\n'\nexit 9".to_string(), false),
             ("printf 'different program\\n'".to_string(), false),
-            (format!("printf '{}'", "bladebro".repeat(9000)), false),
+            (format!("printf '{}'", "obu".repeat(24000)), false),
         ] {
             let path = create_secure_tmp(&std::env::temp_dir()).unwrap();
             std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
@@ -817,7 +816,7 @@ mod tests {
 
     #[test]
     fn a_rejected_download_does_not_leave_its_temp_file() {
-        // `bladebro -u` returned early on a failed verify/swap without
+        // `obu -u` returned early on a failed verify/swap without
         // removing the temp file it had downloaded into the install dir.
         let path = create_secure_tmp(&std::env::temp_dir()).unwrap();
         std::fs::write(&path, b"not a binary").unwrap();
@@ -835,7 +834,7 @@ mod tests {
 
     #[test]
     fn leftover_sweep_removes_stale_temps_from_earlier_runs_only() {
-        let dir = std::env::temp_dir().join(format!("blade-update-sweep-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-update-sweep-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
@@ -851,7 +850,7 @@ mod tests {
         let stale = dir.join(format!("{TMP_PREFIX}-1-1700000000000000000-7.tmp"));
         // A concurrent updater mid-download: another pid, recently written.
         let fresh = dir.join(format!("{TMP_PREFIX}-2-1700000000000000001-8.tmp"));
-        let unrelated = dir.join("bladebro");
+        let unrelated = dir.join("obu");
         for p in [&stale, &fresh, &unrelated] {
             std::fs::write(p, b"x").unwrap();
         }
@@ -1040,7 +1039,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_empty() {
-        let dir = std::env::temp_dir().join("bladebro-test-verify-empty");
+        let dir = std::env::temp_dir().join("obu-test-verify-empty");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("empty.bin");
         std::fs::write(&path, b"").unwrap();
@@ -1055,7 +1054,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_tiny() {
-        let dir = std::env::temp_dir().join("bladebro-test-verify-tiny");
+        let dir = std::env::temp_dir().join("obu-test-verify-tiny");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("tiny.bin");
         std::fs::write(&path, b"ab").unwrap();
@@ -1070,7 +1069,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_wrong_magic() {
-        let dir = std::env::temp_dir().join("bladebro-test-verify-magic");
+        let dir = std::env::temp_dir().join("obu-test-verify-magic");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("wrong.bin");
         let mut f = std::fs::File::create(&path).unwrap();
@@ -1087,7 +1086,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_too_large() {
-        let dir = std::env::temp_dir().join("bladebro-test-verify-large");
+        let dir = std::env::temp_dir().join("obu-test-verify-large");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("large.bin");
         // Write a file with correct magic but fake size > 500MB
@@ -1119,16 +1118,16 @@ mod tests {
         // G11: two connections die without a response (transport-level —
         // the captured 4.3.0 failure class), the third serves the real
         // checksum — the update must verify, not fail on the first hiccup.
-        let dir = std::env::temp_dir().join(format!("blade-checksum-retry-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-checksum-retry-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let bin = dir.join("bladebro");
+        let bin = dir.join("obu");
         std::fs::write(&bin, b"FAKE BINARY BYTES").unwrap();
         use sha2::{Digest, Sha256};
         let hash: String = Sha256::digest(b"FAKE BINARY BYTES")
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
-        let body = format!("{hash}  bladebro\n");
+        let body = format!("{hash}  obu\n");
         let (url, server) = http_fixture(vec![
             "".into(),
             "".into(),
@@ -1154,9 +1153,9 @@ mod tests {
     async fn checksum_permanent_failures_do_not_retry_and_fail_closed() {
         // A 404 is permanent: exactly one attempt, no retry loop, no
         // install — and the error names the next step.
-        let dir = std::env::temp_dir().join(format!("blade-checksum-404-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-checksum-404-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let bin = dir.join("bladebro");
+        let bin = dir.join("obu");
         std::fs::write(&bin, b"FAKE").unwrap();
         let (url, server) = http_fixture(vec![
             "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),

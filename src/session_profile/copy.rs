@@ -10,7 +10,7 @@ const SKIP_ON_COPY: &[&str] = &[
     "SingletonSocket",
     "SingletonCookie",
     "lockfile",
-    ".blade-owner",
+    ".obu-owner",
     "Crashpad",
     "RunningChromeVersion",
     // Performance caches: large, regenerated on demand, and not needed
@@ -52,7 +52,7 @@ pub(crate) fn copy_profile_ex(src: &Path, dst: &Path, extra_skip: &[&str]) -> us
     copy_dir_filtered(src, dst, 0, extra_skip, &mut cut);
     if let Some(first) = &cut.first {
         eprintln!(
-            "[bladebro] profile copy incomplete: {} director{} nested deeper than \
+            "[obu] profile copy incomplete: {} director{} nested deeper than \
              {MAX_COPY_DEPTH} levels not copied (first: {})",
             cut.count,
             if cut.count == 1 { "y" } else { "ies" },

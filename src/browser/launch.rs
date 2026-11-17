@@ -35,7 +35,7 @@ impl Browser {
         for (attempt, no_sandbox) in attempts {
             let p = if auto { free_port() } else { Some(port) };
             let Some(p) = p else {
-                last_err = Some(BladeError::Other(
+                last_err = Some(ObuError::Other(
                     "cannot allocate a loopback debug port (ephemeral range exhausted)".into(),
                 ));
                 break;
@@ -49,22 +49,22 @@ impl Browser {
                         break;
                     }
                     if platform::termination_requested() {
-                        eprintln!(
-                            "[bladebro] termination signal received — not retrying the launch"
-                        );
+                        eprintln!("[obu] termination signal received — not retrying the launch");
                         break;
                     }
                     if attempt == 0 {
                         eprintln!(
-                            "[bladebro] sandboxed Chrome died at startup (root or restricted container?) — retrying with --no-sandbox"
+                            "[obu] sandboxed Chrome died at startup (root or restricted container?) — retrying with --no-sandbox"
                         );
                     } else if attempt == 1 {
-                        eprintln!("[bladebro] Chrome died at startup (port race?), retrying on a fresh port");
+                        eprintln!(
+                            "[obu] Chrome died at startup (port race?), retrying on a fresh port"
+                        );
                     }
                 }
             }
         }
-        Err(last_err.unwrap_or_else(|| BladeError::Other("launch failed".into())))
+        Err(last_err.unwrap_or_else(|| ObuError::Other("launch failed".into())))
     }
 
     /// Launch with the GL ladder: walk `gl_stages()`, keep the first stage
@@ -102,21 +102,19 @@ impl Browser {
                     if i + 1 < stages.len() && platform::termination_requested() {
                         // The command is over: hand this browser back to be
                         // closed rather than start another for a better stage.
-                        eprintln!(
-                            "[bladebro] termination signal received — not relaunching for WebGL"
-                        );
+                        eprintln!("[obu] termination signal received — not relaunching for WebGL");
                         return Ok(browser);
                     }
                     if i + 1 < stages.len() {
                         let next = stages[i + 1];
                         if next == *stage {
                             eprintln!(
-                                "[bladebro] GL healthcheck: no WebGL context via {} — retrying it once (fresh launch)",
+                                "[obu] GL healthcheck: no WebGL context via {} — retrying it once (fresh launch)",
                                 stage_label(*stage)
                             );
                         } else {
                             eprintln!(
-                                "[bladebro] GL healthcheck: no WebGL context via {} — escalating to {}",
+                                "[obu] GL healthcheck: no WebGL context via {} — escalating to {}",
                                 stage_label(*stage),
                                 stage_label(next)
                             );
@@ -124,9 +122,9 @@ impl Browser {
                         last = Some(browser);
                     } else {
                         eprintln!(
-                            "[bladebro] WARNING: no WebGL context after the full GL ladder — \
+                            "[obu] WARNING: no WebGL context after the full GL ladder — \
                              pages will see `getContext('webgl') === null` (stock Chrome on a \
-                             GL-less host behaves identically; no GL mask is applied). Run `bladebro audit`."
+                             GL-less host behaves identically; no GL mask is applied). Run `obu audit`."
                         );
                         set_gpu_state(Some(GpuState::Missing));
                         return Ok(browser);
@@ -134,7 +132,7 @@ impl Browser {
                 }
             }
         }
-        Err(BladeError::Other("no GL stages configured".into()))
+        Err(ObuError::Other("no GL stages configured".into()))
     }
 
     /// One launch attempt with a pinned GL stage (driven by `launch_inner`).
@@ -145,7 +143,7 @@ impl Browser {
     ) -> Result<(Self, Option<String>)> {
         let timing = std::env::var("NAV_TIMING").is_ok();
         let t0 = std::time::Instant::now();
-        // M18: Proxy support via BLADE_PROXY env var. Validated first, before
+        // M18: Proxy support via OBU_PROXY env var. Validated first, before
         // a profile, display or process exists: a malformed or credentialed
         // value fails the launch with a redacted reason instead of silently
         // producing a broken-proxy browser. The raw value may embed
@@ -153,13 +151,13 @@ impl Browser {
         let proxy = match crate::browser::proxy::env_browser_proxy() {
             Ok(p) => p,
             Err(reason) => {
-                return Err(BladeError::Other(format!(
-                    "invalid BLADE_PROXY value: {reason} (value redacted)"
+                return Err(ObuError::Other(format!(
+                    "invalid OBU_PROXY value: {reason} (value redacted)"
                 )));
             }
         };
         if let Some(spec) = &proxy {
-            eprintln!("[bladebro] using proxy: {}", spec.display);
+            eprintln!("[obu] using proxy: {}", spec.display);
         }
         let chrome_path = find_chrome()?;
         let extra = super::compat::agent_extra_flags()?;
@@ -177,7 +175,7 @@ impl Browser {
             // Stealth downgrade: headless=new carries real detection
             // surface. Never fail silently — the operator should know.
             eprintln!(
-                "[bladebro] WARNING: Xvfb unavailable — falling back to headless mode (reduced stealth). Install xvfb for headful-on-virtual-display."
+                "[obu] WARNING: Xvfb unavailable — falling back to headless mode (reduced stealth). Install xvfb for headful-on-virtual-display."
             );
         }
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -222,7 +220,7 @@ impl Browser {
         };
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let mode_str = "headful";
-        eprintln!("[bladebro] launching Chrome from {chrome_path} on port {port} ({mode_str})");
+        eprintln!("[obu] launching Chrome from {chrome_path} on port {port} ({mode_str})");
 
         let mut cmd = browser_command(&chrome_path, &user_data_dir);
         browser_temp_env(&mut cmd);
@@ -253,7 +251,7 @@ impl Browser {
         platform::isolate_owned_child(&mut cmd);
         let child = guard
             .spawn(&mut cmd)
-            .map_err(|e| BladeError::Other(format!("failed to launch Chrome: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("failed to launch Chrome: {e}")))?;
 
         let base = format!("127.0.0.1:{port}");
         if timing {
@@ -276,7 +274,7 @@ impl Browser {
                     // check is skipped.
                     if !endpoint_owned_by_pid(port, child.id()) {
                         if Instant::now() >= deadline {
-                            return Err(BladeError::Other(
+                            return Err(ObuError::Other(
                                 "the debug endpoint on this port is not served by the browser process — refusing it (possible local port hijack)".into(),
                             ));
                         }
@@ -284,7 +282,7 @@ impl Browser {
                         continue;
                     }
                     eprintln!(
-                        "[bladebro] Chrome ready: {} (protocol {})",
+                        "[obu] Chrome ready: {} (protocol {})",
                         v.browser, v.protocol_version
                     );
                     if timing {
@@ -293,7 +291,7 @@ impl Browser {
                     if super::compat::launched_incognito() {
                         let prepared = async {
                             let ws = v.web_socket_debugger_url.as_deref().ok_or_else(|| {
-                                BladeError::Other("Chrome returned no browser WebSocket URL".into())
+                                ObuError::Other("Chrome returned no browser WebSocket URL".into())
                             })?;
                             let client = crate::cdp::CdpClient::connect(ws).await?;
                             super::compat::prepare_incognito(&client).await
@@ -327,20 +325,20 @@ impl Browser {
                             // The launcher is gone, but a sandboxed helper
                             // it started may not be (Flatpak portal spawns):
                             // the guard sweeps the profile on return.
-                            return Err(BladeError::Other(format!(
+                            return Err(ObuError::Other(format!(
                                 "Chrome exited during startup: {status}{}",
                                 chrome_stderr_tail()
                             )));
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            return Err(BladeError::Other(format!(
+                            return Err(ObuError::Other(format!(
                                 "failed to poll Chrome status: {e}"
                             )));
                         }
                     }
                     if Instant::now() >= deadline {
-                        return Err(BladeError::Other(format!(
+                        return Err(ObuError::Other(format!(
                             "Chrome debug endpoint not responding after 20s{}",
                             chrome_stderr_tail()
                         )));
@@ -415,8 +413,8 @@ impl Browser {
         let proxy = match crate::browser::proxy::env_browser_proxy() {
             Ok(p) => p,
             Err(reason) => {
-                return Err(BladeError::Other(format!(
-                    "invalid BLADE_PROXY value: {reason} (value redacted)"
+                return Err(ObuError::Other(format!(
+                    "invalid OBU_PROXY value: {reason} (value redacted)"
                 )));
             }
         };
@@ -434,7 +432,7 @@ impl Browser {
             let mut startup_exit = false;
             let spawned_at = Instant::now();
             let Some(port) = free_port() else {
-                last_err = Some(BladeError::Other(
+                last_err = Some(ObuError::Other(
                     "cannot allocate a loopback debug port (ephemeral range exhausted)".into(),
                 ));
                 break;
@@ -458,10 +456,10 @@ impl Browser {
 
             let mut cmd = Command::new(binary);
             browser_temp_env(&mut cmd);
-            // BLADE_RB_DEBUG=1 surfaces the browser's own stderr — the only
+            // OBU_RB_DEBUG=1 surfaces the browser's own stderr — the only
             // way to see WHY a real-lane launch died (X11/Wayland/GL errors
             // are otherwise discarded into /dev/null).
-            let child_stderr = if std::env::var("BLADE_RB_DEBUG")
+            let child_stderr = if std::env::var("OBU_RB_DEBUG")
                 .map(|v| v == "1")
                 .unwrap_or(false)
             {
@@ -478,7 +476,7 @@ impl Browser {
             }
             platform::isolate_owned_child(&mut cmd);
             let mut child = cmd.spawn().map_err(|e| {
-                BladeError::Other(format!("failed to launch {}: {e}", binary.display()))
+                ObuError::Other(format!("failed to launch {}: {e}", binary.display()))
             })?;
 
             let base = format!("127.0.0.1:{port}");
@@ -492,7 +490,7 @@ impl Browser {
                         if !endpoint_owned_by_pid(port, child.id()) {
                             if Instant::now() >= deadline {
                                 platform::kill_child_tree(&mut child);
-                                last_err = Some(BladeError::Other(
+                                last_err = Some(ObuError::Other(
                                     "the debug endpoint on this port is not served by the browser process — refusing it (possible local port hijack)".into(),
                                 ));
                                 break;
@@ -525,7 +523,7 @@ impl Browser {
                                 platform::kill_child_tree(&mut child);
                                 if spawned_at.elapsed() < Duration::from_secs(5) && status.success()
                                 {
-                                    last_err = Some(BladeError::Other(
+                                    last_err = Some(ObuError::Other(
                                         "the browser exited immediately (status 0) — another \
                                          instance is almost certainly running on this profile \
                                          and Chrome handed the launch off to it. Close it and \
@@ -535,7 +533,7 @@ impl Browser {
                                     ));
                                 } else {
                                     startup_exit = true;
-                                    last_err = Some(BladeError::Other(format!(
+                                    last_err = Some(ObuError::Other(format!(
                                         "browser exited during startup: {status}"
                                     )));
                                 }
@@ -544,14 +542,14 @@ impl Browser {
                             Ok(None) => {}
                             Err(e) => {
                                 platform::kill_child_tree(&mut child);
-                                return Err(BladeError::Other(format!(
+                                return Err(ObuError::Other(format!(
                                     "failed to poll browser status: {e}"
                                 )));
                             }
                         }
                         if Instant::now() >= deadline {
                             platform::kill_child_tree(&mut child);
-                            last_err = Some(BladeError::Other(
+                            last_err = Some(ObuError::Other(
                                 "browser debug endpoint not responding after 20s".into(),
                             ));
                             break;
@@ -575,15 +573,15 @@ impl Browser {
             }
         }
         let failure =
-            last_err.unwrap_or_else(|| BladeError::Other("real-browser launch failed".into()));
+            last_err.unwrap_or_else(|| ObuError::Other("real-browser launch failed".into()));
         if headless {
             Err(failure)
         } else {
             // Visible startup deaths are almost always display problems —
             // point at the diagnostic switch instead of guessing.
-            Err(BladeError::Other(format!(
+            Err(ObuError::Other(format!(
                 "{failure} — visible launches need a reachable display; re-run with \
-                 BLADE_RB_DEBUG=1 to see the browser's own error output"
+                 OBU_RB_DEBUG=1 to see the browser's own error output"
             )))
         }
     }
@@ -613,15 +611,15 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
     match mode {
         crate::realbrowser::Mode::Attach => {
             let port = crate::realbrowser::devtools_port(&profile.root).ok_or_else(|| {
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "no live debug endpoint found for `{}`. Auto-discovery reads Chrome's \
                      DevToolsActivePort file, which browsers write when started with \
                      `--remote-debugging-port=0` (or via chrome://inspect#remote-debugging on \
                      Chrome 144+). For a browser on a FIXED debug port (the only arm Brave \
-                     supports), name the port once: `bladebro rb port <N>` — a fixed port is \
+                     supports), name the port once: `obu rb port <N>` — a fixed port is \
                      also the stealthier arm: Chrome reports navigator.webdriver=true for an \
                      ephemeral port (measured, 151), and the lane never masks Chrome's own \
-                     value. Or switch mechanism: `bladebro rb mode clone`.",
+                     value. Or switch mechanism: `obu rb mode clone`.",
                     profile.path.display()
                 ))
             })?;
@@ -631,7 +629,7 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
             // driving it (Linux; elsewhere the file's existence is the best
             // available signal).
             if !crate::browser::endpoint_owned_by_own_browser(port) {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "the debug endpoint on port {port} (from {}'s DevToolsActivePort) is not \
                      served by any live browser of this user — the file is stale or something \
                      else took the port. Start the browser with `--remote-debugging-port=0`, \
@@ -648,9 +646,9 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
         }
         crate::realbrowser::Mode::Clone => {
             if spec.binary.as_os_str().is_empty() {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "{} has a profile on this machine but no launchable binary was found — \
-                     install it, pick another browser (`bladebro rb use`), or attach to a \
+                     install it, pick another browser (`obu rb use`), or attach to a \
                      running instance (`rb mode attach`).",
                     spec.name
                 )));
@@ -668,9 +666,9 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
         }
         crate::realbrowser::Mode::Profile => {
             if spec.binary.as_os_str().is_empty() {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "{} has a profile on this machine but no launchable binary was found — \
-                     install it, pick another browser (`bladebro rb use`), or attach to a \
+                     install it, pick another browser (`obu rb use`), or attach to a \
                      running instance (`rb mode attach`).",
                     spec.name
                 )));
@@ -678,10 +676,10 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
             if crate::realbrowser::requires_non_default_dir(spec.brand)
                 && crate::realbrowser::same_dir(&profile.root, &spec.profile_root)
             {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "Google Chrome (136+) refuses remote debugging on the DEFAULT profile dir \
                      (`{}`) — the debug endpoint is never exposed, so profile mode cannot work \
-                     here. Options: (a) `bladebro rb mode clone` (recommended; works and your \
+                     here. Options: (a) `obu rb mode clone` (recommended; works and your \
                      browser may stay open), (b) attach via chrome://inspect#remote-debugging \
                      on Chrome 144+, or (c) relaunch Chrome with a non-default \
                      --user-data-dir.",
@@ -689,7 +687,7 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
                 )));
             }
             if let Some(owner) = crate::realbrowser::profile_in_use(&profile.root) {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "your browser is running on this profile ({owner}) — Chrome would hand off \
                      to it and swallow the debug flag. Close it first, or use `rb mode clone` \
                      (works while it stays open), or `rb mode attach`."
@@ -715,21 +713,21 @@ async fn attach_fixed_port(port: u16) -> Result<String> {
     // for it, and "nothing is listening" is the common failure (browser
     // closed, or started without the flag) — name it and the way out.
     let version = crate::cdp::version(&base).await.map_err(|_| {
-        BladeError::Other(format!(
+        ObuError::Other(format!(
             "no browser debug endpoint answers on 127.0.0.1:{port} — the fixed attach port \
-             (`bladebro rb port`). Start your browser with \
-             `--remote-debugging-port={port}`, or clear the port (`bladebro rb port auto`), or \
-             switch mechanism (`bladebro rb mode clone`)."
+             (`obu rb port`). Start your browser with \
+             `--remote-debugging-port={port}`, or clear the port (`obu rb port auto`), or \
+             switch mechanism (`obu rb mode clone`)."
         ))
     })?;
     // SECURITY: same proof as the DevToolsActivePort path — a browser of this
     // user must hold the port, not whatever else answers JSON there (Linux;
     // elsewhere the check is skipped, documented residual).
     if !crate::browser::endpoint_owned_by_own_browser(port) {
-        return Err(BladeError::Other(format!(
-            "the debug endpoint on 127.0.0.1:{port} (the fixed attach port, `bladebro rb \
+        return Err(ObuError::Other(format!(
+            "the debug endpoint on 127.0.0.1:{port} (the fixed attach port, `obu rb \
              port`) is not served by any live browser of this user — refusing it. Start your \
-             browser with `--remote-debugging-port={port}`, or clear the port (`bladebro rb \
+             browser with `--remote-debugging-port={port}`, or clear the port (`obu rb \
              port auto`)."
         )));
     }
@@ -780,7 +778,7 @@ pub(super) fn font_audit() {
                 });
             if !found {
                 eprintln!(
-                    "[bladebro] WARNING: no emoji font found — anti-bot canvas emoji hashes \
+                    "[obu] WARNING: no emoji font found — anti-bot canvas emoji hashes \
                      will mismatch (Kasada/Akamai). Install: noto-fonts-emoji (Arch) / \
                      fonts-noto-color-emoji (Debian)"
                 );
@@ -794,9 +792,9 @@ pub(super) fn font_audit() {
 /// diagnose a startup timeout because Chrome's stderr went to /dev/null;
 /// keep the LAST launch's stderr on disk (truncated per launch) and read
 /// back only a 4 KiB tail on startup failure. The file lives under the
-/// blade home's logs dir (created 0700, file 0600 on Unix).
+/// obu home's logs dir (created 0700, file 0600 on Unix).
 pub(super) fn chrome_stderr_sink() -> Option<std::fs::File> {
-    let dir = crate::platform::blade_dir().join("logs");
+    let dir = crate::platform::obu_dir().join("logs");
     crate::platform::secure_create_dir_all(&dir).ok()?;
     open_chrome_stderr(&dir.join("chrome-last-launch.log"))
 }
@@ -835,7 +833,7 @@ fn open_chrome_stderr(path: &std::path::Path) -> Option<std::fs::File> {
 
 /// Tail of the last launch's Chrome stderr ("" when nothing was captured).
 pub(super) fn chrome_stderr_tail() -> String {
-    let path = crate::platform::blade_dir()
+    let path = crate::platform::obu_dir()
         .join("logs")
         .join("chrome-last-launch.log");
     read_chrome_stderr_tail(&path).unwrap_or_default()
@@ -878,7 +876,7 @@ mod stderr_tests {
     #[test]
     fn stderr_tail_is_bounded_and_sink_is_private() {
         use std::io::Write;
-        let root = std::env::temp_dir().join(format!("blade-stderr-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-stderr-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("launch.log");
         let mut file = open_chrome_stderr(&path).unwrap();

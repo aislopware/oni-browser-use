@@ -1,6 +1,6 @@
 //! The `vision` command parser — `[--marks]`.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 /// Parse `vision` args: [--marks].
@@ -10,13 +10,13 @@ pub(crate) fn parse_vision_args(args: &[String]) -> Result<Value> {
         match a.as_str() {
             "--marks" => marks = true,
             s if s.starts_with("--") => {
-                return Err(BladeError::Usage(format!(
-                    "unknown flag {s} for vision — see 'bladebro help vision'"
+                return Err(ObuError::Usage(format!(
+                    "unknown flag {s} for vision — see 'obu help vision'"
                 )))
             }
             s => {
-                return Err(BladeError::Usage(format!(
-                    "unexpected argument '{s}' for vision — bladebro vision [--marks]"
+                return Err(ObuError::Usage(format!(
+                    "unexpected argument '{s}' for vision — obu vision [--marks]"
                 )))
             }
         }

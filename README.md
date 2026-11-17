@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Assets/logo.png" alt="Bladebro" width="120">
+<img src="Assets/logo.png" alt="Obu" width="120">
 
 **Give your AI agent a browser. Few tools. Full control. Real stealth. Zero runtime deps.**
 
@@ -8,12 +8,12 @@ Re-render-immune refs · batch actions · auto-extract · self-improving · 6-la
 
 One MCP server · one CLI · one persistent page model · no Node.js · one binary · Linux · macOS · Windows
 
-[![npm version](https://img.shields.io/npm/v/bladebro?style=flat-square)](https://www.npmjs.com/package/bladebro) [![npm downloads](https://img.shields.io/npm/dm/bladebro?style=flat-square)](https://www.npmjs.com/package/bladebro) [![license](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE) [![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square)](#-install) [![GitHub stars](https://img.shields.io/github/stars/dondai44423/bladebro?style=flat-square)](https://github.com/dondai44423/bladebro/stargazers)
+[![npm version](https://img.shields.io/npm/v/obu?style=flat-square)](https://www.npmjs.com/package/obu) [![npm downloads](https://img.shields.io/npm/dm/obu?style=flat-square)](https://www.npmjs.com/package/obu) [![license](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE) [![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square)](#-install) [![GitHub stars](https://img.shields.io/github/stars/aislopware/oni-browser-use?style=flat-square)](https://github.com/aislopware/oni-browser-use/stargazers)
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G5Y624N5RE)
 
 ```bash
-npm install -g bladebro && bladebro mcp
+cargo install --locked --git https://github.com/aislopware/oni-browser-use obu && obu mcp
 ```
 
 [Demo](#-demo) · [Install](#-install) · [The 5 tools](#-the-5-tools) · [Usage](#-usage) · [Your browser](#-real-browser-mode) · [Stealth Bench V1](#-stealth-bench-v1) · [Stealth](#-stealth) · [Adapters](#-site-adapters) · [Comparison](#-comparison) · [Gotchas & limits](#-gotchas--limits)
@@ -22,22 +22,26 @@ npm install -g bladebro && bladebro mcp
 
 ---
 
-**Bladebro is an agentic browser driver** — it gives an AI agent full control of a real browser through **5 tools**, not thirty. Built in Rust on a self-built CDP transport: one static binary, no Node.js, no Playwright, no runtime. It holds a persistent **Live Page Model** across tool calls, so every action returns **what changed** — never the whole page again.
+> **This is a fork.** `obu` is [aislopware/oni-browser-use](https://github.com/aislopware/oni-browser-use): [dondai44423/bladebro](https://github.com/dondai44423/bladebro) (Apache-2.0), renamed throughout by [`scripts/fork-rename.py`](scripts/fork-rename.py) and extended for driving a browser you are working in (own background tab, refs that survive one-shot commands, isolated-world reads). <!-- fork-rename:keep -->
+>
+> The fork publishes **no npm packages and no GitHub releases**. What upstream ships through npm is built from source here, and `obu update` finds nothing to download; the `npx` and npm-package lines below describe upstream's packaging and do not work — a package called `obu` on npm is **not this project**. Build with `cargo build --release`, then run `./target/release/obu`.
 
-> **⭐ New — drive *your* browser.** `bladebro rb on` switches every surface to your own Chromium-family browser — your profile, your logins, your display — with the page-injection layer **off entirely**: a real environment has no manufactured tells to catch. Everything driver-side stays on. **[Real-browser mode →](#-real-browser-mode)**
+**Obu is an agentic browser driver** — it gives an AI agent full control of a real browser through **5 tools**, not thirty. Built in Rust on a self-built CDP transport: one static binary, no Node.js, no Playwright, no runtime. It holds a persistent **Live Page Model** across tool calls, so every action returns **what changed** — never the whole page again.
+
+> **⭐ New — drive *your* browser.** `obu rb on` switches every surface to your own Chromium-family browser — your profile, your logins, your display — with the page-injection layer **off entirely**: a real environment has no manufactured tells to catch. Everything driver-side stays on. **[Real-browser mode →](#-real-browser-mode)**
 
 ## 🎬 Demo
 
-**Bladebro doing real work on two bot-protected sites — Reddit and X.com — in under two minutes.** Real navigation, real actions, real content back: comment trees, threads and timelines as clean structured output.
+**Obu doing real work on two bot-protected sites — Reddit and X.com — in under two minutes.** Real navigation, real actions, real content back: comment trees, threads and timelines as clean structured output.
 
 <https://github.com/user-attachments/assets/f67d80cc-a0ae-447a-8848-e35fce67f378>
 
 ## 🏆 Stealth Bench V1
 
-Run against [browser-use's Stealth Bench V1](https://github.com/browser-use/benchmark): **80 real production sites** protected by 11 anti-bot vendors. Bladebro cleared **68 (85%)** — above every provider on the published leaderboard (browser-use-cloud: 81%).
+Run against [browser-use's Stealth Bench V1](https://github.com/browser-use/benchmark): **80 real production sites** protected by 11 anti-bot vendors. Obu cleared **68 (85%)** — above every provider on the published leaderboard (browser-use-cloud: 81%).
 
-- **Out of the box** — one IP, no proxy, no captcha solver, no fingerprint rotation, no cloud. Stock Chromium with Bladebro's stealth layer on by default.
-- **Honest run** — real navigation of the real 80 sites; an open-model agent acted as the browsing agent because there was no paid cloud access, and the deviations are disclosed in full. The defensive layer being measured is Bladebro's own.
+- **Out of the box** — one IP, no proxy, no captcha solver, no fingerprint rotation, no cloud. Stock Chromium with Obu's stealth layer on by default.
+- **Honest run** — real navigation of the real 80 sites; an open-model agent acted as the browsing agent because there was no paid cloud access, and the deviations are disclosed in full. The defensive layer being measured is Obu's own.
 - **Where it stands** — perfect on Cloudflare (22/22) and reCaptcha (6/6); cleared the two sites browser-use-cloud did not (Shape, Temu); one named gap: Akamai (3/6).
 
 **[Full report and methodology →](STEALTH_BENCH.md)** · **[Per-site results (CSV)](stealth-bench-sites.csv)**
@@ -53,7 +57,7 @@ Run against [browser-use's Stealth Bench V1](https://github.com/browser-use/benc
 | **Auto-extract + adapters** | Template-free list extraction, site-aware: Reddit comment trees, X.com threads, GitHub repos, product pages. |
 | **Infinite-scroll collect** | `act collect` scrolls, dedupes and returns a whole feed as one artifact, in one call. |
 | **6-layer stealth** | Protocol, environment, behavior, coherence, residue, seasoning — on by default, verified against real detectors. |
-| **Real-browser lane** | `bladebro rb on` drives your real Chrome-family browser — your profile, your display — with zero page patches and every driver feature on. |
+| **Real-browser lane** | `obu rb on` drives your real Chrome-family browser — your profile, your display — with zero page patches and every driver feature on. |
 | **Self-improving** | Learns consent selectors, block choices and settle timing per domain; one behavioral fingerprint forever. |
 | **Self-healing** | Dead refs re-resolve, dead tabs reopen, crashed Chrome relaunches — transparently. |
 
@@ -62,19 +66,19 @@ Run against [browser-use's Stealth Bench V1](https://github.com/browser-use/benc
 ### npm (recommended)
 
 ```bash
-npm install -g bladebro
-bladebro mcp
+cargo install --locked --git https://github.com/aislopware/oni-browser-use obu
+obu mcp
 ```
 
-Requires Chrome/Chromium; prebuilt Linux binaries require glibc 2.28 or newer. No Rust or compilation. npm resolves the prebuilt binary for your platform — zero postinstall scripts. Update later with `npm update -g bladebro`.
+Requires Chrome/Chromium; prebuilt Linux binaries require glibc 2.28 or newer. No Rust or compilation. npm resolves the prebuilt binary for your platform — zero postinstall scripts. Update later with `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu`.
 
 | Platform | Package | Size | Status |
 |---|---|---|---|
-| Linux x86_64 | `bladebro-linux-x64` | 7.4 MB | Live-verified |
-| Linux ARM64 | `bladebro-linux-arm64` | 6.5 MB | Not live-verified |
-| Windows x86_64 | `bladebro-windows-x64` | 6.9 MB | CI-verified |
-| macOS Intel | `bladebro-darwin-x64` | 6.9 MB | CI-verified |
-| macOS Apple Silicon | `bladebro-darwin-arm64` | 6.4 MB | CI-verified |
+| Linux x86_64 | `obu-linux-x64` | 7.4 MB | Live-verified |
+| Linux ARM64 | `obu-linux-arm64` | 6.5 MB | Not live-verified |
+| Windows x86_64 | `obu-windows-x64` | 6.9 MB | CI-verified |
+| macOS Intel | `obu-darwin-x64` | 6.9 MB | CI-verified |
+| macOS Apple Silicon | `obu-darwin-arm64` | 6.4 MB | CI-verified |
 
 <sub>Every release builds and passes CI on Ubuntu, macOS and Windows. Linux ARM64 and macOS binaries are cross-compiled from Linux with cargo-zigbuild.</sub>
 
@@ -83,70 +87,70 @@ A Linux `ENOENT` launch error can mean the executable's loader is missing even w
 ### Pi coding agent
 
 ```bash
-pi install npm:bladebro
+pi install npm:obu
 ```
 
 Registers 5 native tools (`browser.act`, `browser.see`, `browser.state`, `browser.run`, `browser.vision`) from the binary's own `tools/list` — tool definitions auto-adapt to any change, with zero extension maintenance.
 
 ### DeepSeek Harness (DSH)
 
-Add Bladebro as a native plugin in the Web UI's **Plugins** page, or run:
+Add Obu as a native plugin in the Web UI's **Plugins** page, or run:
 
 ```bash
-dsh plugin --profile web add bladebro
+dsh plugin --profile web add obu
 ```
 
 pnpm 11 defaults to a [one-day release-age delay](https://pnpm.io/blog/releases/11.0),
 so an unversioned install immediately after a release can select an older package.
-To select an exact release, append its version, for example `dsh plugin --profile web add bladebro@4.6.7`
-(or enter `bladebro@4.6.7` in Plugins). If your package manager explicitly enforces
+To select an exact release, append its version, for example `dsh plugin --profile web add obu@4.6.7`
+(or enter `obu@4.6.7` in Plugins). If your package manager explicitly enforces
 a stricter release-age policy, wait for its configured delay. Keep that policy intact.
 
-Restart the profile and start a new chat. Desktop users can install `bladebro`
+Restart the profile and start a new chat. Desktop users can install `obu`
 from the same **Plugins** page. For terminal setup, enable Desktop's **Manage dsh
 Command**, fully quit the app, then use its bundled command:
 
 ```bash
-dsh plugin --profile desktop add bladebro
+dsh plugin --profile desktop add obu
 ```
 
 Use Desktop's command for its profile; the npm DSH CLI cannot manage that
 app-owned profile. Open Desktop again after installation.
 
-DSH discovers the five tools as `mcp__bladebro__act`, `see`, `state`, `run` and
+DSH discovers the five tools as `mcp__obu__act`, `see`, `state`, `run` and
 `vision` (each with the same prefix). Schemas and descriptions come from the
 binary; DSH handles permissions, image attachments, reconnection and cleanup
 through its native MCP bridge. DSH may also expose its own generic MCP resource
 helpers and choose PTC presentation. No API key, separate MCP configuration, global
-Bladebro install or extra plugin package is needed. Chrome/Chromium must be
+Obu install or extra plugin package is needed. Chrome/Chromium must be
 installed on the machine running the DSH host. A remotely hosted Web UI controls
 that host's browser, rather than the device viewing the UI.
 
-Disable/re-enable the **Bladebro** bundle in Plugins, or remove it with
-`dsh plugin --profile web remove bladebro` (use `desktop` with Desktop's command).
+Disable/re-enable the **Obu** bundle in Plugins, or remove it with
+`dsh plugin --profile web remove obu` (use `desktop` with Desktop's command).
 Restart the profile and begin a new chat after package changes. Other tools and
 settings remain intact. Do not also configure a second MCP server named
-`bladebro`; DSH refuses the duplicate namespace.
+`obu`; DSH refuses the duplicate namespace.
 
-Updates use DSH's package manager: `dsh plugin --profile web update bladebro`,
+Updates use DSH's package manager: `dsh plugin --profile web update obu`,
 or **Update** in Plugins. The plugin and native binary travel in the same
-package, so ordinary Bladebro releases update both. Existing global/Pi installs
+package, so ordinary Obu releases update both. Existing global/Pi installs
 are separate. No background downloader or installation scripts run.
 
 Advanced configuration belongs in the profile's `cordis.patch.yml`:
 
 ```yaml
-- id: bladebro
+- id: obu
   config:
     # Optional absolute source-build/portable executable; package binary is default.
-    binaryPath: /absolute/path/to/bladebro
+    binaryPath: /absolute/path/to/obu
     env:
       CHROME_PATH: /absolute/path/to/chrome
-      BLADE_HOME: /absolute/path/to/private/browser-data
+      OBU_HOME: /absolute/path/to/private/browser-data
     toolCallTimeoutMs: 180000
 ```
 
-Windows YAML paths can use forward slashes, such as `C:/Tools/bladebro.exe`.
+Windows YAML paths can use forward slashes, such as `C:/Tools/obu.exe`.
 The optional `cwd` and `reconnect` settings use DSH's native MCP configuration.
 The default per-call budget is 180 seconds; raise it for longer `run` sequences.
 Cancellation stops waiting, but an already-dispatched browser mutation may
@@ -161,8 +165,8 @@ and [Desktop command runtime](https://github.com/deepseek-ai/deepseek-harness/bl
 ### Hermes Agent
 
 ```bash
-npm install -g bladebro
-bladebro hermes on
+cargo install --locked --git https://github.com/aislopware/oni-browser-use obu
+obu hermes on
 ```
 
 Requires a current Hermes CLI with `config get --json --raw`, `config unset`
@@ -172,12 +176,12 @@ Start a **new Hermes chat** (restart a running gateway or desktop client).
 This connects the standard MCP server and removes Hermes' built-in browser
 toolset, including `browser_exec`, from the agent's tools. Web search and
 extraction keep their existing settings. Chrome/Chromium must be installed;
-`bladebro doctor` checks browser prerequisites.
+`obu doctor` checks browser prerequisites.
 
 ```bash
-bladebro hermes status          # inspect the setup
-bladebro hermes off             # restore the previous browser settings
-bladebro hermes on --profile work  # target a named Hermes profile
+obu hermes status          # inspect the setup
+obu hermes off             # restore the previous browser settings
+obu hermes on --profile work  # target a named Hermes profile
 ```
 
 Use the same profile for `off`; `HERMES_HOME` is also respected. If Hermes isn't
@@ -185,12 +189,12 @@ on PATH, add `--hermes /path/to/hermes` (its CLI executable on Windows).
 Setup uses Hermes' public `config` and `mcp test` commands, saves private
 recovery state beside `config.yaml`, and reads settings back after writing.
 Interrupted switches can resume with `on` or restore with `off`. A changed
-MCP entry is refused during recovery rather than overwritten. Existing server environment settings are retained; explicit `BLADE_HOME` and
+MCP entry is refused during recovery rather than overwritten. Existing server environment settings are retained; explicit `OBU_HOME` and
 `CHROME_PATH` from setup are forwarded because Hermes filters inherited variables.
 Other settings and pre-existing browser suppression survive restore. Avoid concurrent manual
 configuration edits while switching.
 
-There is no separate plugin or copied tool schema: normal Bladebro updates
+There is no separate plugin or copied tool schema: normal Obu updates
 update the Hermes browser too. Hermes may expose MCP tools through its built-in
 Tool Search; all five remain discoverable there. `browser.backend: off` selects
 Hermes' alternative native browser stack; it does **not** disable browser tools.
@@ -202,17 +206,17 @@ and [MCP documentation](https://hermes-agent.nousresearch.com/docs/user-guide/fe
 Requires Chromium or Chrome (auto-detected) and Rust 1.86+. Linux servers need Xvfb for headful.
 
 ```bash
-git clone https://github.com/dondai44423/bladebro.git
-cd bladebro
+git clone https://github.com/aislopware/oni-browser-use.git
+cd oni-browser-use
 cargo build --release
-./target/release/bladebro mcp
+./target/release/obu mcp
 ```
 
-Source builds self-update too: `bladebro -u` swaps in the official released binary for your platform (it doesn't rebuild — for that: `git pull && cargo build --release`).
+Source builds self-update too: `obu -u` swaps in the official released binary for your platform (it doesn't rebuild — for that: `git pull && cargo build --release`).
 
 ## 🎯 The 5 tools
 
-The tables use compact MCP parameter notation. CLI calls use named flags, for example `bladebro act click --text "Sign in"` or `bladebro act eval --url https://example.com --js document.title`.
+The tables use compact MCP parameter notation. CLI calls use named flags, for example `obu act click --text "Sign in"` or `obu act eval --url https://example.com --js document.title`.
 
 ### `act` — do, then observe
 
@@ -252,7 +256,7 @@ Input actions return an **outcome verdict + page delta**; explicit reads/eval re
 - **Popups:** `_blank` clicks report the new tab ID once and restore the opener. Use `state switch-tab` to act in the popup. Input reactivates the addressed tab; no mutation is retried after a timeout.
 - **Waits:** `act wait selector=".ready"` waits for visible CSS across open shadows/same-origin frames. `condition=element text="Ready"` also finds ordinary visible elements. `condition=network` requires 300ms with no tracked requests (long-lived streams excluded), and times out honestly. A false `if`/`while` may exit before its maximum budget.
 - **Pagination:** `act paginate next="text=Next" max=5 extract="auto"` reads the current page, clicks once per advance and stops at missing Next, repeated data or the cap. The result retains each page and discloses partial completion. `next` also accepts a CSS selector, `label=...` or `ref=...`; `max` is 1–100 pages.
-- **HTTP body save:** `act download url="https://example.com" body=true` saves an HTTP response (up to 32MiB/30s), reports status/final URL/path, and uses no browser cookies or JavaScript. It honors HTTP(S) `BLADE_PROXY`; other configured proxy types refuse before sending. The ordinary download path remains the browser-context attachment path.
+- **HTTP body save:** `act download url="https://example.com" body=true` saves an HTTP response (up to 32MiB/30s), reports status/final URL/path, and uses no browser cookies or JavaScript. It honors HTTP(S) `OBU_PROXY`; other configured proxy types refuse before sending. The ordinary download path remains the browser-context attachment path.
 
 ### `see` — observe
 
@@ -312,7 +316,7 @@ Screenshot as PNG; `marks=true` overlays numbered ref badges. MCP returns it as 
 ## 🔌 Usage
 
 <p align="center">
-  <img src="Assets/png/in-action.png" alt="Bladebro in action — one call extracts a full thread; ref badges mark clickable elements" width="100%">
+  <img src="Assets/png/in-action.png" alt="Obu in action — one call extracts a full thread; ref badges mark clickable elements" width="100%">
 </p>
 
 Same 5 tools, same handlers, same stealth — two surfaces. Use MCP for agents; use the CLI for scripts, shells and CI. One codebase, so every fix lands on both.
@@ -320,8 +324,8 @@ Same 5 tools, same handlers, same stealth — two surfaces. Use MCP for agents; 
 | | MCP server | CLI |
 |---|---|---|
 | **Best for** | AI agents (Claude, Cursor, pi, Cline) | Shell scripts, CI/CD, quick one-offs |
-| **Works over** | stdio JSON-RPC | `bladebro <command>`, daemon-backed |
-| **Discovery** | `tools/list` | `bladebro help --json` |
+| **Works over** | stdio JSON-RPC | `obu <command>`, daemon-backed |
+| **Discovery** | `tools/list` | `obu help --json` |
 | **Session** | one Chrome per agent session | persistent daemon, or `--no-daemon` per command |
 
 ### MCP server
@@ -331,8 +335,8 @@ Add to your client's config:
 ```json
 {
   "mcpServers": {
-    "bladebro": {
-      "command": "bladebro",
+    "obu": {
+      "command": "obu",
       "args": ["mcp"]
     }
   }
@@ -343,27 +347,27 @@ Speaks MCP **2024-11-05 through 2026-07-28** — the legacy `initialize` handsha
 
 ### CLI
 
-`bladebro help --json` is the single self-teaching manual: the same tool schemas as MCP, plus per-command usage, universal flags, payload conventions and exit codes — in ONE call.
+`obu help --json` is the single self-teaching manual: the same tool schemas as MCP, plus per-command usage, universal flags, payload conventions and exit codes — in ONE call.
 
 ```bash
-bladebro help --json | jq '.tools[].name'   # ["act","see","state","run","vision"]
-bladebro help act --json | jq .detail.actions
+obu help --json | jq '.tools[].name'   # ["act","see","state","run","vision"]
+obu help act --json | jq .detail.actions
 ```
 
 **Daemon mode** — the first command auto-starts a daemon; Chrome stays alive across calls:
 
 ```bash
-bladebro nav https://news.ycombinator.com
-bladebro see content
-bladebro act click e5
-bladebro stop                              # clean shutdown
+obu nav https://news.ycombinator.com
+obu see content
+obu act click e5
+obu stop                              # clean shutdown
 ```
 
 ```bash
-bladebro see content https://example.com --no-daemon   # one-shot: launch Chrome per command
+obu see content https://example.com --no-daemon   # one-shot: launch Chrome per command
 ```
 
-The daemon runs every command with its own lane and browser settings (`CHROME_PATH`, `BLADE_PROXY`, `BLADE_LOCALE`, … as set when it started). A command that resolves another lane (`BLADE_LANE`) or sets one of those variables to a different value is refused before anything runs — `bladebro stop` restarts the daemon with the command's settings, `--no-daemon` runs just that command on its own.
+The daemon runs every command with its own lane and browser settings (`CHROME_PATH`, `OBU_PROXY`, `OBU_LOCALE`, … as set when it started). A command that resolves another lane (`OBU_LANE`) or sets one of those variables to a different value is refused before anything runs — `obu stop` restarts the daemon with the command's settings, `--no-daemon` runs just that command on its own.
 
 **Universal flags**
 
@@ -376,32 +380,32 @@ The daemon runs every command with its own lane and browser settings (`CHROME_PA
 
 **Exit codes are the contract:** `0` success · `1` command failed (the text carries page state for recovery) · `2` usage error (the message says how to fix it).
 
-Big payloads come from a file or stdin — no shell-quoting games: `bladebro run @steps.json`, `cat steps.json | bladebro run -`, `bladebro act eval @script.js`.
+Big payloads come from a file or stdin — no shell-quoting games: `obu run @steps.json`, `cat steps.json | obu run -`, `obu act eval @script.js`.
 
 <details>
 <summary><b>More CLI examples</b></summary>
 
 ```bash
 # Forms — one call
-bladebro act fill '[{"label":"Email","text":"a@b.com"},{"label":"Password","text":"secret"}]' --submit e20
+obu act fill '[{"label":"Email","text":"a@b.com"},{"label":"Password","text":"secret"}]' --submit e20
 
 # Batch steps from a file
-bladebro run @steps.json
-bladebro act batch @steps.json
+obu run @steps.json
+obu act batch @steps.json
 
 # Read + extract
-bladebro see model --json | jq .text
-bladebro see extract auto --json
+obu see model --json | jq .text
+obu see extract auto --json
 
 # State
-bladebro state cookies
-bladebro state open-tab https://example.com
+obu state cookies
+obu state open-tab https://example.com
 
 # Drive your own browser
-bladebro rb on && bladebro nav https://news.ycombinator.com
+obu rb on && obu nav https://news.ycombinator.com
 
 # Screenshot with ref badges
-bladebro vision --marks --json | jq -r .image_path
+obu vision --marks --json | jq -r .image_path
 ```
 
 </details>
@@ -409,7 +413,7 @@ bladebro vision --marks --json | jq -r .image_path
 ## 🧠 How it works
 
 <p align="center">
-  <img src="Assets/png/architecture.png" alt="Bladebro architecture — your agent speaks MCP, Bladebro speaks CDP, driving Chromium" width="100%">
+  <img src="Assets/png/architecture.png" alt="Obu architecture — your agent speaks MCP, Obu speaks CDP, driving Chromium" width="100%">
 </p>
 
 The core is the **Live Page Model** — a persistent, compressed, ref-stable model of the page held across every tool call. Three pillars:
@@ -424,7 +428,7 @@ Everything is built from scratch where it counts — the CDP transport, percepti
 
 **The #1 reliability gap in every other agent browser, solved.**
 
-When React, Vue or Angular re-renders a component, the DOM nodes are destroyed and recreated — and every other agent browser loses its refs. Bladebro's refs are anchored to a signature, not a DOM node, so a re-render that keeps an element's name keeps its ref. When the signature itself shifts because the element's frame index moved (an iframe was added or removed ahead of it) but structure and name survive, the ref follows the fingerprint instead of dying.
+When React, Vue or Angular re-renders a component, the DOM nodes are destroyed and recreated — and every other agent browser loses its refs. Obu's refs are anchored to a signature, not a DOM node, so a re-render that keeps an element's name keeps its ref. When the signature itself shifts because the element's frame index moved (an iframe was added or removed ahead of it) but structure and name survive, the ref follows the fingerprint instead of dying.
 
 ```
 Before re-render:  e2 button "Buy Now"  sig=0|button|Buy Now|1  fp=0xdeadbeef
@@ -445,7 +449,7 @@ A ref never follows the fingerprint to a differently named element. The fingerpr
 - **Context pruning** — `act` responses compress after turn 3 on the same page: full (8K) → reduced (3K) → verdict-only (500 chars). ~54% fewer tokens over a session, zero capability loss.
 
 ```bash
-bladebro state compress off     # on / off / status — or BLADE_NO_COMPRESS=1
+obu state compress off     # on / off / status — or OBU_NO_COMPRESS=1
 ```
 
 The counter resets on navigation, any `see`, or any error. `see`, `state`, `run` and `vision` are never compressed.
@@ -471,7 +475,7 @@ Six layers, all on by default, no config needed:
 
 | Test | Result |
 |---|---|
-| Stealth vector suite + boot self-check + drift stamp (`bladebro audit`) | every vector passes at the suite's own total, stamps stable |
+| Stealth vector suite + boot self-check + drift stamp (`obu audit`) | every vector passes at the suite's own total, stamps stable |
 | Differential oracle vs stock Chrome on the same display (`tools/diff_oracle`) | 99 probes: identical or documented mask surface in every profile state, **0 divergent** |
 | Real-browser lane vs stock Chrome (`oracle.py --lane real`) | 99 probes: **all identical, 0 expected, 0 divergent** — the lane carries no page patches |
 | CreepJS | **headless: 0%, stealth: 0%** (stock Chrome on the same lane: 0%/0%) |
@@ -480,7 +484,7 @@ Six layers, all on by default, no config needed:
 | deviceandbrowserinfo.com | “You are human!” — `isBot: false` |
 | PerimeterX/HUMAN (Zillow, Fiverr) | Full page load, no block |
 
-Run `bladebro audit` to verify your own setup; run `python3 tools/diff_oracle/oracle.py` before any release.
+Run `obu audit` to verify your own setup; run `python3 tools/diff_oracle/oracle.py` before any release.
 
 ## 🌐 Real-browser mode
 
@@ -495,24 +499,24 @@ perception, Live Page Model, refs, adapters, token efficiency, resource
 blocking, biometrics + idle hum.
 
 ```bash
-bladebro rb on        # switch every surface (CLI, daemon, MCP) to your browser
-bladebro rb status    # what is configured / live (--json for agents)
-bladebro rb pause     # manual control: input, navigation, history, downloads, collecting and tab ops refuse until `rb resume`
-bladebro rb off       # back to the isolated agent browser
+obu rb on        # switch every surface (CLI, daemon, MCP) to your browser
+obu rb status    # what is configured / live (--json for agents)
+obu rb pause     # manual control: input, navigation, history, downloads, collecting and tab ops refuse until `rb resume`
+obu rb off       # back to the isolated agent browser
 ```
 
 | Mechanism | How it works | When it fits |
 |---|---|---|
-| `clone` (default) | Imports your profile once into a blade-owned copy (browser may stay open; the source is never written to); runs your real binary on the copy, which ages through use | Everyday use; works on branded Google Chrome |
+| `clone` (default) | Imports your profile once into a obu-owned copy (browser may stay open; the source is never written to); runs your real binary on the copy, which ages through use | Everyday use; works on branded Google Chrome |
 | `profile` | Launches your binary on your live profile | Purists — close the browser first; Google Chrome 136+ refuses CDP on the default profile dir |
 | `attach` | Drives a browser that already exposes a debug endpoint (`--remote-debugging-port=0`, or Chrome 144+ `chrome://inspect#remote-debugging`) | Zero disruption; never owned, never shut down. The agent works in its own background window: your open tabs are never navigated, hidden or raised over. Its page gets CDP focus emulation — a covered or minimized window is otherwise a `hidden` page (no frames, 1 Hz timers), which no person clicks in — so it renders and takes input as a tab being looked at, without the window or the OS focus moving. Refs stay valid from one one-shot command to the next on that tab (the ref table is kept per tab under the data dir). Caveat (measured, Chrome 151): an *ephemeral* `--remote-debugging-port=0` arm — and the approval flow — makes Chrome itself report `navigator.webdriver=true`; a fixed port reports `false` — name it with `rb port <N>` |
 
 Supported browsers: Chromium, Google Chrome, Brave, **Helium**, Edge, Vivaldi,
-and Opera. `bladebro rb use` lists detected installs; `bladebro rb use helium`
+and Opera. `obu rb use` lists detected installs; `obu rb use helium`
 selects Helium on Linux, macOS, or Windows. On Linux, Helium wrappers on PATH
 and `HELIUM_CONFIG_HOME` are recognized. For an AppImage or portable install,
 launch Helium once to create its profile, select it, then set
-`bladebro rb use --binary /absolute/path/to/helium.AppImage` (or executable).
+`obu rb use --binary /absolute/path/to/helium.AppImage` (or executable).
 
 `rb mode auto` (default) attaches when a live endpoint exists, else clones.
 Fixed debug port: a browser started with `--remote-debugging-port=<N>` writes
@@ -549,14 +553,14 @@ Learns from every session, persists in `knowledge/` under your data root, surviv
 
 **Domain knowledge base** — per-site consent selectors and behavior, learned from success only:
 
-- Confidence +0.05 per success, −0.15 per failure (failures cost 3×). Auto-applied at ≥0.7 when the stored selector is one of the current `BLADE_CONSENT` policy's buttons, so known sites skip the full detection JS entirely.
+- Confidence +0.05 per success, −0.15 per failure (failures cost 3×). Auto-applied at ≥0.7 when the stored selector is one of the current `OBU_CONSENT` policy's buttons, so known sites skip the full detection JS entirely.
 - Evicted below 0.3 after 30 days; bounded at 2,000 domains. Unknown sites fall back to full detection — zero regression.
 
 **Behavioral fingerprint** — biometric parameters generated once per installation and reused forever, so detectors see the same "person" every session: click precision, mouse curvature, typing cadence, inter-action gaps, overshoot and idle-hum frequency, all clamped to human ranges, written atomically.
 
 ## 📊 Comparison
 
-| | Bladebro | agent-browser | Playwright MCP | Chrome DevTools MCP |
+| | Obu | agent-browser | Playwright MCP | Chrome DevTools MCP |
 |---|---|---|---|---|
 | Tool defs | **5 compact definitions** | 0 (CLI) | ~13,700 tokens | ~8,000 tokens |
 | Per-click result | **60–570 tokens** (delta) | ~1,400 (snapshot) | 2,000+ | 2,000+ |
@@ -572,11 +576,11 @@ Learns from every session, persists in `knowledge/` under your data root, surviv
 | Binary size | **7.4 MB** | ~50 MB (node + deps) | ~50 MB | ~50 MB |
 | Platforms | **Linux, macOS, Windows** | Linux, macOS, Windows | Linux, macOS, Windows | Linux, macOS, Windows |
 
-### Head-to-head: Bladebro vs agent-browser
+### Head-to-head: Obu vs agent-browser
 
-agent-browser v0.33.2 at its best (headed, system Chromium, persistent profile, custom UA) vs Bladebro defaults, same machine:
+agent-browser v0.33.2 at its best (headed, system Chromium, persistent profile, custom UA) vs Obu defaults, same machine:
 
-| Task | agent-browser | Bladebro |
+| Task | agent-browser | Obu |
 |---|---|---|
 | Wikipedia (navigate + read) | 153K chars, 3 calls | **82K chars, 2 calls (−47%)** |
 | Hacker News (elements) | 14K chars, 2 calls | **5.5K chars, 1 call (−61%)** |
@@ -585,11 +589,11 @@ agent-browser v0.33.2 at its best (headed, system Chromium, persistent profile, 
 | HN structured extraction | No feature | **30 items as JSON, 1 call** |
 
 <details>
-<summary><b>Stealth benchmark: Bladebro vs Camoufox</b></summary>
+<summary><b>Stealth benchmark: Obu vs Camoufox</b></summary>
 
 A pure stealth comparison — Camoufox is a patched Firefox for scraping, not an agent tool. Both headed, same machine, same network, no proxy, 8 detection sites.
 
-| Detection site | Camoufox | Bladebro |
+| Detection site | Camoufox | Obu |
 |---|---|---|
 | Sannysoft | 1 fail (Chrome obj — expected for Firefox) | All pass |
 | CreepJS | Fingerprint computed | headless: 6%, stealth: 20% |
@@ -599,25 +603,25 @@ A pure stealth comparison — Camoufox is a patched Firefox for scraping, not an
 
 CreepJS values in this block are from that earlier round — the current suite reads headless 0% / stealth 0% (stealth table above).
 
-Near equal on stealth; both flagged for masking on Pixelscan (expected for any anti-detect tool). The difference is delivery: Bladebro ships this out of the box in one binary — Camoufox needs Python, a venv and a Playwright script to drive it.
+Near equal on stealth; both flagged for masking on Pixelscan (expected for any anti-detect tool). The difference is delivery: Obu ships this out of the box in one binary — Camoufox needs Python, a venv and a Playwright script to drive it.
 
 </details>
 
 ## 🚧 Gotchas & limits
 
-Honest boundaries: what surprises people, and what Bladebro deliberately does not do.
+Honest boundaries: what surprises people, and what Obu deliberately does not do.
 
 | Situation | What happens — and why |
 |---|---|
 | **CAPTCHA / Turnstile challenges** | Not solved as a general capability, deliberately — you get a `blocked:` verdict with a remediation ladder; hand off to a solver if needed. One narrow exception: a site adapter may pass a challenge that is trivial for a human (reddit's one-time "prove your humanity" checkbox gets one humanized click); image grids stay unsolved and are reported honestly. |
-| **Datacenter / VPS IPs** | Flagged regardless of fingerprint. Use `BLADE_PROXY` with a residential proxy — with a proxy set, WebRTC ICE candidates are filtered (no srflx / raw-IP host candidates reach the page) so the real IP cannot leak around it. |
+| **Datacenter / VPS IPs** | Flagged regardless of fingerprint. Use `OBU_PROXY` with a residential proxy — with a proxy set, WebRTC ICE candidates are filtered (no srflx / raw-IP host candidates reach the page) so the real IP cannot leak around it. |
 | **Cross-origin iframe content** | Invisible (`SecurityError`). Deliberate: access would need `Runtime.enable`, which defuses the protocol stealth layer. |
 | **Browser extensions** | Not supported — CDP cannot load them, and they would break the stealth profile. |
 | **Session video recording** | Not supported. Use `vision` screenshots. |
 | **Firefox / Gecko** | Not supported — the driver speaks CDP, which is Chromium-only. |
 | **macOS binaries** | Cross-compiled from Linux via cargo-zigbuild; CI builds and tests macOS natively on every release, and since 4.6.1 the CI stealth audit drives the native CI build through a real browser on macOS (and Windows) — runtime-verified in CI, not yet on local hardware. File an issue if something breaks. |
 | **Linux ARM64** | Cross-compiled; not live-verified on ARM hardware yet. Community reports welcome. |
-| **`BLADE_NOISE=1`** | Canvas/audio noise can *hurt* — FingerprintJS ML reads it as tampering. Off by default; enable only if you know why. |
+| **`OBU_NOISE=1`** | Canvas/audio noise can *hurt* — FingerprintJS ML reads it as tampering. Off by default; enable only if you know why. |
 
 ## 🔧 Configuration
 
@@ -627,47 +631,47 @@ Everything optional; configuration is environment variables.
 
 | Var | Default | What it does |
 |---|---|---|
-| `BLADE_HOME` | auto | Data root override (highest priority): knowledge, logins, artifacts, fingerprint |
-| `XDG_STATE_HOME` | XDG spec | Data root becomes `$XDG_STATE_HOME/blade` when set |
-| `BLADE_PROFILE_DIR` | `<data root>/profile` | Persistent browser profile location — point it at a directory only you can write (it holds the live cookie jar) |
-| `BLADE_FRESH` | unset | `1` = ephemeral profile (no persistence) |
+| `OBU_HOME` | auto | Data root override (highest priority): knowledge, logins, artifacts, fingerprint |
+| `XDG_STATE_HOME` | XDG spec | Data root becomes `$XDG_STATE_HOME/obu` when set |
+| `OBU_PROFILE_DIR` | `<data root>/profile` | Persistent browser profile location — point it at a directory only you can write (it holds the live cookie jar) |
+| `OBU_FRESH` | unset | `1` = ephemeral profile (no persistence) |
 | `CHROME_PATH` | auto-detected | Chrome/Chromium binary |
 
 **Identity & stealth**
 
 | Var | Default | What it does |
 |---|---|---|
-| `BLADE_LOCALE` | `en-US` | BCP-47 locale (`en-GB`, `ne-NP`, …) |
-| `BLADE_TZ` | IP geo | Timezone (`Europe/London`, `Asia/Kathmandu`, …) |
-| `BLADE_GPU` | `auto` | `intel` / `amd` / `nvidia` / `mali` / `adreno` / `auto` (lspci detection) |
-| `BLADE_WEBGL` | `auto` | `spoof` / `real` / `auto` |
-| `BLADE_MEDIA` | `auto` | `patch` / `real` / `auto` |
-| `BLADE_NOISE` | unset | `1` = canvas/audio fingerprint noise (see gotchas) |
-| `BLADE_PROXY` | none | Proxy URL — also enables WebRTC ICE filtering + the non-proxied-UDP launch policy, so the real IP stays out of ICE candidates. No embedded `user:pass@`: Chrome cannot authenticate with them, so the launch refuses them — use an IP-allowlisted endpoint or a local forwarding proxy that adds the credentials |
-| `BLADE_CONSENT` | `reject` | Consent banners: `accept` / `reject` / `off` |
+| `OBU_LOCALE` | `en-US` | BCP-47 locale (`en-GB`, `ne-NP`, …) |
+| `OBU_TZ` | IP geo | Timezone (`Europe/London`, `Asia/Kathmandu`, …) |
+| `OBU_GPU` | `auto` | `intel` / `amd` / `nvidia` / `mali` / `adreno` / `auto` (lspci detection) |
+| `OBU_WEBGL` | `auto` | `spoof` / `real` / `auto` |
+| `OBU_MEDIA` | `auto` | `patch` / `real` / `auto` |
+| `OBU_NOISE` | unset | `1` = canvas/audio fingerprint noise (see gotchas) |
+| `OBU_PROXY` | none | Proxy URL — also enables WebRTC ICE filtering + the non-proxied-UDP launch policy, so the real IP stays out of ICE candidates. No embedded `user:pass@`: Chrome cannot authenticate with them, so the launch refuses them — use an IP-allowlisted endpoint or a local forwarding proxy that adds the credentials |
+| `OBU_CONSENT` | `reject` | Consent banners: `accept` / `reject` / `off` |
 
 **Behavior & ops**
 
 | Var | Default | What it does |
 |---|---|---|
-| `BLADE_NO_ACTIVATE` | unset | `1` = never raise the browser window: clicks, navigation and vision act on the page in place (`Page.bringToFront` is skipped even for a background tab) |
-| `BLADE_PACE` | on | `off` = disable the pacing governor (human inter-action gaps) |
-| `BLADE_NO_COMPRESS` | unset | `1` = disable context pruning |
-| `BLADE_MAIN_WORLD` | unset | `1` = run the driver's page reads (capture, lookups, waits, verdict probes) in the page's own JavaScript world instead of an isolated one — for telling a page-side difference apart; the page's scripts can then observe every read |
-| `BLADE_NO_WARMING` | unset | `1` = skip first-run profile warming |
-| `BLADE_NO_UPDATE_CHECK` | unset | `1` = skip update checks |
-| `BLADE_CMD_TIMEOUT` | `300` | How long the CLI waits for a daemon response, seconds |
-| `BLADE_IDLE_TIMEOUT` | `600` | Daemon idle time before Chrome shuts down, seconds |
-| `BLADE_TRANSPORT` | ws | MCP transport: WebSocket by default (native `webdriver=false`); `pipe` opts into the zero-port pipe (its automation flag is masked) |
-| `BLADE_CHROME_FLAGS` | none | Extra Chrome launch flags, split shell-style (`--user-agent="… (X11; …)"` stays one flag; backslashes are literal). `--enable-features`/`--disable-features` lists merge with the built-in ones |
-| `BLADE_INCOGNITO` | `auto` | Agent lane only: `1` uses incognito compatibility, `0` disables automatic compatibility; restart the client/daemon after changing |
-| `BLADE_LANE` | auto | `real` forces the real-browser lane for this process (same as `rb on`) |
-| `BLADE_RB_DEBUG` | — | `1` surfaces the browser's own stderr on real-lane launches |
-| `BLADE_PLAIN` | — | `1` renders CLI output plain — no ANSI even on a terminal (same: `NO_COLOR`; override: `CLICOLOR_FORCE=1`) |
+| `OBU_NO_ACTIVATE` | unset | `1` = never raise the browser window: clicks, navigation and vision act on the page in place (`Page.bringToFront` is skipped even for a background tab) |
+| `OBU_PACE` | on | `off` = disable the pacing governor (human inter-action gaps) |
+| `OBU_NO_COMPRESS` | unset | `1` = disable context pruning |
+| `OBU_MAIN_WORLD` | unset | `1` = run the driver's page reads (capture, lookups, waits, verdict probes) in the page's own JavaScript world instead of an isolated one — for telling a page-side difference apart; the page's scripts can then observe every read |
+| `OBU_NO_WARMING` | unset | `1` = skip first-run profile warming |
+| `OBU_NO_UPDATE_CHECK` | unset | `1` = skip update checks |
+| `OBU_CMD_TIMEOUT` | `300` | How long the CLI waits for a daemon response, seconds |
+| `OBU_IDLE_TIMEOUT` | `600` | Daemon idle time before Chrome shuts down, seconds |
+| `OBU_TRANSPORT` | ws | MCP transport: WebSocket by default (native `webdriver=false`); `pipe` opts into the zero-port pipe (its automation flag is masked) |
+| `OBU_CHROME_FLAGS` | none | Extra Chrome launch flags, split shell-style (`--user-agent="… (X11; …)"` stays one flag; backslashes are literal). `--enable-features`/`--disable-features` lists merge with the built-in ones |
+| `OBU_INCOGNITO` | `auto` | Agent lane only: `1` uses incognito compatibility, `0` disables automatic compatibility; restart the client/daemon after changing |
+| `OBU_LANE` | auto | `real` forces the real-browser lane for this process (same as `rb on`) |
+| `OBU_RB_DEBUG` | — | `1` surfaces the browser's own stderr on real-lane launches |
+| `OBU_PLAIN` | — | `1` renders CLI output plain — no ANSI even on a terminal (same: `NO_COLOR`; override: `CLICOLOR_FORCE=1`) |
 
-Data root resolution (Unix): `BLADE_HOME` → `$XDG_STATE_HOME/blade` → `$HOME/.local/state/blade` → `$HOME/.blade` (legacy). Existing installs keep their tree — nothing is ever split across two directories. Windows: `%USERPROFILE%\.blade` (plus `BLADE_HOME`). `bladebro doctor` prints the resolved data root and exits nonzero when a required check fails. An explicit `CHROME_PATH` must point to an executable file; invalid overrides report an error instead of silently launching another browser.
+Data root resolution (Unix): `OBU_HOME` → `$XDG_STATE_HOME/obu` → `$HOME/.local/state/obu` → `$HOME/.obu` (legacy). Existing installs keep their tree — nothing is ever split across two directories. Windows: `%USERPROFILE%\.obu` (plus `OBU_HOME`). `obu doctor` prints the resolved data root and exits nonzero when a required check fails. An explicit `CHROME_PATH` must point to an executable file; invalid overrides report an error instead of silently launching another browser.
 
-**Raspberry Pi OS trixie (arm64):** issue [#45](https://github.com/dondai44423/bladebro/issues/45) reports Chromium's regular-profile network service hanging even on loopback. On a detected Raspberry Pi running Debian/Raspbian trixie, the agent lane automatically uses one managed incognito context. Other hosts keep their persistent profile, and an explicit `BLADE_PROFILE_DIR` keeps its chosen mode. Set `BLADE_INCOGNITO=1` to request this compatibility path elsewhere, or `0` to disable automatic selection. The real-browser and external-attach lanes keep their existing behavior. Incognito cookies still persist through Bladebro's login snapshot; named `state save`/`load` sessions restore cookies and storage. History, cache and automatic localStorage persistence are unavailable in this mode; launch diagnostics and `doctor` disclose that tradeoff. The reporter verified the Pi workaround; the release regression suite exercises the context, tabs, HTTP navigation and persistence contracts on Linux x64.
+**Raspberry Pi OS trixie (arm64):** issue [#45](https://github.com/dondai44423/bladebro/issues/45) reports Chromium's regular-profile network service hanging even on loopback. On a detected Raspberry Pi running Debian/Raspbian trixie, the agent lane automatically uses one managed incognito context. Other hosts keep their persistent profile, and an explicit `OBU_PROFILE_DIR` keeps its chosen mode. Set `OBU_INCOGNITO=1` to request this compatibility path elsewhere, or `0` to disable automatic selection. The real-browser and external-attach lanes keep their existing behavior. Incognito cookies still persist through Obu's login snapshot; named `state save`/`load` sessions restore cookies and storage. History, cache and automatic localStorage persistence are unavailable in this mode; launch diagnostics and `doctor` disclose that tradeoff. The reporter verified the Pi workaround; the release regression suite exercises the context, tabs, HTTP navigation and persistence contracts on Linux x64.
 
 **Flatpak browsers (SteamOS, Bazzite, Fedora Silverblue):** when no native Chrome/Chromium is found, discovery uses an installed Flatpak export — `org.chromium.Chromium`, then `com.google.Chrome`, `com.brave.Browser`, `com.microsoft.Edge`, `com.vivaldi.Vivaldi`, `io.github.ungoogled_software.ungoogled_chromium` — from the user installation (`FLATPAK_USER_DIR`, else `~/.local/share/flatpak`) before the system one (`/var/lib/flatpak`). Install one with `flatpak install flathub org.chromium.Chromium`. The agent lane starts an export (found or given as `CHROME_PATH`) with `flatpak run`, sharing the session profile, the downloads dir and a per-process upload staging dir (`<data root>/uploads/<pid>`) into the sandbox, so cookies, storage and downloads reach the host; it needs the desktop session's D-Bus and Flatpak portal. The sandbox reads nothing else (at most your home dir, per the app's manifest), so `act upload` copies the file into the staging dir and hands Chrome the copy; copies are removed when the browser closes. A wrapper script around an export runs without these shares. The real-browser lane is unchanged.
 
@@ -675,20 +679,20 @@ Data root resolution (Unix): `BLADE_HOME` → `$XDG_STATE_HOME/blade` → `$HOME
 
 | Command | What it does |
 |---|---|
-| `bladebro -doc` / `bladebro doctor` | System check — Chrome, display and its window manager, profile hygiene, logins, data root, network, version |
-| `bladebro audit` | Stealth audit — the vector suite + boot self-check + cross-restart drift stamp, against your setup |
-| `bladebro -v` | Version + update status (check only) |
-| `bladebro -u` | Self-update: check, download, SHA-256-verify, swap — non-npm installs |
-| `bladebro --rollback` | Restore the previous version (from the pre-update backup) |
-| `npm update -g bladebro` | Update an npm install |
+| `obu -doc` / `obu doctor` | System check — Chrome, display and its window manager, profile hygiene, logins, data root, network, version |
+| `obu audit` | Stealth audit — the vector suite + boot self-check + cross-restart drift stamp, against your setup |
+| `obu -v` | Version + update status (check only) |
+| `obu -u` | Self-update: check, download, SHA-256-verify, swap — non-npm installs |
+| `obu --rollback` | Restore the previous version (from the pre-update backup) |
+| `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` | Update an npm install |
 
-**One updater per install — use the one that matches how you installed.** npm-managed (`npm install -g bladebro`) → `npm update -g bladebro`, which keeps the shim, the platform package and npm's bookkeeping in sync. Everything else — a downloaded binary, a manual copy, a `cargo build` — → `bladebro -u`: it downloads the official released binary for your platform, SHA-256-verifies it against the published checksum, confirms it starts, backs up the old one and swaps it in; `bladebro --rollback` undoes it. (`-u` never rebuilds from source — for that: `git pull && cargo build --release`.)
+**One updater per install — use the one that matches how you installed.** npm-managed (`cargo install --locked --git https://github.com/aislopware/oni-browser-use obu`) → `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu`, which keeps the shim, the platform package and npm's bookkeeping in sync. Everything else — a downloaded binary, a manual copy, a `cargo build` — → `obu -u`: it downloads the official released binary for your platform, SHA-256-verifies it against the published checksum, confirms it starts, backs up the old one and swaps it in; `obu --rollback` undoes it. (`-u` never rebuilds from source — for that: `git pull && cargo build --release`.)
 
-`bladebro -u` knows which install it's on: under npm it refuses to touch npm's files and points you to npm (`--force` overrides — at the cost of npm's metadata going stale); on a build that's ahead of the latest release it won't downgrade without `--force`. `BLADE_NO_UPDATE_CHECK=1` skips update checks entirely.
+`obu -u` knows which install it's on: under npm it refuses to touch npm's files and points you to npm (`--force` overrides — at the cost of npm's metadata going stale); on a build that's ahead of the latest release it won't downgrade without `--force`. `OBU_NO_UPDATE_CHECK=1` skips update checks entirely.
 
 ## 💖 Sponsors
 
-Bladebro is free and open source. Sponsoring keeps development independent.
+Obu is free and open source. Sponsoring keeps development independent.
 
 | Tier | Price | What you get |
 |---|---|---|

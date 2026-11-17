@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::error::BladeError;
+use crate::error::ObuError;
 use crate::page::Page;
 
 static MARK_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -45,7 +45,7 @@ pub async fn handle_vision(
     id: Option<Value>,
     args: &Value,
     page: &mut Page,
-) -> std::result::Result<Value, BladeError> {
+) -> std::result::Result<Value, ObuError> {
     let shot = capture_vision(args, page).await?;
     Ok(vision_response(id, shot))
 }
@@ -77,12 +77,12 @@ fn vision_response(id: Option<Value>, shot: VisionShot) -> Value {
 pub async fn capture_vision(
     args: &Value,
     page: &mut Page,
-) -> std::result::Result<VisionShot, BladeError> {
+) -> std::result::Result<VisionShot, ObuError> {
     super::validate::vision(args)?;
     let marks = args.get("marks").and_then(|m| m.as_bool()).unwrap_or(false);
     let mut note = String::new();
     let overlay_id = serde_json::to_string(&format!(
-        "blade-marks-{}-{}",
+        "obu-marks-{}-{}",
         std::process::id(),
         MARK_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ))?;
@@ -191,7 +191,7 @@ pub async fn capture_vision(
             Ok(shot_from_capture(data, &note))
         }
         // Propagate Closed so serve() can self-heal.
-        Err(BladeError::Closed) => Err(BladeError::Closed),
+        Err(ObuError::Closed) => Err(ObuError::Closed),
         Err(e) => Ok(VisionShot::error(format!("\u{2717} error: {e}"))),
     }
 }

@@ -96,7 +96,7 @@ const INTEL_EXT2_NOMINAL: &[&str] = &[
 /// OS's own ANGLE shape (Mesa/ES, Direct3D 11, Metal) so a mask never names
 /// a foreign platform — a Linux Mesa string on Windows or a phone GPU on a
 /// Mac was the pre-4.6.1 fallback class. Falls back per OS/arch when
-/// detection fails. Override: BLADE_GPU=intel|amd|nvidia|apple|mali|adreno.
+/// detection fails. Override: OBU_GPU=intel|amd|nvidia|apple|mali|adreno.
 #[derive(Clone)]
 pub(super) struct GpuProfile {
     gl_vendor: String,
@@ -129,38 +129,38 @@ pub(super) fn get_gpu_profile() -> GpuProfile {
 
 fn detect_gpu() -> GpuProfile {
     let style = os_style();
-    if let Ok(gpu) = std::env::var("BLADE_GPU") {
+    if let Ok(gpu) = std::env::var("OBU_GPU") {
         match gpu.as_str() {
             "amd" => {
-                eprintln!("[stealth] BLADE_GPU=amd — using AMD Radeon profile");
+                eprintln!("[stealth] OBU_GPU=amd — using AMD Radeon profile");
                 return amd_profile(None, style);
             }
             "nvidia" => {
-                eprintln!("[stealth] BLADE_GPU=nvidia — using NVIDIA GeForce profile");
+                eprintln!("[stealth] OBU_GPU=nvidia — using NVIDIA GeForce profile");
                 return nvidia_profile(None, style);
             }
             "apple" => {
-                eprintln!("[stealth] BLADE_GPU=apple — using Apple Silicon profile");
+                eprintln!("[stealth] OBU_GPU=apple — using Apple Silicon profile");
                 return apple_profile("Apple M1");
             }
             "mali" => {
-                eprintln!("[stealth] BLADE_GPU=mali — using Mali-G78 profile");
+                eprintln!("[stealth] OBU_GPU=mali — using Mali-G78 profile");
                 return mali_profile();
             }
             "adreno" => {
-                eprintln!("[stealth] BLADE_GPU=adreno — using Adreno 730 profile");
+                eprintln!("[stealth] OBU_GPU=adreno — using Adreno 730 profile");
                 return adreno_profile();
             }
             _ => {
                 // Default override: match the native arch
                 #[cfg(target_arch = "aarch64")]
                 {
-                    eprintln!("[stealth] BLADE_GPU={gpu} — using Mali-G78 profile");
+                    eprintln!("[stealth] OBU_GPU={gpu} — using Mali-G78 profile");
                     return mali_profile();
                 }
                 #[cfg(not(target_arch = "aarch64"))]
                 {
-                    eprintln!("[stealth] BLADE_GPU={gpu} — using Intel UHD 630 profile");
+                    eprintln!("[stealth] OBU_GPU={gpu} — using Intel UHD 630 profile");
                     return intel_profile(intel_fallback_name(style), style);
                 }
             }
@@ -254,7 +254,7 @@ fn intel_fallback_name(style: OsStyle) -> &'static str {
 
 /// OS/arch fallback when detection fails — a plausible default for the
 /// platform, never a foreign one. (Windows x86 default: the most common
-/// desktop GPU class; BLADE_GPU overrides remain for other classes.)
+/// desktop GPU class; OBU_GPU overrides remain for other classes.)
 fn fallback_profile() -> GpuProfile {
     if cfg!(target_os = "macos") {
         if cfg!(target_arch = "aarch64") {

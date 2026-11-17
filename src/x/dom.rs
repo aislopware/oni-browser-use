@@ -71,7 +71,7 @@ return JSON.stringify({{count:items.size,exhausted:idle>=6,items:[...items.value
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("dom collect failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "x: {}",
             crate::platform::truncate_utf8(msg, 200)
         )));
@@ -82,7 +82,7 @@ return JSON.stringify({{count:items.size,exhausted:idle>=6,items:[...items.value
         .and_then(|v| v.as_str())
         .unwrap_or("{}");
     let j: Value = serde_json::from_str(raw)
-        .map_err(|e| BladeError::Other(format!("x: dom collect parse ({e})")))?;
+        .map_err(|e| ObuError::Other(format!("x: dom collect parse ({e})")))?;
     let (items, exhausted) = dom_items_from_json(&j);
     let complete = exhausted && items.len() < cap;
     Ok(XPayload {

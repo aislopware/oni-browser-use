@@ -35,11 +35,11 @@ pub fn remediation_ladder(block_type: &str) -> Vec<String> {
         ],
         "akamai" => vec![
             "blocked by Akamai (IP reputation + TLS fingerprint)".into(),
-            "try: BLADE_PROXY for a different IP, BLADE_TZ for matching timezone".into(),
+            "try: OBU_PROXY for a different IP, OBU_TZ for matching timezone".into(),
         ],
         "rate-limit" => vec![
             "rate limited \u{2014} wait 30-60s before retrying".into(),
-            "consider: BLADE_PROXY for a different IP".into(),
+            "consider: OBU_PROXY for a different IP".into(),
         ],
         "reddit-humanity" => vec![
             "reddit's one-time humanity check (reCAPTCHA v2 checkbox)".into(),

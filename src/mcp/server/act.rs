@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use crate::action::Action;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::eval::handle_eval;
@@ -26,7 +26,7 @@ fn handle_dialog_expect(args: &Value, page: &Page) -> Result<String> {
         .trim()
         .to_lowercase();
     if expect.is_empty() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "act dialog needs expect=alert|confirm|prompt|beforeunload|any — or clear to disarm"
                 .into(),
         ));
@@ -44,7 +44,7 @@ fn handle_dialog_expect(args: &Value, page: &Page) -> Result<String> {
         expect.as_str(),
         "alert" | "confirm" | "prompt" | "beforeunload" | "any"
     ) {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "act dialog: expect must be alert, confirm, prompt, beforeunload, any (or clear)"
                 .into(),
         ));
@@ -55,7 +55,7 @@ fn handle_dialog_expect(args: &Value, page: &Page) -> Result<String> {
         .filter(|m| !m.is_empty())
         .map(String::from);
     if message.as_ref().is_some_and(|m| m.chars().count() > 200) {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "act dialog: message matcher too long (max 200 chars)".into(),
         ));
     }
@@ -65,14 +65,14 @@ fn handle_dialog_expect(args: &Value, page: &Page) -> Result<String> {
         .filter(|p| !p.is_empty())
         .map(String::from);
     if prompt_text.is_some() && expect != "prompt" && expect != "any" {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "act dialog: prompt_text only applies to expect=prompt (or any)".into(),
         ));
     }
     let accept = args.get("accept").and_then(|a| a.as_bool()).unwrap_or(true);
     let timeout = resolve_wait_timeout(args, 30)?;
     if timeout.as_secs() > 300 {
-        return Err(BladeError::Usage("act dialog: timeout max is 300s".into()));
+        return Err(ObuError::Usage("act dialog: timeout max is 300s".into()));
     }
     let origin = crate::page::origin_of(page.model().url());
     let exp = crate::page::DialogExpect {
@@ -111,7 +111,7 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
     let fields = args
         .get("fields")
         .and_then(|f| f.as_array())
-        .ok_or_else(|| BladeError::Other("fill requires 'fields' array".into()))?;
+        .ok_or_else(|| ObuError::Other("fill requires 'fields' array".into()))?;
     let submit = args.get("submit").and_then(|s| s.as_str()).unwrap_or("");
     let mut last_verdict = String::new();
     let mut count = 0usize;
@@ -149,12 +149,12 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
         if matches!(role.as_str(), "checkbox" | "radio" | "switch")
             && (field.get("text").is_some() || field.get("option").is_some())
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "fill {resolved}: checkbox, radio and switch require check=true/false; omit all values to toggle (text/option cannot set checked state)"
             )));
         }
         if f_check.is_some() && !matches!(role.as_str(), "checkbox" | "radio" | "switch") {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "fill {resolved}: check requires a checkbox, radio or switch"
             )));
         }
@@ -162,7 +162,7 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
             && field.get("text").is_none()
             && field.get("option").is_none()
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "fill {resolved}: text or option is required; use text=\"\" to clear explicitly"
             )));
         }
@@ -177,7 +177,7 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
                             crate::action::read_checked(page.cdp_ref(), page.model(), &resolved)
                                 .await?;
                         if role == "radio" && is_checked && !want_checked {
-                            return Err(BladeError::Usage(format!("fill {resolved}: a checked radio cannot be unchecked by clicking it; select another option in its group")));
+                            return Err(ObuError::Usage(format!("fill {resolved}: a checked radio cannot be unchecked by clicking it; select another option in its group")));
                         }
                         is_checked != want_checked
                     }
@@ -207,7 +207,7 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
         let (_, verdict) = page.act(action).await?;
         if let Some(want) = f_check {
             if crate::action::read_checked(page.cdp_ref(), page.model(), &resolved).await? != want {
-                return Err(BladeError::Other(format!("fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying")));
+                return Err(ObuError::Other(format!("fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying")));
             }
         }
         last_verdict = verdict;
@@ -334,7 +334,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                 } else if !selector.is_empty() {
                     resolve_selector_target(page, selector, nth).await?
                 } else {
-                    return Err(BladeError::Other(
+                    return Err(ObuError::Other(
                         "click requires 'ref', 'text', 'label', 'selector', or 'x'+'y'".into(),
                     ));
                 };
@@ -354,7 +354,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             } else if !selector.is_empty() {
                 resolve_selector_target(page, selector, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "type requires 'ref', 'label', or 'selector' + 'text'".into(),
                 ));
             };
@@ -378,7 +378,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                 };
                 resolve_text_target(page, label, rf, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "clear requires 'ref', 'label', or 'selector'".into(),
                 ));
             };
@@ -405,7 +405,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             } else if !selector.is_empty() {
                 resolve_selector_target(page, selector, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "select requires 'ref', 'label', or 'selector'".into(),
                 ));
             };
@@ -441,7 +441,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             // V7: JS eval. Handled inline (returns data, not delta).
             let js = args.get("js").and_then(|j| j.as_str()).unwrap_or("");
             if js.is_empty() {
-                return Err(BladeError::Other("eval requires 'js'".into()));
+                return Err(ObuError::Other("eval requires 'js'".into()));
             }
             let eval_ref = if !ref_id.is_empty() {
                 ref_id.to_string()
@@ -503,7 +503,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             } else if !selector.is_empty() {
                 resolve_selector_target(page, selector, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "hover requires 'ref', 'text', 'label', or 'selector'".into(),
                 ));
             };
@@ -515,7 +515,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             } else if !selector.is_empty() {
                 resolve_selector_target(page, selector, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "upload requires 'ref' or 'selector'".into(),
                 ));
             };
@@ -537,7 +537,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                 };
                 resolve_text_target(page, label, rf, nth).await?
             } else {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "read requires 'ref' (an element id like e5 from see), 'label', or 'selector'"
                         .into(),
                 ));
@@ -619,9 +619,9 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             let steps = args
                 .get("steps")
                 .and_then(|s| s.as_array())
-                .ok_or_else(|| BladeError::Other("batch requires 'steps' array".into()))?;
+                .ok_or_else(|| ObuError::Other("batch requires 'steps' array".into()))?;
             if steps.is_empty() {
-                return Err(BladeError::Other("batch requires at least one step".into()));
+                return Err(ObuError::Other("batch requires at least one step".into()));
             }
             let mut verdicts: Vec<String> = Vec::new();
             let mut ok_count = 0usize;
@@ -685,7 +685,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                                 chars
                             ));
                         }
-                        Err(BladeError::Closed) => return Err(BladeError::Closed),
+                        Err(ObuError::Closed) => return Err(ObuError::Closed),
                         Err(e) => {
                             // optional:true continues past a failed read step
                             // like it does for every other step.
@@ -770,7 +770,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                         }
                         prev_url = curr_url;
                     }
-                    Err(BladeError::Closed) => return Err(BladeError::Closed),
+                    Err(ObuError::Closed) => return Err(ObuError::Closed),
                     Err(e) => {
                         if step
                             .get("optional")
@@ -877,7 +877,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             return handle_state(&state_args, page).await;
         }
         _ => {
-            return Err(crate::error::BladeError::Other(
+            return Err(crate::error::ObuError::Other(
                 crate::action::unknown_action_message(action_str),
             ))
         }
@@ -995,15 +995,15 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
         }
         // Error context: recapture and include available elements so the
         // agent doesn't need a separate `see` call to understand the failure.
-        // CRITICAL: BladeError::Closed propagates UNWRAPPED — serve()
+        // CRITICAL: ObuError::Closed propagates UNWRAPPED — serve()
         // detects it and self-heals (relaunch + retry). Wrapping it in
         // Other would kill transparent crash recovery.
-        Err(BladeError::Closed) => Err(BladeError::Closed),
+        Err(ObuError::Closed) => Err(ObuError::Closed),
         Err(e) => {
             page.reset_act_turn();
             let _ = page.recapture().await;
             let view = page.view(3000);
-            Err(crate::error::BladeError::Other(format!(
+            Err(crate::error::ObuError::Other(format!(
                 "{e}\n\n--- current page state ---\n{view}"
             )))
         }

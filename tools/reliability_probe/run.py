@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Live mutation/state regression suite. Own Chrome, HTTP fixture and data home.
-BLADEBRO=/path/to/binary python3 tools/reliability_probe/run.py
+OBU=/path/to/binary python3 tools/reliability_probe/run.py
 """
 import http.server
 import json
@@ -12,7 +12,7 @@ import tempfile
 import threading
 import time
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 CHROME = os.environ.get('CHROME', shutil.which('chromium') or shutil.which('google-chrome') or '')
 assert CHROME, 'Chrome/Chromium is required'
 checks = 0
@@ -43,9 +43,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-with tempfile.TemporaryDirectory(prefix='blade-reliability-') as root:
-    home = Path(root) / 'blade'
-    env = dict(os.environ, BLADE_HOME=str(home), BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1', BLADE_LANE='agent')
+with tempfile.TemporaryDirectory(prefix='obu-reliability-') as root:
+    home = Path(root) / 'obu'
+    env = dict(os.environ, OBU_HOME=str(home), OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1', OBU_LANE='agent')
     for key in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
         env.pop(key, None)
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -140,7 +140,7 @@ with tempfile.TemporaryDirectory(prefix='blade-reliability-') as root:
         check('MCP attach leaves private login sidecar unchanged', sidecar.read_bytes() == before)
         # Owned daemon persistence: both sites survive; explicit deletions win.
         owned_home = Path(root) / 'owned'
-        owned_env = dict(env, BLADE_HOME=str(owned_home))
+        owned_env = dict(env, OBU_HOME=str(owned_home))
         def owned(*args):
             result = subprocess.run([BINARY,'--json',*args],env=owned_env,capture_output=True,text=True,timeout=45)
             value = json.loads(result.stdout)

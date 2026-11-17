@@ -36,15 +36,15 @@ impl Browser {
                     }
                     if attempt == 0 {
                         eprintln!(
-                            "[bladebro] sandboxed Chrome died at startup (root or restricted container?) — retrying with --no-sandbox"
+                            "[obu] sandboxed Chrome died at startup (root or restricted container?) — retrying with --no-sandbox"
                         );
                     } else if attempt == 1 {
-                        eprintln!("[bladebro] Chrome died at startup, retrying");
+                        eprintln!("[obu] Chrome died at startup, retrying");
                     }
                 }
             }
         }
-        Err(last_err.unwrap_or_else(|| BladeError::Other("pipe launch failed".into())))
+        Err(last_err.unwrap_or_else(|| ObuError::Other("pipe launch failed".into())))
     }
 
     /// Launch over the pipe transport with the same GL ladder as the WS
@@ -81,12 +81,12 @@ impl Browser {
                         let next = stages[i + 1];
                         if next == *stage {
                             eprintln!(
-                                "[bladebro] GL healthcheck: no WebGL context via {} — retrying it once (fresh launch)",
+                                "[obu] GL healthcheck: no WebGL context via {} — retrying it once (fresh launch)",
                                 stage_label(*stage)
                             );
                         } else {
                             eprintln!(
-                                "[bladebro] GL healthcheck: no WebGL context via {} — escalating to {}",
+                                "[obu] GL healthcheck: no WebGL context via {} — escalating to {}",
                                 stage_label(*stage),
                                 stage_label(next)
                             );
@@ -94,9 +94,9 @@ impl Browser {
                         last = Some((browser, client));
                     } else {
                         eprintln!(
-                            "[bladebro] WARNING: no WebGL context after the full GL ladder — \
+                            "[obu] WARNING: no WebGL context after the full GL ladder — \
                              pages will see `getContext('webgl') === null` (stock Chrome on a \
-                             GL-less host behaves identically; no GL mask is applied). Run `bladebro audit`."
+                             GL-less host behaves identically; no GL mask is applied). Run `obu audit`."
                         );
                         set_gpu_state(Some(GpuState::Missing));
                         return Ok((browser, client));
@@ -104,7 +104,7 @@ impl Browser {
                 }
             }
         }
-        Err(BladeError::Other("no GL stages configured".into()))
+        Err(ObuError::Other("no GL stages configured".into()))
     }
 
     /// One pipe launch attempt with a pinned GL stage (driven by
@@ -118,19 +118,19 @@ impl Browser {
         use std::os::unix::process::CommandExt;
         use tokio::net::unix::pipe;
 
-        // M18: Proxy support via BLADE_PROXY env var. Validated + redacted
+        // M18: Proxy support via OBU_PROXY env var. Validated + redacted
         // exactly like the WS lane (first, before any profile, display or
         // process exists) — same failure mode, same log guarantee.
         let proxy = match crate::browser::proxy::env_browser_proxy() {
             Ok(p) => p,
             Err(reason) => {
-                return Err(BladeError::Other(format!(
-                    "invalid BLADE_PROXY value: {reason} (value redacted)"
+                return Err(ObuError::Other(format!(
+                    "invalid OBU_PROXY value: {reason} (value redacted)"
                 )));
             }
         };
         if let Some(spec) = &proxy {
-            eprintln!("[bladebro] using proxy: {}", spec.display);
+            eprintln!("[obu] using proxy: {}", spec.display);
         }
         let chrome_path = find_chrome()?;
         let extra = super::compat::agent_extra_flags()?;
@@ -143,7 +143,7 @@ impl Browser {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         if xvfb.is_none() {
             eprintln!(
-                "[bladebro] WARNING: Xvfb unavailable — falling back to headless mode (reduced stealth). Install xvfb for headful-on-virtual-display."
+                "[obu] WARNING: Xvfb unavailable — falling back to headless mode (reduced stealth). Install xvfb for headful-on-virtual-display."
             );
         }
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -178,20 +178,20 @@ impl Browser {
         // (chrome writes fd 4). We keep out_tx/in_rx; the child-side ends
         // become fds 3/4 in the child via pre_exec dup2.
         let (out_tx, out_rx) =
-            pipe::pipe().map_err(|e| BladeError::Other(format!("pipe create: {e}")))?;
+            pipe::pipe().map_err(|e| ObuError::Other(format!("pipe create: {e}")))?;
         let (in_tx, in_rx) =
-            pipe::pipe().map_err(|e| BladeError::Other(format!("pipe create: {e}")))?;
+            pipe::pipe().map_err(|e| ObuError::Other(format!("pipe create: {e}")))?;
 
         // Child-side ends: blocking fds (Chrome does blocking IO on 3/4).
         let child_read_fd = out_rx
             .into_blocking_fd()
-            .map_err(|e| BladeError::Other(format!("pipe fd: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("pipe fd: {e}")))?;
         let child_write_fd = in_tx
             .into_blocking_fd()
-            .map_err(|e| BladeError::Other(format!("pipe fd: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("pipe fd: {e}")))?;
         if child_read_fd.as_raw_fd() <= 4 || child_write_fd.as_raw_fd() <= 4 {
-            return Err(BladeError::Other(
-                "pipe fds collided with stdio — unset BLADE_TRANSPORT (the MCP defaults to WebSocket) or set BLADE_TRANSPORT=ws to force it".into(),
+            return Err(ObuError::Other(
+                "pipe fds collided with stdio — unset OBU_TRANSPORT (the MCP defaults to WebSocket) or set OBU_TRANSPORT=ws to force it".into(),
             ));
         }
 
@@ -203,7 +203,7 @@ impl Browser {
         };
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let mode_str = "headful";
-        eprintln!("[bladebro] launching Chrome from {chrome_path} on CDP pipe ({mode_str})");
+        eprintln!("[obu] launching Chrome from {chrome_path} on CDP pipe ({mode_str})");
 
         let mut cmd = super::launch::browser_command(&chrome_path, &user_data_dir);
         browser_temp_env(&mut cmd);
@@ -241,7 +241,7 @@ impl Browser {
         platform::isolate_owned_child(&mut cmd);
         let child = guard
             .spawn(&mut cmd)
-            .map_err(|e| BladeError::Other(format!("failed to launch Chrome: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("failed to launch Chrome: {e}")))?;
 
         let client = crate::cdp::CdpClient::from_pipe(in_rx, out_tx)?;
 
@@ -257,7 +257,7 @@ impl Browser {
                         .get("product")
                         .and_then(|p| p.as_str())
                         .unwrap_or("unknown");
-                    eprintln!("[bladebro] Chrome ready: {product} (pipe transport)");
+                    eprintln!("[obu] Chrome ready: {product} (pipe transport)");
                     super::compat::prepare_incognito(&client).await?;
                     let probe = probe_gl_pipe(&client).await;
                     let (child, profile) = guard.finish()?;
@@ -281,20 +281,20 @@ impl Browser {
                             // Same as the WS lane: a sandboxed helper can
                             // outlive the launcher (Flatpak portal spawns);
                             // the guard sweeps the profile on return.
-                            return Err(BladeError::Other(format!(
+                            return Err(ObuError::Other(format!(
                                 "Chrome exited during startup: {status}{}",
                                 super::launch::chrome_stderr_tail()
                             )));
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            return Err(BladeError::Other(format!(
+                            return Err(ObuError::Other(format!(
                                 "failed to poll Chrome status: {e}"
                             )));
                         }
                     }
                     if Instant::now() >= deadline {
-                        return Err(BladeError::Other(format!(
+                        return Err(ObuError::Other(format!(
                             "Chrome pipe not responding after 20s{}",
                             super::launch::chrome_stderr_tail()
                         )));

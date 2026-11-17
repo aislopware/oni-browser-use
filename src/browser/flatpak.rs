@@ -10,7 +10,7 @@
 //! never /tmp, nor a data dir outside home). Run through the export as-is,
 //! Chrome silently creates the session profile inside the sandbox and it
 //! vanishes on exit — no cookies, localStorage or seasoning ever reach
-//! bladebro's profile dir. Downloads likewise complete into the sandbox's own
+//! obu's profile dir. Downloads likewise complete into the sandbox's own
 //! copy of the downloads dir, and an upload hands the page a file the
 //! sandbox cannot open. The agent lane therefore runs an export via
 //! `flatpak run` itself, sharing the session dir, the downloads dir and a
@@ -157,7 +157,7 @@ pub(super) fn launch_command(chrome_path: &str, user_data_dir: &Path) -> Option<
     });
     let Some(flatpak) = flatpak else {
         eprintln!(
-            "[bladebro] WARNING: {chrome_path} is a Flatpak export but `flatpak` was not found; \
+            "[obu] WARNING: {chrome_path} is a Flatpak export but `flatpak` was not found; \
              launching the export directly — the sandbox cannot see the session profile, so \
              cookies and storage will not persist"
         );
@@ -172,7 +172,7 @@ pub(super) fn launch_command(chrome_path: &str, user_data_dir: &Path) -> Option<
     // From here on this process stages every upload (see `upload_path`).
     let staging = UPLOAD_STAGING.get_or_init(|| {
         prepare_staging(
-            &crate::platform::blade_dir().join("uploads"),
+            &crate::platform::obu_dir().join("uploads"),
             std::process::id(),
         )
     });
@@ -195,7 +195,7 @@ static UPLOAD_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// This process's staging dir under `root`, created (0700) before the
 /// launch shares it — Flatpak drops a share whose path does not exist. Dirs
-/// of bladebro processes that are gone (a crash skips teardown) are removed.
+/// of obu processes that are gone (a crash skips teardown) are removed.
 fn prepare_staging(root: &Path, pid: u32) -> PathBuf {
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
@@ -312,7 +312,7 @@ mod tests {
     /// browser is the only one there, and discovery must find it.
     #[test]
     fn flatpak_browsers_are_discovered_in_preference_order() {
-        let root = std::env::temp_dir().join(format!("blade-flatpak-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-flatpak-{}", std::process::id()));
         let user = root.join("user");
         let system = root.join("system");
         let vars: HashMap<&str, String> = HashMap::from([
@@ -382,7 +382,7 @@ mod tests {
     /// installation the path names.
     #[test]
     fn exports_launch_through_flatpak_run_with_the_profile_shared() {
-        let root = std::env::temp_dir().join(format!("blade-flatpak-run-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-flatpak-run-{}", std::process::id()));
         let user = root.join("user");
         let system = root.join("system");
         let vars: HashMap<&str, String> = HashMap::from([
@@ -398,16 +398,16 @@ mod tests {
         assert_eq!(
             run_args(
                 &parsed,
-                Path::new("/state/blade/profiles/sess-42"),
-                Path::new("/state/blade/downloads"),
-                Path::new("/state/blade/uploads/42")
+                Path::new("/state/obu/profiles/sess-42"),
+                Path::new("/state/obu/downloads"),
+                Path::new("/state/obu/uploads/42")
             ),
             [
                 "run",
                 "--user",
-                "--filesystem=/state/blade/profiles/sess-42",
-                "--filesystem=/state/blade/downloads",
-                "--filesystem=/state/blade/uploads/42",
+                "--filesystem=/state/obu/profiles/sess-42",
+                "--filesystem=/state/obu/downloads",
+                "--filesystem=/state/obu/uploads/42",
                 "org.chromium.Chromium"
             ]
         );
@@ -457,7 +457,7 @@ mod tests {
     fn uploads_are_staged_into_a_dir_the_sandbox_shares() {
         use std::os::unix::fs::PermissionsExt;
         let root = std::env::temp_dir().join(format!(
-            "blade-flatpak-upload-{}-{}",
+            "obu-flatpak-upload-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -474,9 +474,9 @@ mod tests {
             .unwrap()
             .set_modified(mtime)
             .unwrap();
-        let data = root.join("blade");
+        let data = root.join("obu");
         let uploads = data.join("uploads");
-        // Left by a bladebro that is gone (no pid above i32::MAX is alive),
+        // Left by a obu that is gone (no pid above i32::MAX is alive),
         // by a live process (pid 1), and not ours at all.
         for leftover in ["4294967295/0", "1/0", "notes"] {
             std::fs::create_dir_all(uploads.join(leftover)).unwrap();

@@ -2,7 +2,7 @@
 //! `-h`/`--help` is routed, and what reaches stdout/stderr before the CLI
 //! module owns a command.
 //!
-//! Subprocess-based with an isolated BLADE_HOME. None of these paths may
+//! Subprocess-based with an isolated OBU_HOME. None of these paths may
 //! launch Chrome; CHROME_PATH points at a missing binary so a regression
 //! fails fast instead of starting a browser.
 
@@ -12,26 +12,25 @@ use std::process::{Command, Output, Stdio};
 use serde_json::Value;
 
 fn home(tag: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("bladebro-cli-surface-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("obu-cli-surface-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 fn command(home: &PathBuf) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bladebro"));
-    cmd.env("BLADE_HOME", home)
-        .env("BLADE_LANE", "agent")
-        .env("BLADE_NO_UPDATE_CHECK", "1")
-        .env("BLADE_NO_WARMING", "1")
-        .env("BLADE_IDLE_TIMEOUT", "5")
-        .env("BLADE_PLAIN", "1")
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_obu"));
+    cmd.env("OBU_HOME", home)
+        .env("OBU_LANE", "agent")
+        .env("OBU_NO_UPDATE_CHECK", "1")
+        .env("OBU_NO_WARMING", "1")
+        .env("OBU_IDLE_TIMEOUT", "5")
+        .env("OBU_PLAIN", "1")
         .env("CHROME_PATH", home.join("no-chrome-here"))
         .stdin(Stdio::null());
     cmd
 }
 
-fn bladebro(home: &PathBuf, args: &[&str]) -> Output {
+fn obu(home: &PathBuf, args: &[&str]) -> Output {
     command(home).args(args).output().unwrap()
 }
 
@@ -47,7 +46,7 @@ fn stdout(out: &Output) -> String {
 fn help_is_routed_to_the_named_command() {
     let home = home("help");
     let manual = "COMMANDS";
-    let act = "bladebro act — interact with the page";
+    let act = "obu act — interact with the page";
     for args in [
         &["act", "--help"][..],
         &["act", "-h"],
@@ -55,7 +54,7 @@ fn help_is_routed_to_the_named_command() {
         &["help", "act"],
         &["--help", "act"],
     ] {
-        let out = bladebro(&home, args);
+        let out = obu(&home, args);
         let text = stdout(&out);
         assert!(out.status.success(), "{args:?}: {out:?}");
         assert!(
@@ -64,7 +63,7 @@ fn help_is_routed_to_the_named_command() {
         );
     }
 
-    let out = bladebro(&home, &["act", "--help", "--json"]);
+    let out = obu(&home, &["act", "--help", "--json"]);
     assert!(out.status.success(), "{out:?}");
     let v: Value = serde_json::from_slice(&out.stdout).expect("--help --json is one JSON object");
     assert_eq!(v["command"], "act");
@@ -73,27 +72,27 @@ fn help_is_routed_to_the_named_command() {
     // Commands main.rs owns answer with their help — the handler must not
     // run (`mcp --help` would start a server, `-u --help` would update).
     for (args, marker) in [
-        (&["mcp", "--help"][..], "bladebro mcp — MCP server"),
-        (&["-u", "--help"], "bladebro -u / update — self-update"),
-        (&["audit", "-h"], "bladebro audit — stealth audit"),
+        (&["mcp", "--help"][..], "obu mcp — MCP server"),
+        (&["-u", "--help"], "obu -u / update — self-update"),
+        (&["audit", "-h"], "obu audit — stealth audit"),
     ] {
-        let out = bladebro(&home, args);
+        let out = obu(&home, args);
         assert!(out.status.success(), "{args:?}: {out:?}");
         assert!(stdout(&out).contains(marker), "{args:?}: {}", stdout(&out));
     }
 
     // Before any command, and for `help` itself, it stays the manual.
     for args in [&["--help"][..], &["-h"], &["help", "--help"]] {
-        let out = bladebro(&home, args);
+        let out = obu(&home, args);
         assert!(out.status.success(), "{args:?}: {out:?}");
         assert!(stdout(&out).contains(manual), "{args:?}: {}", stdout(&out));
     }
-    let out = bladebro(&home, &["--help", "--json"]);
+    let out = obu(&home, &["--help", "--json"]);
     let v: Value = serde_json::from_slice(&out.stdout).expect("--help --json is one JSON object");
     assert!(v["commands"]["act"].is_object());
 
     // An unknown command is not a help request for the manual.
-    let out = bladebro(&home, &["nva", "--help"]);
+    let out = obu(&home, &["nva", "--help"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
 
     let _ = std::fs::remove_dir_all(&home);
@@ -113,7 +112,7 @@ fn json_errors_before_dispatch_are_one_object_on_stdout() {
         ),
         (&["--json", "nav", "x", "--host"], "--host needs a value"),
     ] {
-        let out = bladebro(&home, args);
+        let out = obu(&home, args);
         assert_eq!(out.status.code(), Some(2), "{args:?}: {out:?}");
         let text = stdout(&out);
         let lines: Vec<&str> = text.lines().collect();
@@ -127,7 +126,7 @@ fn json_errors_before_dispatch_are_one_object_on_stdout() {
         );
     }
     // Without --json, stdout stays empty: the human error is on stderr.
-    let out = bladebro(&home, &["nva"]);
+    let out = obu(&home, &["nva"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(out.stdout.is_empty(), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("unknown command"));
@@ -200,14 +199,14 @@ fn open_pty() -> Option<(std::fs::File, std::fs::File)> {
 }
 
 /// Styling is decided per stream. stderr used to follow STDOUT's terminal
-/// state: `bladebro nav x 2>err.log` on a terminal wrote ANSI codes into
+/// state: `obu nav x 2>err.log` on a terminal wrote ANSI codes into
 /// the log, while a terminal stderr behind `| jq` stayed plain.
 #[cfg(target_os = "linux")]
 #[test]
 fn stderr_styling_follows_stderr_not_stdout() {
     let home = home("color");
     let colorable = |cmd: &mut Command| {
-        cmd.env_remove("BLADE_PLAIN")
+        cmd.env_remove("OBU_PLAIN")
             .env_remove("NO_COLOR")
             .env_remove("CLICOLOR_FORCE")
             .env("TERM", "xterm");

@@ -2,7 +2,7 @@
 
 **Before you change anything: read [`CONTRIBUTING.md`](CONTRIBUTING.md).** It is one page and it is the binding contract — what PRs are accepted, what gets rejected, and what "verified" means here. This file adds the repo mechanics an agent needs on top of it. If the two ever disagree, CONTRIBUTING.md wins.
 
-Bladebro is an agentic browser driver for AI: an MCP server (`bladebro mcp`, stdio JSON-RPC) and a CLI (`bladebro nav`, `see`, `act`, …) driving a real Chrome/Chromium over the DevTools Protocol. The shipped artifact is a single Rust binary — no Node.js runtime, no Playwright/Puppeteer, no LLM in the driver. The CDP transport, perception layer, stealth injection, biometrics and session management are built from scratch in this repo.
+Obu is an agentic browser driver for AI: an MCP server (`obu mcp`, stdio JSON-RPC) and a CLI (`obu nav`, `see`, `act`, …) driving a real Chrome/Chromium over the DevTools Protocol. The shipped artifact is a single Rust binary — no Node.js runtime, no Playwright/Puppeteer, no LLM in the driver. The CDP transport, perception layer, stealth injection, biometrics and session management are built from scratch in this repo.
 
 Two properties shape every change:
 
@@ -13,21 +13,21 @@ Two properties shape every change:
 
 ```bash
 cargo check                               # type-check loop (~3 s)
-cargo build --profile gate                # fast runnable binary → ./target/gate/bladebro
+cargo build --profile gate                # fast runnable binary → ./target/gate/obu
 cargo fmt --check                         # formatting (CI-enforced)
 cargo clippy --release -- -D warnings     # zero warnings, always
 cargo test --profile gate                 # all tests must pass (~90 s edit→green)
-cargo build --release                     # the shipped artifact (LTO) → ./target/release/bladebro
+cargo build --release                     # the shipped artifact (LTO) → ./target/release/obu
 
-./target/release/bladebro doctor          # environment check
-./target/release/bladebro nav example.com # auto-starts its daemon + browser
-./target/release/bladebro see content
-./target/release/bladebro stop            # when done — don't leave a daemon running
+./target/release/obu doctor          # environment check
+./target/release/obu nav example.com # auto-starts its daemon + browser
+./target/release/obu see content
+./target/release/obu stop            # when done — don't leave a daemon running
 ```
 
-The verification instruments (`tools/*/README.md`) read `BLADEBRO`; point them at `target/gate/bladebro` while iterating. The full set runs in `.github/workflows/probes.yml` (nightly, tag, manual) as parallel remote jobs — run only the one that covers your change, by hand.
+The verification instruments (`tools/*/README.md`) read `OBU`; point them at `target/gate/obu` while iterating. The full set runs in `.github/workflows/probes.yml` (nightly, tag, manual) as parallel remote jobs — run only the one that covers your change, by hand.
 
-Rust: edition 2021, MSRV 1.86. `rust-toolchain.toml` pins the toolchain CI uses — a drifting `stable` is how two releases failed on lints a one-version-behind local clippy could not see. Bump the pin deliberately, with the gate run on the new version. Requirements: Chrome/Chromium installed. On headless Linux bladebro manages its own Xvfb + window manager. Linux (x64 + ARM64), macOS (x64 + arm64) and Windows are all first-class — CI builds all three OSes, so don't write code that silently assumes Linux.
+Rust: edition 2021, MSRV 1.86. `rust-toolchain.toml` pins the toolchain CI uses — a drifting `stable` is how two releases failed on lints a one-version-behind local clippy could not see. Bump the pin deliberately, with the gate run on the new version. Requirements: Chrome/Chromium installed. On headless Linux obu manages its own Xvfb + window manager. Linux (x64 + ARM64), macOS (x64 + arm64) and Windows are all first-class — CI builds all three OSes, so don't write code that silently assumes Linux.
 
 ## Where to change what
 
@@ -53,8 +53,8 @@ Other places: `tests/` (integration tests + fixtures; unit tests live inline as 
 
 ## Non-negotiables (PRs violating these are rejected)
 
-1. **Five tools. Forever.** `act`, `see`, `state`, `run`, `vision`. New capabilities are parameters or behaviors of those five — never a sixth tool. The tool definitions (five compact definitions) are the entire interface budget of every agent using bladebro.
-2. **No LLM inside the driver.** Deterministic machinery only. The agent is the intelligence; bladebro never calls a model.
+1. **Five tools. Forever.** `act`, `see`, `state`, `run`, `vision`. New capabilities are parameters or behaviors of those five — never a sixth tool. The tool definitions (five compact definitions) are the entire interface budget of every agent using obu.
+2. **No LLM inside the driver.** Deterministic machinery only. The agent is the intelligence; obu never calls a model.
 3. **No CAPTCHA solving as a capability — with one narrow, adapter-only exception.** The standing rule: detect, report an honest `blocked:` verdict, apply the remediation ladder; nothing is ever fake-solved. The exception: a site adapter may pass a challenge that is trivial for a human — a single check-the-box click through the normal humanized input path, as the reddit adapter does for reddit's one-time "prove your humanity" gate. Conditions that keep it honest: adapter-specific and site-gated (never a universal solver), and if the challenge escalates beyond the simple check (an image grid), that is reported honestly and never solved.
 4. **No Chromium fork.** The engine is stock system Chrome/Chromium. Everything else is built here.
 5. **Adapters are pure optimization.** The `extract=auto` site paths make existing commands smarter on their site — zero new tools, zero new params, live-tested on the real site.
@@ -69,9 +69,9 @@ These run in CI as parallel jobs (`.github/workflows/probes.yml`, nightly + tag 
 
 House rules: **reproduce before you fix** (don't "fix" what you haven't seen fail) and **verify from live readback** (a command exiting 0 is not evidence that a behavior works). These tools exist because trusting our own code is how stealth bugs ship:
 
-- `./target/release/bladebro audit` — the stealth vector suite + cross-restart stability stamps. The suite prints its own total (111 on the reference machine, GPU/profile-dependent elsewhere); the bar is no `FAIL` line and stable stamps after any stealth-adjacent change.
-- `python3 tools/diff_oracle/oracle.py` — stock Chrome vs bladebro, same display, identical probe battery; every difference classified EXPECTED (a documented mask, with its reason) or DIVERGENT. **`divergent: 0` is required — a DIVERGENT line is a STOP, not a note.** `--lane real` checks the real-browser lane (bar: 0 expected, 0 divergent).
-- `python3 tools/qol_probe/run.py` — the input/action behavior suite against local fixtures (`editor.html`, `shadow.html`, `extract.html`, `universal.html`, `router.html`); 122 checks. Runs on a local HTTP fixture server with its own `BLADE_HOME`. The fastest way to validate click/type/fill/select changes, and the right place to add a repro when you fix an input bug.
+- `./target/release/obu audit` — the stealth vector suite + cross-restart stability stamps. The suite prints its own total (111 on the reference machine, GPU/profile-dependent elsewhere); the bar is no `FAIL` line and stable stamps after any stealth-adjacent change.
+- `python3 tools/diff_oracle/oracle.py` — stock Chrome vs obu, same display, identical probe battery; every difference classified EXPECTED (a documented mask, with its reason) or DIVERGENT. **`divergent: 0` is required — a DIVERGENT line is a STOP, not a note.** `--lane real` checks the real-browser lane (bar: 0 expected, 0 divergent).
+- `python3 tools/qol_probe/run.py` — the input/action behavior suite against local fixtures (`editor.html`, `shadow.html`, `extract.html`, `universal.html`, `router.html`); 122 checks. Runs on a local HTTP fixture server with its own `OBU_HOME`. The fastest way to validate click/type/fill/select changes, and the right place to add a repro when you fix an input bug.
 - `python3 tools/lane_matrix.py all 5` — cold-start matrix across all five lanes (daemon / one-shot / MCP / MCP-pipe / real), 5 rounds each.
 - `python3 tools/rb_live/attach_drift.py` — real-lane attach drift check; run after touching `src/realbrowser.rs`.
 
@@ -84,7 +84,7 @@ Match the surrounding code. Specific to this repo:
 - **Comments explain why**, not what — constraints, detection classes, behaviors that break if the line changes.
 - **Error strings are product surface.** Agents read them: be specific, actionable, name the recovery path. Include page state in action errors.
 - **No `unwrap`/`expect` in non-test code** outside provably-guarded cases; failures bubble with context (`anyhow`/`thiserror`).
-- **Injected JS must stay dependency-free and syntactically valid.** The test suite runs `node --check` on assembled scripts because one parse error silently disables *every* patch. Debug with `BLADE_DUMP_INJECT=/tmp/inj.js` + `node --check /tmp/inj.js`.
+- **Injected JS must stay dependency-free and syntactically valid.** The test suite runs `node --check` on assembled scripts because one parse error silently disables *every* patch. Debug with `OBU_DUMP_INJECT=/tmp/inj.js` + `node --check /tmp/inj.js`.
 - **`src/cli/help.rs` help blocks are raw strings** (`r#"…"#`). A `"#` sequence inside one (a CSS `"#id"` example, say) terminates the string early and the compiler error appears dozens of lines away. Don't put it there.
 - **stdout is a machine contract.** `--json` prints a single JSON object; MCP stdout is pure JSON-RPC. Logs go to stderr. Human styling (`src/ui.rs`) is TTY-gated — piped output must stay plain.
 - **Keep outputs lean.** Delta-first responses, big payloads offloaded to artifact files. Don't add a field an agent doesn't need.
@@ -110,19 +110,38 @@ gh run watch --workflow Release          # the only thing to wait on; nothing bu
 - Never build a release artifact locally, never bump a version by hand, never re-tag — a failed release is re-run with `workflow_dispatch` on the same tag.
 - Never republish an npm version: `publish-npm-ci.sh` fails closed if the registry already has it.
 
+## Merging upstream
+
+This fork is [dondai44423/bladebro](https://github.com/dondai44423/bladebro) under another name. <!-- fork-rename:keep -->
+The rename is done by `scripts/fork-rename.py` and by nothing else: `bladebro` → `obu`, `BLADE_*` → `OBU_*`, the data dir `blade` → `obu`, the npm packages, the repository URL. <!-- fork-rename:keep -->
+Never rename by hand, and never bring the upstream name back in new code — CI runs `python3 scripts/fork-rename.py --check`.
+
+To take upstream changes, rename upstream's tree with the same script first, then merge. Both sides then changed every renamed line identically, so only real changes can conflict:
+
+```bash
+git fetch upstream
+git show main:scripts/fork-rename.py > /tmp/fork-rename.py
+git checkout -B upstream-renamed upstream/main
+python3 /tmp/fork-rename.py && cargo fmt
+git add -A && git commit -m "chore: upstream, renamed by scripts/fork-rename.py"
+git checkout main && git merge upstream-renamed
+```
+
+A fix that only exists because the name got shorter (a test that sized its input by the name) goes into the script's `FIXUPS` table, not into the tree — otherwise the next merge conflicts on it.
+
 ## Boundaries
 
-- ✅ **Always:** run clippy + tests; add the regression test; use a scratch data dir for manual experiments (`BLADE_HOME=$(mktemp -d) ./target/release/bladebro …`) so a real browser profile is never touched; state exactly how you verified (commands + output) in the PR.
+- ✅ **Always:** run clippy + tests; add the regression test; use a scratch data dir for manual experiments (`OBU_HOME=$(mktemp -d) ./target/release/obu …`) so a real browser profile is never touched; state exactly how you verified (commands + output) in the PR.
 - ⚠️ **Ask first** (open an issue or draft PR): adding a dependency (binary size + supply chain — it ships ~7 MB and we like it); changing MCP tool schemas (every word is billed to every user's context); changing capture/perception output formats (agents parse them); touching the stealth injection *architecture*; anything in `npm/`.
 - 🚫 **Never:** a 6th tool; an LLM call in the driver; CAPTCHA solving beyond the adapter-only human-trivial exception (non-negotiable #3); a Chromium fork; a `Function.prototype.toString` patch; launch flags that mark the browser as automated; committing secrets, tokens or real browsing-profile data; committing build artifacts; npm install scripts (the packages ship zero — keep it that way); version bumps or publishing.
 
 ## Gotchas worth knowing (each one cost real debugging time)
 
 - **Owned browser shutdown must flush before process-tree cleanup.** Await `Browser::shutdown_gracefully()` on normal exit, EOF, signal and idle paths. Killing the whole process group first kills Chrome's storage services before localStorage reaches disk. Keep emergency tree cleanup bounded; never close an externally attached browser. `tools/reliability_probe/persistence.py` locks direct/forked CLI and MCP restart behavior.
-- **A running daemon/MCP keeps the old binary inode.** After rebuilding, `bladebro stop` (or restart the MCP server) before testing — otherwise you're still testing the old build.
-- **The MCP lane defaults to the WebSocket transport** (native `navigator.webdriver == false`). `BLADE_TRANSPORT=pipe` is the opt-in zero-port pipe: Chrome then reports `webdriver == true` and needs a mask — keep it opt-in, never a default.
+- **A running daemon/MCP keeps the old binary inode.** After rebuilding, `obu stop` (or restart the MCP server) before testing — otherwise you're still testing the old build.
+- **The MCP lane defaults to the WebSocket transport** (native `navigator.webdriver == false`). `OBU_TRANSPORT=pipe` is the opt-in zero-port pipe: Chrome then reports `webdriver == true` and needs a mask — keep it opt-in, never a default.
 - **The stealth baseline is Chrome-version-sensitive.** The current audited numbers were measured against Chromium 157 at v4.6.9. Re-measure on a different Chrome before calling something a regression.
-- **A page session's `Runtime.evaluate` runs in an isolated world** (`src/cdp/reader.rs`), where the page's scripts cannot observe the driver's DOM reads — and where the page's own JS globals, JS-assigned `on*` handlers and custom-element properties do not exist. A script that needs them (the agent's `eval`, an adapter calling the page's API, a stealth self-check) must ask for `cdp.main_world()`; for one property of one node, trade the node's handle through its backend id as `in_the_pages_world` (`src/action/find.rs`) does — never move a whole script back. Scripts must be a single expression (an IIFE); a statement list falls back to the page's world. `BLADE_MAIN_WORLD=1` turns the routing off for A/B.
-- **Don't point anything at a real browser profile.** Tests and the gate tools isolate themselves with scratch `BLADE_HOME`s — keep that property in anything you add.
+- **A page session's `Runtime.evaluate` runs in an isolated world** (`src/cdp/reader.rs`), where the page's scripts cannot observe the driver's DOM reads — and where the page's own JS globals, JS-assigned `on*` handlers and custom-element properties do not exist. A script that needs them (the agent's `eval`, an adapter calling the page's API, a stealth self-check) must ask for `cdp.main_world()`; for one property of one node, trade the node's handle through its backend id as `in_the_pages_world` (`src/action/find.rs`) does — never move a whole script back. Scripts must be a single expression (an IIFE); a statement list falls back to the page's world. `OBU_MAIN_WORLD=1` turns the routing off for A/B.
+- **Don't point anything at a real browser profile.** Tests and the gate tools isolate themselves with scratch `OBU_HOME`s — keep that property in anything you add.
 
 Before you say "done": clippy clean → tests pass → the instruments for your change ran green → the PR description says what changed, how it was verified, and before/after numbers for stealth or performance work. That is the definition of done here.

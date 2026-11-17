@@ -5,7 +5,7 @@
 //! not find it and every command needed `--host/--port` — which bypasses the
 //! daemon. These tests lock the config surface and prove the attach path
 //! consults the configured port, with no browser/profile discovery, through
-//! real CLI subprocesses on an isolated `BLADE_HOME`.
+//! real CLI subprocesses on an isolated `OBU_HOME`.
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -21,11 +21,9 @@ impl Home {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "blade-rb-port-{tag}-{}-{nanos}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(root.join("blade")).unwrap();
+        let root =
+            std::env::temp_dir().join(format!("obu-rb-port-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(root.join("obu")).unwrap();
         std::fs::create_dir_all(root.join("home")).unwrap();
         Self(root)
     }
@@ -34,18 +32,18 @@ impl Home {
     /// a real browser profile: an attach that still went through discovery
     /// would fail on the selection, not on the port.
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(args)
-            .env("BLADE_HOME", self.0.join("blade"))
+            .env("OBU_HOME", self.0.join("obu"))
             .env("HOME", self.0.join("home"))
             .env("XDG_CONFIG_HOME", self.0.join("home/.config"))
             // Windows resolves profiles from these, not from HOME.
             .env("USERPROFILE", self.0.join("home"))
             .env("LOCALAPPDATA", self.0.join("home/AppData/Local"))
             .env("APPDATA", self.0.join("home/AppData/Roaming"))
-            .env("BLADE_NO_UPDATE_CHECK", "1")
-            .env("BLADE_NO_WARMING", "1")
-            .env_remove("BLADE_LANE")
+            .env("OBU_NO_UPDATE_CHECK", "1")
+            .env("OBU_NO_WARMING", "1")
+            .env_remove("OBU_LANE")
             .output()
             .unwrap()
     }
@@ -68,7 +66,7 @@ impl Home {
     }
 
     fn write_config(&self, cfg: Value) {
-        std::fs::write(self.0.join("blade/realbrowser.json"), cfg.to_string()).unwrap();
+        std::fs::write(self.0.join("obu/realbrowser.json"), cfg.to_string()).unwrap();
     }
 }
 

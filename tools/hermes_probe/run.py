@@ -11,7 +11,7 @@ import tempfile
 import threading
 
 p = argparse.ArgumentParser()
-p.add_argument('--binary', default='target/release/bladebro', type=Path)
+p.add_argument('--binary', default='target/release/obu', type=Path)
 p.add_argument('--hermes', default=shutil.which('hermes'))
 p.add_argument('--hermes-root', type=Path, required=True)
 p.add_argument('--python', type=Path, required=True, help='Python from the installed Hermes dependency environment')
@@ -42,19 +42,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-with tempfile.TemporaryDirectory(prefix='blade-hermes-probe-') as tmp:
+with tempfile.TemporaryDirectory(prefix='obu-hermes-probe-') as tmp:
     root = Path(tmp)
     home = root / 'Hermes home Δ with spaces'
     home.mkdir(mode=0o700)
-    env = dict(os.environ, HERMES_HOME=str(home), BLADE_HOME=str(root / 'browser'),
-               BLADE_NO_UPDATE_CHECK='1', PYTHONIOENCODING='utf-8', NO_COLOR='1')
+    env = dict(os.environ, HERMES_HOME=str(home), OBU_HOME=str(root / 'browser'),
+               OBU_NO_UPDATE_CHECK='1', PYTHONIOENCODING='utf-8', NO_COLOR='1')
     env.pop('HERMES_PROFILE', None)
-    env.pop('BLADE_LANE', None)
+    env.pop('OBU_LANE', None)
     long_tmp = root / ('long harness temporary directory ' * 3)
     long_tmp.mkdir(mode=0o700)
     env['TMPDIR'] = str(long_tmp)
     cfg = home / 'config.yaml'
-    state = home / '.bladebro-browser/state.json'
+    state = home / '.obu-browser/state.json'
     base = {'agent': {'disabled_toolsets': ['tts']}, 'mcp_servers': {
         'keep': {'command': 'never-run', 'enabled': False, 'env': {'SENTINEL': 'preserve'}}},
         'browser': {'backend': 'off'}, 'platform_toolsets': {'cli': ['hermes-cli']},
@@ -105,7 +105,7 @@ with tempfile.TemporaryDirectory(prefix='blade-hermes-probe-') as tmp:
     snapshot = state.read_bytes()
     cli('on', label='on-again')
     check(state.read_bytes() == snapshot, 'idempotent on retains original restore point')
-    check('Bladebro configured' in cli('status', label='status')['text'], 'status reports read-back state')
+    check('Obu configured' in cli('status', label='status')['text'], 'status reports read-back state')
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory(prefix='blade-hermes-probe-') as tmp:
         result = run([a.python, Path(__file__).with_name('runtime.py'), '--hermes-root', a.hermes_root,
                       '--url', f'http://127.0.0.1:{server.server_port}/'], 'runtime')
         check('PASS TOTAL ' in result.stdout, 'runtime reaches final assertions under a long TMPDIR')
-        check((root / 'browser').is_dir(), 'MCP uses the explicit disposable Bladebro home')
+        check((root / 'browser').is_dir(), 'MCP uses the explicit disposable Obu home')
     finally:
         server.shutdown()
         server.server_close()
@@ -129,19 +129,19 @@ with tempfile.TemporaryDirectory(prefix='blade-hermes-probe-') as tmp:
     result = run([a.python, Path(__file__).with_name('runtime.py'), '--hermes-root', a.hermes_root,
                   '--native'], 'native-catalog')
     check('PASS TOTAL ' in result.stdout, 'native catalog restored after off')
-    run([a.hermes, 'profile', 'create', 'bladeprobe', '--no-alias', '--no-skills'], 'profile-create')
+    run([a.hermes, 'profile', 'create', 'obuprobe', '--no-alias', '--no-skills'], 'profile-create')
     default_before = cfg.read_bytes()
-    cli('on', '--profile', 'bladeprobe', label='profile-on')
+    cli('on', '--profile', 'obuprobe', label='profile-on')
     check(cfg.read_bytes() == default_before, 'named profile leaves default config untouched')
-    check('Bladebro configured' in cli('status', '--profile', 'bladeprobe', label='profile-status')['text'],
+    check('Obu configured' in cli('status', '--profile', 'obuprobe', label='profile-status')['text'],
           'named profile setup reads back independently')
-    cli('off', '--profile', 'bladeprobe', label='profile-off')
+    cli('off', '--profile', 'obuprobe', label='profile-off')
     check(cfg.read_bytes() == default_before, 'named profile restore leaves default untouched')
 
-    # An existing custom Bladebro entry and prior browser suppression must survive.
+    # An existing custom Obu entry and prior browser suppression must survive.
     custom = json.loads(json.dumps(base))
     custom['agent']['disabled_toolsets'].append('browser')
-    custom['mcp_servers']['bladebro'] = {'enabled': False, 'command': 'old-browser',
+    custom['mcp_servers']['obu'] = {'enabled': False, 'command': 'old-browser',
                                        'env': {'SENTINEL': 'private-prior-value'}}
     write(custom)
     cli('on', label='existing-on')
@@ -174,11 +174,11 @@ with tempfile.TemporaryDirectory(prefix='blade-hermes-probe-') as tmp:
     write(base)
     cli('on', label='conflict-on')
     installed = json.loads(state.read_text())['installed']
-    run([a.hermes, 'config', 'set', 'mcp_servers.bladebro.command', 'user-edited'], 'conflict-edit')
+    run([a.hermes, 'config', 'set', 'mcp_servers.obu.command', 'user-edited'], 'conflict-edit')
     before = cfg.read_bytes()
     cli('off', label='conflict-off', ok=False)
     check(cfg.read_bytes() == before and state.exists(), 'conflicting edits are not overwritten')
-    run([a.hermes, 'config', 'set', 'mcp_servers.bladebro', json.dumps(installed)], 'conflict-resolve')
+    run([a.hermes, 'config', 'set', 'mcp_servers.obu', json.dumps(installed)], 'conflict-resolve')
     cli('off', label='conflict-restored')
 
     for label, invalid in [('malformed', 'agent: [unterminated'),

@@ -29,6 +29,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --check
+      - name: Fork rename is complete
+        # The upstream name must not come back (see "Merging upstream" in
+        # AGENTS.md); the script is the only thing that renames.
+        run: python3 scripts/fork-rename.py --check
       - name: Oracle evidence parser
         run: python3 tools/diff_oracle/test_oracle.py
       - name: Clippy (host + all targets)

@@ -10,7 +10,7 @@ Covers the acceptance matrices that need a live browser:
   G13 proxy redaction (CLI, synthetic secret never logged)
 
 Run:  python3 tools/gap44/probe.py <run-number>
-Each run uses a fresh scratch BLADE_HOME; run twice for the two-pass gate.
+Each run uses a fresh scratch OBU_HOME; run twice for the two-pass gate.
 """
 
 import json
@@ -27,10 +27,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BIN = Path(os.environ.get("BLADEBRO", str(ROOT / "target" / "release" / "bladebro")))
+BIN = Path(os.environ.get("OBU", str(ROOT / "target" / "release" / "obu")))
 
 RUN = sys.argv[1] if len(sys.argv) > 1 else "1"
-HOME = Path(tempfile.mkdtemp(prefix=f"blade-gap44-{RUN}-"))
+HOME = Path(tempfile.mkdtemp(prefix=f"obu-gap44-{RUN}-"))
 RESULTS = []
 
 
@@ -85,8 +85,8 @@ BASE = f"http://127.0.0.1:{PORT}"
 
 # ── MCP client ──────────────────────────────────────────────────────────────
 
-env = dict(os.environ, BLADE_HOME=str(HOME), BLADE_NO_WARMING="1", BLADE_NO_UPDATE_CHECK="1")
-for k in ("CHROME_PATH", "BLADE_TRANSPORT", "BLADE_LANE", "BLADE_PROFILE_DIR", "BLADE_PROXY"):
+env = dict(os.environ, OBU_HOME=str(HOME), OBU_NO_WARMING="1", OBU_NO_UPDATE_CHECK="1")
+for k in ("CHROME_PATH", "OBU_TRANSPORT", "OBU_LANE", "OBU_PROFILE_DIR", "OBU_PROXY"):
     env.pop(k, None)
 
 stderr_path = HOME / "mcp-stderr.log"
@@ -392,7 +392,7 @@ try:
     dec = json.JSONDecoder()
     data = dec.raw_decode(t[m.start():])[0] if m else {}
     rows = data.get("rows", [])
-    meta = data.get("__blade_meta", {})
+    meta = data.get("__obu_meta", {})
     r0 = rows[0] if rows else {}
     ok = (
         len(rows) == 3
@@ -446,12 +446,12 @@ finally:
         proc.wait(timeout=10)
     # ── G13: proxy redaction (MCP lane keeps stderr; synthetic secrets only) ─
     secret = "SEKRITPW44"
-    h1 = Path(tempfile.mkdtemp(prefix="blade-gap44-proxy-"))
+    h1 = Path(tempfile.mkdtemp(prefix="obu-gap44-proxy-"))
 
     def mcp_proxy_run(proxy_value):
-        env3 = dict(os.environ, BLADE_HOME=str(h1), BLADE_NO_WARMING="1",
-                    BLADE_NO_UPDATE_CHECK="1", BLADE_PROXY=proxy_value)
-        for k in ("CHROME_PATH", "BLADE_TRANSPORT", "BLADE_LANE", "BLADE_PROFILE_DIR"):
+        env3 = dict(os.environ, OBU_HOME=str(h1), OBU_NO_WARMING="1",
+                    OBU_NO_UPDATE_CHECK="1", OBU_PROXY=proxy_value)
+        for k in ("CHROME_PATH", "OBU_TRANSPORT", "OBU_LANE", "OBU_PROFILE_DIR"):
             env3.pop(k, None)
         errf = h1 / "proxy-stderr.log"
         p = subprocess.Popen([str(BIN), "mcp"], env=env3, stdin=subprocess.PIPE,
@@ -517,13 +517,13 @@ finally:
     # The refusal is about credentials, not proxies: a plain endpoint is still
     # handed to Chrome (here a dead loopback proxy, so only the launch matters).
     out3, err3, hits3, reply3 = mcp_proxy_run("http://127.0.0.1:9")
-    accepted = not reply3.get("result", {}).get("isError") and "invalid BLADE_PROXY" not in err3
+    accepted = not reply3.get("result", {}).get("isError") and "invalid OBU_PROXY" not in err3
     check("G13 credential-free proxy is still accepted (MCP lane)",
           accepted, short(f"hits={hits3} err_tail={err3[-200:]}"))
 
     out2, err2, hits2, _ = mcp_proxy_run(f"http://user:{secret}@host:notaport")
     ok = (secret not in out2 and secret not in err2 and not hits2
-          and "invalid BLADE_PROXY" in (out2 + err2))
+          and "invalid OBU_PROXY" in (out2 + err2))
     check("G13 malformed proxy: fails redacted, names the problem",
           ok, short(f"hits={hits2} err_tail={err2[-200:]}"))
     shutil.rmtree(h1, ignore_errors=True)

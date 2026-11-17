@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 
 repo = Path(__file__).resolve().parents[2]
-with tempfile.TemporaryDirectory(prefix='blade-release-test-') as tmp:
+with tempfile.TemporaryDirectory(prefix='obu-release-test-') as tmp:
     root = Path(tmp)
     for name in ('release.sh', 'scripts/publish-npm.sh', 'Cargo.toml', 'CHANGELOG.md', 'deny.toml', 'tools/reliability_probe/linux-abi.py'):
         destination = root / name
@@ -25,8 +25,8 @@ with tempfile.TemporaryDirectory(prefix='blade-release-test-') as tmp:
         path.chmod(0o700)
     script('uname', 'case "$1" in -s) echo Linux;; -m) echo x86_64;; esac')
     script('cargo', 'if [ "$1" = deny ]; then shift; exec cargo-deny "$@"; fi\nexit 0')
-    env = dict(os.environ, PATH=str(commands), BLADE_RELEASE_CAPPED='1')
-    env.pop('BLADE_RELEASE_VERIFY', None)
+    env = dict(os.environ, PATH=str(commands), OBU_RELEASE_CAPPED='1')
+    env.pop('OBU_RELEASE_VERIFY', None)
     before = {name: (root / name).read_bytes() for name in ('Cargo.toml','CHANGELOG.md')}
     result = subprocess.run(['/bin/bash', str(root / 'release.sh'),'4.1.0'], env=env, cwd=root, capture_output=True, text=True)
     # dirname/basename are used before preflight; preserve genuine utilities.
@@ -40,18 +40,18 @@ with tempfile.TemporaryDirectory(prefix='blade-release-test-') as tmp:
     print('PASS missing cross builder refuses before any version mutation')
     # Existing artifacts must not allow bypassing the unavailable builder.
     (root / 'target/release').mkdir(parents=True)
-    (root / 'target/release/bladebro').write_text('stale')
+    (root / 'target/release/obu').write_text('stale')
     result = subprocess.run(['/bin/bash', str(root / 'release.sh'),'4.1.0'], env=env, cwd=root, capture_output=True, text=True)
     assert result.returncode != 0 and 'missing cargo-zigbuild' in result.stderr
     assert all((root / name).read_bytes() == data for name,data in before.items())
     print('PASS stale artifacts cannot bypass the cross builder gate')
-    packages = ['bladebro','bladebro-linux-x64','bladebro-linux-arm64','bladebro-windows-x64','bladebro-darwin-x64','bladebro-darwin-arm64']
+    packages = ['obu','obu-linux-x64','obu-linux-arm64','obu-windows-x64','obu-darwin-x64','obu-darwin-arm64']
     for package in packages:
         path = root / 'npm' / package
         path.mkdir(parents=True)
         (path / 'package.json').write_text(json.dumps({'name':package,'version':'4.0.3'}))
         (path / 'LICENSE').write_text('copied license fixture')
-    for target, filename in [('release','bladebro'),('aarch64-unknown-linux-gnu/release','bladebro'),('x86_64-pc-windows-gnu/release','bladebro.exe'),('x86_64-apple-darwin/release','bladebro'),('aarch64-apple-darwin/release','bladebro')]:
+    for target, filename in [('release','obu'),('aarch64-unknown-linux-gnu/release','obu'),('x86_64-pc-windows-gnu/release','obu.exe'),('x86_64-apple-darwin/release','obu'),('aarch64-apple-darwin/release','obu')]:
         path = root / 'target' / target
         path.mkdir(parents=True,exist_ok=True)
         (path / filename).write_text('copied test fixture')
@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory(prefix='blade-release-test-') as tmp:
     for name in ('cargo-zigbuild', 'zig'):
         script(name, 'exit 0')
     script('git', 'case "$1" in branch) echo main;; rev-parse) exit 1;; *) exit 0;; esac')
-    script('gh', 'case "$1" in repo) echo fixture/bladebro;; api) echo "$TEST_OPEN_ALERT";; *) exit 0;; esac')
+    script('gh', 'case "$1" in repo) echo fixture/obu;; api) echo "$TEST_OPEN_ALERT";; *) exit 0;; esac')
     script('cargo-deny', 'if [ "$TEST_DENY_FAIL" = 1 ]; then echo "advisories FAILED" >&2; exit 1; fi')
     # Authentication succeeds; only the actual security gates may refuse.
     script('npm', 'case "$1" in whoami) echo fixture-publisher;; *) exit 1;; esac')
@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='blade-release-test-') as tmp:
     assert result.returncode != 0 and 'main package was not published' in result.stderr, (result.stdout,result.stderr)
     lines = calls.read_text().splitlines()
     assert sum(' publish ' in line for line in lines) == 5, lines
-    assert not any('/npm/bladebro publish ' in line for line in lines), lines
+    assert not any('/npm/obu publish ' in line for line in lines), lines
     # 60 platform-propagation iterations × 5 packages (the deadline was
     # widened 12→30 in the 4.2.0 post-ship fix and 30→60 for the 10-minute
     # window; the fixture never propagates).
@@ -106,7 +106,7 @@ if args[:2]==['run','list']:
     if event=='push' and mode=='push':print('101')
     elif event=='workflow_dispatch' and mode in ('dispatch','ci-failure'):print('202')
 elif args[0]=='api':
-    assert args[1]=='repos/fixture/bladebro/git/ref/heads/main'
+    assert args[1]=='repos/fixture/obu/git/ref/heads/main'
     print('b'*40 if mode=='advanced' else sha)
 elif args[:2]==['workflow','run']:assert args==['workflow','run','CI','--ref','main']
 elif args[:2]==['run','watch']:
@@ -114,7 +114,7 @@ elif args[:2]==['run','watch']:
     if mode=='ci-failure':sys.exit(1)
 else:raise AssertionError(args)
 GH""")
-    env.update(RELEASE_SHA='a'*40, RELEASE_REPO='fixture/bladebro', TEST_CI_CALLS=str(root/'ci-calls'))
+    env.update(RELEASE_SHA='a'*40, RELEASE_REPO='fixture/obu', TEST_CI_CALLS=str(root/'ci-calls'))
     for mode in ('push','dispatch','advanced','race','ci-failure'):
         calls_path = root / 'ci-calls'
         calls_path.unlink(missing_ok=True)
@@ -144,19 +144,19 @@ GH""")
     hook_gate.write_text('set -euo pipefail\n'+text[hook_start:hook_end]+'\necho CANDIDATE_GATE_PASSED\n')
     script('git','case "$1" in rev-parse) echo "$TEST_HOOK_HEAD";; status) echo "$TEST_HOOK_DIRTY";; *) exit 1;; esac')
     hook=commands/'verify-candidate'
-    env.update(VERSION='4.1.1',TEST_HOOK_HEAD=env['RELEASE_SHA'],TEST_HOOK_DIRTY='',BLADE_RELEASE_VERIFY=str(hook),TEST_HOOK_RECEIPT=str(root/'hook-receipt'))
-    original_artifact=(root/'target/release/bladebro').read_bytes()
+    env.update(VERSION='4.1.1',TEST_HOOK_HEAD=env['RELEASE_SHA'],TEST_HOOK_DIRTY='',OBU_RELEASE_VERIFY=str(hook),TEST_HOOK_RECEIPT=str(root/'hook-receipt'))
+    original_artifact=(root/'target/release/obu').read_bytes()
     for mode in ('success','failure','artifact-changed','head-changed','dirty-tree'):
-        (root/'target/release/bladebro').write_bytes(original_artifact)
+        (root/'target/release/obu').write_bytes(original_artifact)
         env.update(TEST_HOOK_HEAD='b'*40 if mode=='head-changed' else env['RELEASE_SHA'],TEST_HOOK_DIRTY=' M Cargo.toml' if mode=='dirty-tree' else '')
-        script('verify-candidate','printf "%s\\n%s\\n" "$1" "$2" > "$TEST_HOOK_RECEIPT"\n'+('exit 7' if mode=='failure' else 'echo changed >> target/release/bladebro' if mode=='artifact-changed' else 'exit 0'))
+        script('verify-candidate','printf "%s\\n%s\\n" "$1" "$2" > "$TEST_HOOK_RECEIPT"\n'+('exit 7' if mode=='failure' else 'echo changed >> target/release/obu' if mode=='artifact-changed' else 'exit 0'))
         result=subprocess.run(['/bin/bash',str(hook_gate)],env=env,cwd=root,capture_output=True,text=True)
         assert (root/'hook-receipt').read_text().splitlines()==['4.1.1',env['RELEASE_SHA']]
         assert (result.returncode==0)==(mode=='success'),(mode,result.stdout,result.stderr)
         assert ('CANDIDATE_GATE_PASSED' in result.stdout)==(mode=='success'),mode
         print('PASS candidate verification gate:',mode)
     # Invalid hooks refuse at preflight, before editing version files.
-    env['BLADE_RELEASE_VERIFY']='relative-script'
+    env['OBU_RELEASE_VERIFY']='relative-script'
     script('git','case "$1" in branch) echo main;; status) exit 0;; rev-parse) exit 1;; *) exit 0;; esac')
     result=subprocess.run(['/bin/bash',str(root/'release.sh'),'4.1.1'],env=env,cwd=root,capture_output=True,text=True)
     assert result.returncode!=0 and 'absolute executable file' in result.stderr,result.stderr

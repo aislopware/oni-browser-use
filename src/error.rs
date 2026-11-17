@@ -1,14 +1,14 @@
-//! Error types for Bladebro.
+//! Error types for Obu.
 
 use thiserror::Error;
 
-/// All fallible Bladebro operations return this.
+/// All fallible Obu operations return this.
 ///
 /// Kept as a single enum (not a `Box<dyn Error>`) so callers can match on the
 /// concrete cause — important for the self-diagnosing-failure design where the
 /// driver reports *why* an action failed, not just that it did.
 #[derive(Debug, Error)]
-pub enum BladeError {
+pub enum ObuError {
     /// A CDP command returned a protocol-level error (non-zero code).
     #[error("CDP error ({code}) {message}")]
     Cdp { code: i64, message: String },
@@ -83,11 +83,11 @@ pub enum BladeError {
 }
 
 /// Convenience alias used throughout the crate.
-pub type Result<T> = std::result::Result<T, BladeError>;
+pub type Result<T> = std::result::Result<T, ObuError>;
 
-impl BladeError {
-    /// Construct an [`BladeError::Other`] from any Display-able value.
+impl ObuError {
+    /// Construct an [`ObuError::Other`] from any Display-able value.
     pub fn other<E: std::fmt::Display>(e: E) -> Self {
-        BladeError::Other(e.to_string())
+        ObuError::Other(e.to_string())
     }
 }

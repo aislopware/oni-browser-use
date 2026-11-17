@@ -1,6 +1,6 @@
 //! Domain knowledge base — cross-session learning that compounds with use.
 //!
-//! Two subsystems, both persisted in `~/.blade/knowledge/`, both surviving
+//! Two subsystems, both persisted in `~/.obu/knowledge/`, both surviving
 //! machine restarts, both compounding with use:
 //!
 //! ## 1. Domain knowledge
@@ -738,7 +738,7 @@ pub fn domain_from_url(url: &str) -> String {
 }
 
 fn knowledge_dir() -> PathBuf {
-    platform::blade_dir().join("knowledge")
+    platform::obu_dir().join("knowledge")
 }
 
 fn now_secs() -> u64 {
@@ -1044,7 +1044,7 @@ mod tests {
     }
 
     fn scratch_root(tag: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("blade-kb-{tag}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-kb-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("domains")).unwrap();
         root
@@ -1131,9 +1131,9 @@ mod tests {
 
     #[test]
     fn knowledge_base_roundtrip() {
-        // NOTE: this test intentionally does NOT touch BLADE_HOME. Env vars
+        // NOTE: this test intentionally does NOT touch OBU_HOME. Env vars
         // are process-global and mutations race with parallel tests reading
-        // platform::blade_dir(); the BLADE_HOME resolution is covered by
+        // platform::obu_dir(); the OBU_HOME resolution is covered by
         // platform::tests (pure resolver) instead.
         let mut kb = KnowledgeBase::default();
         kb.learn_consent("example.com", "#onetrust-reject-all-handler", "onetrust");

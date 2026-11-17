@@ -141,7 +141,7 @@ pub fn all_tools() -> Vec<ToolDef> {
                     "extract": {"type":"string","enum":["auto","json","links","forms"],"description":"Extract/paginate read kind; default auto."},
                     "template": {"type":"object","description":"See template contract; for extract=json."},
                     "limit": {"type":"integer","description":"Per-page extraction item limit."},
-                    "body": {"type":"boolean","description":"Download: HTTP body instead of browser attachment, <=32 MiB/30s. No browser cookies; honors HTTP(S) BLADE_PROXY, refuses other proxy types; returns status/path."},
+                    "body": {"type":"boolean","description":"Download: HTTP body instead of browser attachment, <=32 MiB/30s. No browser cookies; honors HTTP(S) OBU_PROXY, refuses other proxy types; returns status/path."},
                     "path": {"type": "string", "description": "PDF: output path."},
                     "landscape": {"type": "boolean"},
                     "printBackground": {"type": "boolean"},

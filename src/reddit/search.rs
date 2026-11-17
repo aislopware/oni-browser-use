@@ -128,12 +128,12 @@ pub async fn fetch_search(
     limit: usize,
 ) -> Result<SearchPayload> {
     if !query.split('&').any(|p| p.starts_with("q=")) {
-        return Err(BladeError::Other("reddit: search without a query".into()));
+        return Err(ObuError::Other("reddit: search without a query".into()));
     }
     // Same loid gate as the comment sweep: without the token these API paths
     // answer with the network-security wall instead of JSON.
     if !ensure_loid(cdp).await {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: no loid session token yet (the page-load challenge has not resolved) — load the page once, then retry".into(),
         ));
     }

@@ -1,17 +1,17 @@
 //! The `state` command parser — same op names as MCP, loud on unknown ops/flags.
 
 use super::take_value;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 /// Parse `state` args: <op> [args] [flags]. Same op names as MCP (plus
 /// rm-ss), and unknown ops/flags are loud errors.
 pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
     if args.is_empty() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "state needs an op — cookies, set-cookie, del-cookie, ls, ss, set-ls, set-ss, \
              rm-ls, rm-ss, clear-ls, clear-ss, tabs, open-tab, close-tab, switch-tab, save, \
-             load, compress, block (see 'bladebro help state')"
+             load, compress, block (see 'obu help state')"
                 .into(),
         ));
     }
@@ -44,8 +44,8 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
         other => other,
     };
     if !OPS.contains(&op) {
-        return Err(BladeError::Usage(format!(
-            "unknown state op '{op}' — available: {} (see 'bladebro help state')",
+        return Err(ObuError::Usage(format!(
+            "unknown state op '{op}' — available: {} (see 'obu help state')",
             OPS.join(", ")
         )));
     }
@@ -78,8 +78,8 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 "http-only" => j["httpOnly"] = json!(true),
                 "clear" => j["clear"] = json!(true),
                 _ => {
-                    return Err(BladeError::Usage(format!(
-                        "unknown flag --{flag} for state — see 'bladebro help state'"
+                    return Err(ObuError::Usage(format!(
+                        "unknown flag --{flag} for state — see 'obu help state'"
                     )))
                 }
             }
@@ -104,13 +104,13 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| p.next());
             let name = name.ok_or_else(|| {
-                BladeError::Usage(
+                ObuError::Usage(
                     "set-cookie needs a name — `state set-cookie <name> <value> [--url <u> | --domain <d>]`"
                         .into(),
                 )
             })?;
             let value = value.ok_or_else(|| {
-                BladeError::Usage(
+                ObuError::Usage(
                     "set-cookie needs a value — `state set-cookie <name> <value>`".into(),
                 )
             })?;
@@ -124,7 +124,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| pos.first().cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage(
+                    ObuError::Usage(
                         "del-cookie needs a name — `state del-cookie <name> [--url <u> | --domain <d>]`"
                             .into(),
                     )
@@ -143,7 +143,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .or_else(|| j.get("key").and_then(|x| x.as_str()).map(String::from))
                 .or_else(|| pos.first().cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage(format!("{op} needs a key — `state {op} <key> <value>`"))
+                    ObuError::Usage(format!("{op} needs a key — `state {op} <key> <value>`"))
                 })?;
             let value = j
                 .get("value")
@@ -151,7 +151,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| pos.get(1).cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage(format!("{op} needs a value — `state {op} <key> <value>`"))
+                    ObuError::Usage(format!("{op} needs a value — `state {op} <key> <value>`"))
                 })?;
             if let Some(obj) = j.as_object_mut() {
                 obj.remove("key");
@@ -166,9 +166,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| j.get("key").and_then(|x| x.as_str()).map(String::from))
                 .or_else(|| pos.first().cloned())
-                .ok_or_else(|| {
-                    BladeError::Usage(format!("{op} needs a key — `state {op} <key>`"))
-                })?;
+                .ok_or_else(|| ObuError::Usage(format!("{op} needs a key — `state {op} <key>`")))?;
             if let Some(obj) = j.as_object_mut() {
                 obj.remove("key");
             }
@@ -189,7 +187,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| pos.first().cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage("open-tab needs a URL — `state open-tab <url>`".into())
+                    ObuError::Usage("open-tab needs a URL — `state open-tab <url>`".into())
                 })?;
             j["url"] = json!(url);
         }
@@ -200,7 +198,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| pos.first().cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage(format!(
+                    ObuError::Usage(format!(
                         "{op} needs a tab id — `state {op} <id>` (ids come from `state tabs`)"
                     ))
                 })?;
@@ -213,7 +211,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .map(String::from)
                 .or_else(|| pos.first().cloned())
                 .ok_or_else(|| {
-                    BladeError::Usage(format!("{op} needs a session name — `state {op} <name>`"))
+                    ObuError::Usage(format!("{op} needs a session name — `state {op} <name>`"))
                 })?;
             j["name"] = json!(name);
         }
@@ -225,7 +223,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 .or_else(|| pos.first().cloned())
                 .unwrap_or_else(|| "status".to_string());
             if !matches!(mode.as_str(), "on" | "off" | "status") {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "compress mode must be on|off|status, got '{mode}'"
                 )));
             }
@@ -244,7 +242,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
         }
         "tabs" | "ls" | "ss" | "clear-ls" | "clear-ss" => {
             if !pos.is_empty() {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unexpected extra argument '{}' for {op}",
                     pos[0]
                 )));

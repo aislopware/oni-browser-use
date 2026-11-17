@@ -3,7 +3,7 @@
 //!
 //! ## The problem
 //!
-//! Every bladebro process used to share `~/.blade/profile`.
+//! Every obu process used to share `~/.obu/profile`.
 //! Chrome's SingletonLock meant a second session's launch had
 //! to KILL the first session's live Chrome — and if both were
 //! alive, they murdered each other's browsers in a loop. On
@@ -14,11 +14,11 @@
 //! ## The model
 //!
 //! ```text
-//! ~/.blade/
+//! ~/.obu/
 //!   profile/              ← seasoned TEMPLATE (never held by a running Chrome)
 //!   profiles/
 //!     sess-<pid>/         ← per-process live profile (Chrome's user-data-dir)
-//!       .blade-owner      ← bladebro's pid (ownership for the reaper)
+//!       .obu-owner      ← obu's pid (ownership for the reaper)
 //! ```
 //!
 //! - **Launch**: reap orphans → copy template → session dir →
@@ -42,7 +42,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 
 mod copy;
@@ -56,7 +56,7 @@ pub(crate) use self::reap::{profile_in_use, session_owner_dead, session_roots};
 /// Import-generation marker at the top of a real-lane clone template. Every
 /// import writes a fresh value; session copies carry it, and a sync-back only
 /// replaces a template of the SAME generation (see `sync_back_impl`).
-pub(crate) const IMPORT_MARKER: &str = ".blade-import";
+pub(crate) const IMPORT_MARKER: &str = ".obu-import";
 
 /// A per-process session profile. Cleaned up by [`cleanup`]
 /// after Chrome has exited (never while Chrome holds it).
@@ -66,7 +66,7 @@ pub struct SessionProfile {
     /// Borrowed/custom profiles stay caller-owned regardless of their path.
     owned: bool,
     /// Whether to copy this profile back over the agent-lane template
-    /// on cleanup (false for BLADE_FRESH ephemeral sessions).
+    /// on cleanup (false for OBU_FRESH ephemeral sessions).
     seasoned: bool,
     /// Real-lane sessions only: the realbrowser root
     /// (`<data-dir>/realbrowser/<id>`) whose `template/` this session
@@ -90,10 +90,10 @@ impl Drop for TemplateLock {
 /// Never chmod a borrowed path, symlink or directory another user can change.
 fn create_private_profile_dir(dir: &Path) -> Result<()> {
     platform::secure_create_dir_all(dir)
-        .map_err(|e| BladeError::Other(format!("cannot create profile dir: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot create profile dir: {e}")))?;
     let metadata = std::fs::symlink_metadata(dir)?;
     if !metadata.is_dir() {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "unsafe owned profile directory: {}",
             dir.display()
         )));
@@ -102,7 +102,7 @@ fn create_private_profile_dir(dir: &Path) -> Result<()> {
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "unsafe profile ownership or public write permissions: {}",
                 dir.display()
             )));
@@ -112,7 +112,7 @@ fn create_private_profile_dir(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Prepare the operator's BLADE_PROFILE_DIR override: validate the target
+/// Prepare the operator's OBU_PROFILE_DIR override: validate the target
 /// and its ancestors, refuse symlinks / foreign ownership / non-dirs, and
 /// lock the directory to 0700 (it holds the live cookie jar).
 fn prepare_custom_profile_dir(d: &Path) -> Result<()> {
@@ -120,35 +120,35 @@ fn prepare_custom_profile_dir(d: &Path) -> Result<()> {
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         crate::platform::validate_dir_ancestors(d)
-            .map_err(|e| BladeError::Other(format!("BLADE_PROFILE_DIR {}: {e}", d.display())))?;
+            .map_err(|e| ObuError::Other(format!("OBU_PROFILE_DIR {}: {e}", d.display())))?;
         let lock_private = |p: &Path| -> Result<()> {
             std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o700))
-                .map_err(|e| BladeError::Other(format!("cannot secure profile dir: {e}")))
+                .map_err(|e| ObuError::Other(format!("cannot secure profile dir: {e}")))
         };
         match std::fs::symlink_metadata(d) {
             Ok(meta) => {
                 if meta.file_type().is_symlink() {
-                    return Err(BladeError::Other(format!(
-                        "BLADE_PROFILE_DIR {} is a symlink — refusing it (possible local profile hijack)",
+                    return Err(ObuError::Other(format!(
+                        "OBU_PROFILE_DIR {} is a symlink — refusing it (possible local profile hijack)",
                         d.display()
                     )));
                 }
                 if !meta.is_dir() {
-                    return Err(BladeError::Other(format!(
-                        "BLADE_PROFILE_DIR {} is not a directory",
+                    return Err(ObuError::Other(format!(
+                        "OBU_PROFILE_DIR {} is not a directory",
                         d.display()
                     )));
                 }
                 if meta.uid() != unsafe { libc::geteuid() } {
-                    return Err(BladeError::Other(format!(
-                        "BLADE_PROFILE_DIR {} is owned by another user — refusing it (possible local profile hijack)",
+                    return Err(ObuError::Other(format!(
+                        "OBU_PROFILE_DIR {} is owned by another user — refusing it (possible local profile hijack)",
                         d.display()
                     )));
                 }
                 let mode = meta.permissions().mode() & 0o777;
                 if mode & 0o077 != 0 {
                     eprintln!(
-                        "[bladebro] WARNING: BLADE_PROFILE_DIR {} is group/other-accessible ({mode:o}) — it holds cookies and localStorage",
+                        "[obu] WARNING: OBU_PROFILE_DIR {} is group/other-accessible ({mode:o}) — it holds cookies and localStorage",
                         d.display()
                     );
                 }
@@ -157,36 +157,36 @@ fn prepare_custom_profile_dir(d: &Path) -> Result<()> {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 if let Some(parent) = d.parent() {
                     std::fs::create_dir_all(parent).map_err(|e| {
-                        BladeError::Other(format!("cannot create profile dir parent: {e}"))
+                        ObuError::Other(format!("cannot create profile dir parent: {e}"))
                     })?;
                 }
                 // mkdir(2): fails for ANY pre-placed object (file, dir or
                 // symlink) — the profile can never be created through a
                 // plant.
                 std::fs::create_dir(d)
-                    .map_err(|e| BladeError::Other(format!("cannot create profile dir: {e}")))?;
+                    .map_err(|e| ObuError::Other(format!("cannot create profile dir: {e}")))?;
                 // Re-validate what now exists (dir, ours, no symlink).
                 let meta = std::fs::symlink_metadata(d)?;
                 if !meta.is_dir() || meta.uid() != unsafe { libc::geteuid() } {
-                    return Err(BladeError::Other(format!(
-                        "BLADE_PROFILE_DIR {} is not a plain directory owned by this user — refusing it",
+                    return Err(ObuError::Other(format!(
+                        "OBU_PROFILE_DIR {} is not a plain directory owned by this user — refusing it",
                         d.display()
                     )));
                 }
                 lock_private(d)?;
             }
-            Err(e) => return Err(BladeError::Other(format!("cannot stat profile dir: {e}"))),
+            Err(e) => return Err(ObuError::Other(format!("cannot stat profile dir: {e}"))),
         }
     }
     #[cfg(not(unix))]
     {
         crate::platform::secure_create_dir_all(d)
-            .map_err(|e| BladeError::Other(format!("cannot create profile dir: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot create profile dir: {e}")))?;
     }
     Ok(())
 }
 
-/// Create the ephemeral (BLADE_FRESH) profile dir: unpredictable name +
+/// Create the ephemeral (OBU_FRESH) profile dir: unpredictable name +
 /// exclusive mkdir + 0700 + ancestor validation. The name must be
 /// unguessable (a pid-sprayed plant in shared /tmp must never land) and
 /// creation must fail-if-exists (mkdir(2)) so a pre-placed object can
@@ -195,12 +195,12 @@ fn create_ephemeral_profile_dir() -> Result<PathBuf> {
     let base = std::env::temp_dir();
     #[cfg(unix)]
     crate::platform::validate_dir_ancestors(&base).map_err(|e| {
-        BladeError::Other(format!(
+        ObuError::Other(format!(
             "refusing an ephemeral profile under an unsafe temp path: {e}"
         ))
     })?;
     for _ in 0..5 {
-        let candidate = base.join(format!("bladebro-chrome-{:x}", fresh_profile_entropy()));
+        let candidate = base.join(format!("obu-chrome-{:x}", fresh_profile_entropy()));
         match std::fs::create_dir(&candidate) {
             Ok(()) => {
                 #[cfg(unix)]
@@ -214,10 +214,10 @@ fn create_ephemeral_profile_dir() -> Result<PathBuf> {
                 return Ok(candidate);
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(BladeError::Other(format!("cannot create profile dir: {e}"))),
+            Err(e) => return Err(ObuError::Other(format!("cannot create profile dir: {e}"))),
         }
     }
-    Err(BladeError::Other(
+    Err(ObuError::Other(
         "cannot create profile dir: name collisions".into(),
     ))
 }
@@ -240,16 +240,16 @@ fn fresh_profile_entropy() -> u128 {
 
 impl SessionProfile {
     /// Create the session profile for this process: reap
-    /// orphans from dead bladebro processes, then copy the
+    /// orphans from dead obu processes, then copy the
     /// seasoned template into a fresh per-process dir.
     pub fn create() -> Result<Self> {
         reap_orphans();
 
-        let seasoned = !std::env::var("BLADE_FRESH")
+        let seasoned = !std::env::var("OBU_FRESH")
             .map(|v| v == "1")
             .unwrap_or(false);
 
-        let dir = if let Ok(custom) = std::env::var("BLADE_PROFILE_DIR") {
+        let dir = if let Ok(custom) = std::env::var("OBU_PROFILE_DIR") {
             // Explicit override of the LOCATION — not of the security
             // posture. The profile holds the live cookie jar, so the same
             // 0700 discipline as every other lane applies, and a
@@ -271,7 +271,7 @@ impl SessionProfile {
         } else if seasoned {
             session_dir()
         } else {
-            // BLADE_FRESH=1: ephemeral temp dir. SECURITY: unpredictable
+            // OBU_FRESH=1: ephemeral temp dir. SECURITY: unpredictable
             // name + mkdir(2) exclusive create — a pid-predictable name in
             // shared /tmp let a local co-user pre-plant the dir with a
             // `Default/Cookies` symlink for Chromium to write the live
@@ -281,7 +281,7 @@ impl SessionProfile {
             create_ephemeral_profile_dir()?
         };
 
-        Self::prepare_owned_dir(&platform::blade_dir(), &dir, seasoned)?;
+        Self::prepare_owned_dir(&platform::obu_dir(), &dir, seasoned)?;
 
         Ok(Self {
             dir,
@@ -314,15 +314,15 @@ impl SessionProfile {
                 copy_profile(&template, dir);
             }
         }
-        std::fs::write(dir.join(".blade-owner"), std::process::id().to_string())
-            .map_err(|e| BladeError::Other(format!("cannot mark profile ownership: {e}")))?;
+        std::fs::write(dir.join(".obu-owner"), std::process::id().to_string())
+            .map_err(|e| ObuError::Other(format!("cannot mark profile ownership: {e}")))?;
         Ok(())
     }
 
     /// Create a real-lane session profile (clone mechanism): copy the
     /// imported template at `root/template` into a per-process session dir
     /// under `root/profiles/` — the same discipline the agent lane uses for
-    /// its own template, so concurrent bladebro processes (daemon + MCP)
+    /// its own template, so concurrent obu processes (daemon + MCP)
     /// never contend Chrome's SingletonLock on the clone, and the clone
     /// still ages through the sole-survivor sync-back.
     pub fn create_real(root: &Path) -> Result<Self> {
@@ -333,7 +333,7 @@ impl SessionProfile {
             // An earlier session of this same process: never copy on top.
             create_private_profile_dir(&dir)?;
             std::fs::remove_dir_all(&dir)
-                .map_err(|e| BladeError::Other(format!("cannot replace stale profile: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot replace stale profile: {e}")))?;
         }
         create_private_profile_dir(&dir)?;
         note_created_here(&dir);
@@ -341,8 +341,8 @@ impl SessionProfile {
         if template.is_dir() {
             copy_profile(&template, &dir);
         }
-        std::fs::write(dir.join(".blade-owner"), std::process::id().to_string())
-            .map_err(|e| BladeError::Other(format!("cannot mark profile ownership: {e}")))?;
+        std::fs::write(dir.join(".obu-owner"), std::process::id().to_string())
+            .map_err(|e| ObuError::Other(format!("cannot mark profile ownership: {e}")))?;
         Ok(Self {
             dir,
             owned: true,
@@ -357,7 +357,7 @@ impl SessionProfile {
     /// profile is untouched on teardown.
     pub fn adopt(dir: &Path) -> Result<Self> {
         if !dir.is_dir() {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "profile dir not found: {}",
                 dir.display()
             )));
@@ -374,8 +374,8 @@ impl SessionProfile {
         &self.dir
     }
 
-    /// A session dir bladebro created for its own agent-lane browser (not an
-    /// operator's BLADE_PROFILE_DIR, an adopted user profile or a real-lane
+    /// A session dir obu created for its own agent-lane browser (not an
+    /// operator's OBU_PROFILE_DIR, an adopted user profile or a real-lane
     /// clone): only such a dir proves a process running on it is ours.
     pub(crate) fn is_owned_agent_session(&self) -> bool {
         self.owned && self.real_root.is_none()
@@ -487,10 +487,10 @@ impl SessionProfile {
     /// The template is only replaced after Chrome is dead, so the copy is
     /// never taken from a live, un-flushed profile.
     ///
-    /// `root` is passed in rather than re-resolved: `blade_dir()` reads the
+    /// `root` is passed in rather than re-resolved: `obu_dir()` reads the
     /// process-global env, and a second resolution could land in a different
     /// directory than the reap that called us (the test suite flips
-    /// BLADE_HOME on other threads).
+    /// OBU_HOME on other threads).
     fn sync_back_only_at(root: &Path, dir: &Path) {
         if other_live_sessions_at(&root.join("profiles")) {
             return;
@@ -510,19 +510,19 @@ impl SessionProfile {
     /// this process should warm the profile (first run ever, or previous
     /// warming failed and the marker was released). Also re-warms if the
     /// template profile is empty/missing (e.g. manually deleted).
-    /// BLADE_NO_WARMING=1 disables warming entirely (privacy: no default
+    /// OBU_NO_WARMING=1 disables warming entirely (privacy: no default
     /// visits to google.com/github.com/wikipedia.org).
     pub fn claim_warming() -> bool {
-        if std::env::var("BLADE_NO_WARMING")
+        if std::env::var("OBU_NO_WARMING")
             .map(|v| v == "1")
             .unwrap_or(false)
         {
             return false;
         }
-        let marker = platform::blade_dir().join(".warmed");
+        let marker = platform::obu_dir().join(".warmed");
         // If the template profile is empty or missing, warming is needed
         // regardless of the marker (the profile was deleted/reset).
-        let template = platform::blade_dir().join("profile");
+        let template = platform::obu_dir().join("profile");
         let template_empty = !template.is_dir()
             || template
                 .read_dir()
@@ -540,13 +540,13 @@ impl SessionProfile {
 
     /// Release the warming marker on failure so the next launch retries.
     pub fn release_warming() {
-        let marker = platform::blade_dir().join(".warmed");
+        let marker = platform::obu_dir().join(".warmed");
         let _ = std::fs::remove_file(&marker);
     }
 
     /// Static cleanup for after the Browser (and its profile)
     /// has been consumed by Drop. Detects seasoning from the
-    /// path: only `~/.blade/profiles/sess-*` dirs sync back.
+    /// path: only `~/.obu/profiles/sess-*` dirs sync back.
     pub fn cleanup_dir(dir: &Path) {
         if let Some(root) = real_root_of_session(dir) {
             // Real-lane (clone) session: sync back to the browser's own
@@ -554,7 +554,7 @@ impl SessionProfile {
             Self::sync_back_impl(&root, "template", "template.sync", ".template.old", dir);
             return;
         }
-        let profiles = platform::blade_dir().join("profiles");
+        let profiles = platform::obu_dir().join("profiles");
         let is_session = dir.starts_with(&profiles)
             && dir
                 .file_name()
@@ -563,8 +563,8 @@ impl SessionProfile {
         if is_session {
             Self::sync_back_and_remove(dir);
         } else {
-            // Ephemeral (BLADE_FRESH) dir: only a dir WE created — an
-            // unpredictable `bladebro-chrome-<entropy>` name directly under
+            // Ephemeral (OBU_FRESH) dir: only a dir WE created — an
+            // unpredictable `obu-chrome-<entropy>` name directly under
             // temp_dir whose owner marker names this pid — is removed. The
             // name is entropy-based since 2026-10-07 (a pid-predictable
             // name was the pre-plant target), so the marker, not the name,
@@ -575,9 +575,9 @@ impl SessionProfile {
                 .is_some_and(|p| p == std::env::temp_dir().as_path());
             let named = dir
                 .file_name()
-                .map(|n| n.to_string_lossy().starts_with("bladebro-chrome-"))
+                .map(|n| n.to_string_lossy().starts_with("obu-chrome-"))
                 .unwrap_or(false);
-            let mine = std::fs::read_to_string(dir.join(".blade-owner"))
+            let mine = std::fs::read_to_string(dir.join(".obu-owner"))
                 .ok()
                 .is_some_and(|s| s.trim() == std::process::id().to_string());
             if under_temp && named && mine {
@@ -588,7 +588,7 @@ impl SessionProfile {
 
     fn sync_back_and_remove(dir: &Path) {
         Self::sync_back_impl(
-            &platform::blade_dir(),
+            &platform::obu_dir(),
             "profile",
             ".profile.sync",
             ".profile.old",
@@ -625,7 +625,7 @@ impl SessionProfile {
             // without one, so their sync-back is unchanged.
             if import_generation(dir) != import_generation(&template) {
                 eprintln!(
-                    "[bladebro] the clone was re-imported while session {} ran — its copy \
+                    "[obu] the clone was re-imported while session {} ran — its copy \
                      is discarded instead of overwriting the new import",
                     dir.display()
                 );
@@ -674,9 +674,9 @@ fn import_generation(dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-/// Owner pids of live bladebro sessions under `profiles` (this process
+/// Owner pids of live obu sessions under `profiles` (this process
 /// excluded) — what `rb refresh` / `rb forget` must not run under. A dir
-/// still being created has no `.blade-owner` yet; its `sess-<pid>` name
+/// still being created has no `.obu-owner` yet; its `sess-<pid>` name
 /// stands in, as in the reaper.
 pub(crate) fn live_session_owners(profiles: &Path) -> Vec<u32> {
     let my_pid = std::process::id();
@@ -688,7 +688,7 @@ pub(crate) fn live_session_owners(profiles: &Path) -> Vec<u32> {
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().to_string();
             let named = name.strip_prefix("sess-")?.parse::<u32>().ok();
-            std::fs::read_to_string(entry.path().join(".blade-owner"))
+            std::fs::read_to_string(entry.path().join(".obu-owner"))
                 .ok()
                 .and_then(|s| s.trim().parse::<u32>().ok())
                 .or(named)
@@ -735,7 +735,7 @@ fn template_lock_stale(lock: &Path) -> bool {
 
 /// This process's session profile dir.
 fn session_dir() -> PathBuf {
-    own_session_dir(&platform::blade_dir())
+    own_session_dir(&platform::obu_dir())
 }
 
 /// This process's session dir under a data root (`root/profiles/sess-<pid>`).
@@ -771,8 +771,8 @@ fn rescue_same_pid_leftover(root: &Path, dir: &Path, real_root: Option<&Path>) -
     if !leftover || reap::reap_dead_session(root, dir, real_root) {
         return Ok(());
     }
-    Err(BladeError::Other(format!(
-        "session profile {d} is still in use by a process (browser or launcher) that an earlier bladebro process with this pid left running; stop the process started with --user-data-dir={d}, then retry",
+    Err(ObuError::Other(format!(
+        "session profile {d} is still in use by a process (browser or launcher) that an earlier obu process with this pid left running; stop the process started with --user-data-dir={d}, then retry",
         d = dir.display()
     )))
 }
@@ -798,14 +798,14 @@ pub fn real_root_of_session(dir: &Path) -> Option<PathBuf> {
         .file_name()
         .map(|n| n.to_string_lossy().starts_with("sess-"))
         .unwrap_or(false);
-    if in_realbrowser && is_session && root.starts_with(platform::blade_dir()) {
+    if in_realbrowser && is_session && root.starts_with(platform::obu_dir()) {
         Some(root.to_path_buf())
     } else {
         None
     }
 }
 
-/// Are there OTHER session dirs under `profiles` whose owner bladebro is
+/// Are there OTHER session dirs under `profiles` whose owner obu is
 /// alive?
 fn other_live_sessions_at(profiles: &Path) -> bool {
     let my_pid = std::process::id();
@@ -818,7 +818,7 @@ fn other_live_sessions_at(profiles: &Path) -> bool {
         if !name.starts_with("sess-") {
             continue;
         }
-        let owner = std::fs::read_to_string(entry.path().join(".blade-owner"))
+        let owner = std::fs::read_to_string(entry.path().join(".obu-owner"))
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok());
         if let Some(pid) = owner {
@@ -838,7 +838,7 @@ mod tests {
     #[test]
     fn reused_owned_profile_is_private_without_chmodding_ancestors() {
         use std::os::unix::fs::PermissionsExt;
-        let root = std::env::temp_dir().join(format!("blade-profile-mode-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-profile-mode-{}", std::process::id()));
         let dir = root.join("profile");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -865,7 +865,7 @@ mod tests {
         let b = create_ephemeral_profile_dir().unwrap();
         assert_ne!(a, b, "names must be unpredictable, not pid-based");
         let name = a.file_name().unwrap().to_string_lossy().to_string();
-        assert!(name.starts_with("bladebro-chrome-"));
+        assert!(name.starts_with("obu-chrome-"));
         let meta = std::fs::metadata(&a).unwrap();
         assert!(meta.is_dir());
         assert_eq!(meta.permissions().mode() & 0o777, 0o700);
@@ -877,7 +877,7 @@ mod tests {
     fn ephemeral_cleanup_removes_only_our_marked_dir() {
         // Our marked dir is removed...
         let a = create_ephemeral_profile_dir().unwrap();
-        std::fs::write(a.join(".blade-owner"), std::process::id().to_string()).unwrap();
+        std::fs::write(a.join(".obu-owner"), std::process::id().to_string()).unwrap();
         SessionProfile::cleanup_dir(&a);
         assert!(
             !a.exists(),
@@ -885,11 +885,11 @@ mod tests {
         );
         // ...a same-scheme dir with a FOREIGN owner marker survives...
         let b = create_ephemeral_profile_dir().unwrap();
-        std::fs::write(b.join(".blade-owner"), "1").unwrap();
+        std::fs::write(b.join(".obu-owner"), "1").unwrap();
         SessionProfile::cleanup_dir(&b);
         assert!(b.exists(), "a foreign marker must never authorize removal");
         // ...and an unmarked plant at a scheme name survives too.
-        let planted = std::env::temp_dir().join("bladebro-chrome-planted-test");
+        let planted = std::env::temp_dir().join("obu-chrome-planted-test");
         let _ = std::fs::remove_dir_all(&planted);
         std::fs::create_dir_all(&planted).unwrap();
         SessionProfile::cleanup_dir(&planted);
@@ -902,8 +902,7 @@ mod tests {
     #[test]
     fn owned_profile_refuses_symlinks_and_public_write_permissions() {
         use std::os::unix::fs::{symlink, PermissionsExt};
-        let root =
-            std::env::temp_dir().join(format!("blade-profile-refusal-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-profile-refusal-{}", std::process::id()));
         let target = root.join("target");
         std::fs::create_dir_all(&target).unwrap();
         std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -932,8 +931,8 @@ mod tests {
 
     #[test]
     fn copy_skips_singleton_files() {
-        let src = std::env::temp_dir().join("bladebro-test-copy-src");
-        let dst = std::env::temp_dir().join("bladebro-test-copy-dst");
+        let src = std::env::temp_dir().join("obu-test-copy-src");
+        let dst = std::env::temp_dir().join("obu-test-copy-dst");
         let _ = std::fs::remove_dir_all(&src);
         let _ = std::fs::remove_dir_all(&dst);
         std::fs::create_dir_all(src.join("Default")).unwrap();
@@ -956,7 +955,7 @@ mod tests {
         // A real profile's extension packages nest well past six levels
         // (uBlock Origin ships lib/codemirror/addon/<group>/*.js); a clone
         // that silently drops those files breaks the user's extensions.
-        let root = std::env::temp_dir().join(format!("bladebro-test-deep-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-test-deep-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let (src, dst) = (root.join("src"), root.join("dst"));
         let rel = "Default/Extensions/cjpalhdlnbpafiamejdnhcphjbkeiagm/1.62.0_0/lib/codemirror/addon/fold/foldcode.js";
@@ -972,8 +971,7 @@ mod tests {
 
     #[test]
     fn copy_reports_what_the_depth_bound_cuts() {
-        let root =
-            std::env::temp_dir().join(format!("bladebro-test-too-deep-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-test-too-deep-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let (src, dst) = (root.join("src"), root.join("dst"));
         let mut leaf = src.clone();
@@ -997,8 +995,8 @@ mod tests {
 
     #[test]
     fn copy_tolerates_missing_src() {
-        let src = std::env::temp_dir().join("bladebro-test-nonexistent");
-        let dst = std::env::temp_dir().join("bladebro-test-copy-dst2");
+        let src = std::env::temp_dir().join("obu-test-nonexistent");
+        let dst = std::env::temp_dir().join("obu-test-copy-dst2");
         let _ = std::fs::remove_dir_all(&dst);
         copy_profile(&src, &dst); // must not panic
     }
@@ -1011,7 +1009,7 @@ mod tests {
     #[test]
     fn stale_lock_with_dead_owner_is_broken_and_acquired() {
         // Hermetic: locks live in a temp dir, never the shared real one.
-        let dir = std::env::temp_dir().join(format!("bladebro-lock-dead-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-lock-dead-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let lock = dir.join(".template.lock.test-dead");
         let _ = std::fs::remove_file(&lock);
@@ -1028,7 +1026,7 @@ mod tests {
     #[test]
     fn stale_lock_with_live_owner_is_not_stale() {
         // Hermetic: locks live in a temp dir, never the shared real one.
-        let dir = std::env::temp_dir().join(format!("bladebro-lock-live-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-lock-live-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let lock = dir.join(".template.lock.test-live");
         let _ = std::fs::remove_file(&lock);
@@ -1076,8 +1074,7 @@ mod tests {
         // its pid (a container entrypoint gets the same pid every boot).
         // Holding the OS guard proves no 4.1+ process holds the lock, and
         // this process holds no other guard: the marker is a corpse.
-        let root =
-            std::env::temp_dir().join(format!("blade-template-ownpid-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-template-ownpid-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(
             root.join(".template.lock"),
@@ -1100,8 +1097,7 @@ mod tests {
         // pid reuse: the marker names a pid that a later, unrelated process
         // now holds. A pre-4.1 copier (marker only, no OS lock) mid-copy
         // still wins; one that old was never a copy in progress.
-        let root =
-            std::env::temp_dir().join(format!("blade-template-reused-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-template-reused-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         // Our parent (the test runner) is a live process that is not us.
         // Spawning a stand-in would hand a copy of other tests' held guards
@@ -1127,7 +1123,7 @@ mod tests {
         // A fixed pid + persistent data dir: an earlier incarnation of THIS
         // pid crashed and left `sess-<pid>`. The reaper skips our own pid,
         // so preparing the new session is the only chance to rescue it.
-        let root = std::env::temp_dir().join(format!("blade-same-pid-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-same-pid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("profile/Default")).unwrap();
         std::fs::write(root.join("profile/Default/Cookies"), "template").unwrap();
@@ -1135,7 +1131,7 @@ mod tests {
             .join("profiles")
             .join(format!("sess-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("Default")).unwrap();
-        std::fs::write(dir.join(".blade-owner"), std::process::id().to_string()).unwrap();
+        std::fs::write(dir.join(".obu-owner"), std::process::id().to_string()).unwrap();
         std::fs::write(dir.join("Default/Cookies"), "crashed-session").unwrap();
 
         SessionProfile::prepare_owned_dir(&root, &dir, true).unwrap();
@@ -1160,8 +1156,7 @@ mod tests {
 
     #[test]
     fn template_guard_excludes_concurrent_handles_and_recovers_after_drop() {
-        let root =
-            std::env::temp_dir().join(format!("blade-template-guard-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-template-guard-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let held = SessionProfile::acquire_lock_at(&root).unwrap();
         std::fs::remove_file(root.join(".template.lock")).unwrap();
@@ -1179,7 +1174,7 @@ mod tests {
 
     #[test]
     fn reaper_preserves_active_template_staging() {
-        let root = std::env::temp_dir().join(format!("blade-live-staging-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-live-staging-{}", std::process::id()));
         std::fs::create_dir_all(root.join(".profile.sync")).unwrap();
         std::fs::create_dir_all(root.join(".profile.old")).unwrap();
         std::fs::create_dir_all(root.join("profile")).unwrap();
@@ -1202,12 +1197,11 @@ mod tests {
     #[test]
     fn reaper_syncs_back_before_delete() {
         // Hermetic: a temp root, never the shared real data dir. The env is
-        // process-global and parallel tests flip BLADE_HOME; the pre-fix
+        // process-global and parallel tests flip OBU_HOME; the pre-fix
         // version resolved the root twice (reap entry + sync) and could be
         // split across two directories by a flip — and it mutated the real
         // install (deleted its session dirs, swapped its template).
-        let root =
-            std::env::temp_dir().join(format!("bladebro-test-reaper-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-test-reaper-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let profiles_dir = root.join("profiles");
         let template_dir = root.join("profile");
@@ -1221,7 +1215,7 @@ mod tests {
         let test_pid = 999_999_999u32; // guaranteed dead pid
         let sess_dir = profiles_dir.join(format!("sess-{test_pid}"));
         std::fs::create_dir_all(sess_dir.join("Default")).unwrap();
-        std::fs::write(sess_dir.join(".blade-owner"), test_pid.to_string()).unwrap();
+        std::fs::write(sess_dir.join(".obu-owner"), test_pid.to_string()).unwrap();
         std::fs::write(sess_dir.join("Default/Cookies"), b"fake-cookie-db-data").unwrap();
 
         // Run the reaper against the temp root.
@@ -1256,8 +1250,7 @@ mod tests {
     /// must not swap its stale copy back over the fresh import.
     #[test]
     fn real_sync_back_never_overwrites_a_newer_import() {
-        let home =
-            std::env::temp_dir().join(format!("bladebro-test-reimport-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("obu-test-reimport-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         let root = home.join("realbrowser/helium");
         let template = root.join("template");
@@ -1275,7 +1268,7 @@ mod tests {
 
         // A dead session from the previous import, found by the reaper.
         std::fs::create_dir_all(stale.join("Default")).unwrap();
-        std::fs::write(stale.join(".blade-owner"), "999999998").unwrap();
+        std::fs::write(stale.join(".obu-owner"), "999999998").unwrap();
         std::fs::write(stale.join(IMPORT_MARKER), "import-1").unwrap();
         std::fs::write(stale.join("Default/Cookies"), b"stale-clone").unwrap();
         reap_orphans_at(&home);
@@ -1308,53 +1301,53 @@ mod tests {
     /// .profile.old is then the ONLY surviving profile; delete = data loss.
     #[test]
     fn reaper_restores_template_displaced_by_interrupted_swap() {
-        // Hermetic: run against a temp blade dir, not the shared ~/.blade that
+        // Hermetic: run against a temp obu dir, not the shared ~/.obu that
         // other reaper tests mutate in parallel.
-        let blade_dir = std::env::temp_dir().join("bladebro-test-swap");
-        let _ = std::fs::remove_dir_all(&blade_dir);
+        let obu_dir = std::env::temp_dir().join("obu-test-swap");
+        let _ = std::fs::remove_dir_all(&obu_dir);
 
         // Simulate the crash state: template was moved aside, new copy never
         // renamed in. `profile` is missing; `.profile.old` holds the profile.
-        std::fs::create_dir_all(blade_dir.join(".profile.old").join("Default")).unwrap();
+        std::fs::create_dir_all(obu_dir.join(".profile.old").join("Default")).unwrap();
         std::fs::write(
-            blade_dir.join(".profile.old").join("Default/Cookies"),
+            obu_dir.join(".profile.old").join("Default/Cookies"),
             b"displaced-cookie",
         )
         .unwrap();
 
         // The displaced profile must be resurrected, not deleted.
         assert!(
-            restore_interrupted_swap(&blade_dir),
+            restore_interrupted_swap(&obu_dir),
             "swap-restore should trigger"
         );
         assert_eq!(
-            std::fs::read(blade_dir.join("profile/Default/Cookies")).unwrap(),
+            std::fs::read(obu_dir.join("profile/Default/Cookies")).unwrap(),
             b"displaced-cookie"
         );
         assert!(
-            !blade_dir.join(".profile.old").exists(),
+            !obu_dir.join(".profile.old").exists(),
             ".profile.old consumed by restore"
         );
 
         // When the template is already present, .profile.old is just staging
         // and must be dropped without disturbing `profile`.
-        std::fs::write(blade_dir.join("profile/Default/Cookies"), b"live").unwrap();
-        std::fs::create_dir_all(blade_dir.join(".profile.old")).unwrap();
+        std::fs::write(obu_dir.join("profile/Default/Cookies"), b"live").unwrap();
+        std::fs::create_dir_all(obu_dir.join(".profile.old")).unwrap();
         assert!(
-            !restore_interrupted_swap(&blade_dir),
+            !restore_interrupted_swap(&obu_dir),
             "no restore when profile present"
         );
         assert_eq!(
-            std::fs::read(blade_dir.join("profile/Default/Cookies")).unwrap(),
+            std::fs::read(obu_dir.join("profile/Default/Cookies")).unwrap(),
             b"live",
             "present template must be left untouched"
         );
         assert!(
-            !blade_dir.join(".profile.old").exists(),
+            !obu_dir.join(".profile.old").exists(),
             "stale .profile.old cleaned"
         );
 
-        let _ = std::fs::remove_dir_all(&blade_dir);
+        let _ = std::fs::remove_dir_all(&obu_dir);
     }
 }
 
@@ -1364,8 +1357,7 @@ mod ownership_tests {
 
     #[test]
     fn adopted_temporary_profile_survives_both_cleanup_paths() {
-        let dir =
-            std::env::temp_dir().join(format!("blade-borrowed-profile-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-borrowed-profile-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let marker = dir.join("user-data");
         std::fs::write(&marker, "must survive").unwrap();

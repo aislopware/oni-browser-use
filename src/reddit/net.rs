@@ -60,15 +60,15 @@ pub(super) async fn ensure_loid(cdp: &CdpSession) -> bool {
 /// network-security wall and the unsolved JS challenge both mean "stop the
 /// sweep — this is a gate, not a gap". Anything else keeps the generic
 /// HTTP / parse error.
-pub(super) fn classify_gate_body(path: &str, text: &str) -> Option<BladeError> {
+pub(super) fn classify_gate_body(path: &str, text: &str) -> Option<ObuError> {
     let lower = text.to_ascii_lowercase();
     if lower.contains("blocked by network security") || lower.contains("whoa there, pardner") {
-        return Some(BladeError::Other(format!(
+        return Some(ObuError::Other(format!(
             "reddit: network-security block (API denied; repeated requests may remain blocked) on {path}"
         )));
     }
     if lower.contains("js_challenge") || lower.contains("requestsubmit") {
-        return Some(BladeError::Other(format!(
+        return Some(ObuError::Other(format!(
             "reddit: JS challenge served to an API path on {path}"
         )));
     }
@@ -85,13 +85,13 @@ pub(super) async fn fetch_json(cdp: &CdpSession, path: &str) -> Result<Value> {
             result => return result,
         }
     }
-    Err(BladeError::Other("reddit: read retries exhausted".into()))
+    Err(ObuError::Other("reddit: read retries exhausted".into()))
 }
 
 // Only safe GET observations, never challenge denial or rate limiting. An
 // unanswered CDP eval is not replayed: its pending fetch may still be alive.
-fn transient_read(error: &BladeError) -> bool {
-    matches!(error, BladeError::Other(message) if ["HTTP 0", "HTTP 502", "HTTP 503", "HTTP 504"].iter().any(|suffix| message.ends_with(suffix)))
+fn transient_read(error: &ObuError) -> bool {
+    matches!(error, ObuError::Other(message) if ["HTTP 0", "HTTP 502", "HTTP 503", "HTTP 504"].iter().any(|suffix| message.ends_with(suffix)))
 }
 
 async fn fetch_json_once(cdp: &CdpSession, path: &str) -> Result<Value> {
@@ -119,7 +119,7 @@ return {{s:r.status,t:x}};}}catch(e){{return {{s:0,t:String(e)}}}}}})()"
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("fetch failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "reddit: {}",
             crate::platform::truncate_utf8(msg, 200)
         )));
@@ -132,20 +132,20 @@ return {{s:r.status,t:x}};}}catch(e){{return {{s:0,t:String(e)}}}}}})()"
     let status = val["s"].as_i64().unwrap_or(0);
     let text = val["t"].as_str().unwrap_or_default();
     if status == 429 {
-        return Err(BladeError::Other("reddit: rate limited (HTTP 429)".into()));
+        return Err(ObuError::Other("reddit: rate limited (HTTP 429)".into()));
     }
     if status != 200 {
         return Err(classify_gate_body(path, text)
-            .unwrap_or_else(|| BladeError::Other(format!("reddit: GET {path} → HTTP {status}"))));
+            .unwrap_or_else(|| ObuError::Other(format!("reddit: GET {path} → HTTP {status}"))));
     }
     if text.trim().is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: empty response (throttled?)".into(),
         ));
     }
     serde_json::from_str(text).map_err(|e| {
         classify_gate_body(path, text).unwrap_or_else(|| {
-            BladeError::Other(format!("reddit: non-JSON response from {path} ({e})"))
+            ObuError::Other(format!("reddit: non-JSON response from {path} ({e})"))
         })
     })
 }
@@ -180,7 +180,7 @@ return fetch(u,{{credentials:'include',signal:c.signal}}).then(r=>r.text().then(
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("batch fetch failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "reddit: {}",
             crate::platform::truncate_utf8(msg, 200)
         )));
@@ -196,16 +196,16 @@ return fetch(u,{{credentials:'include',signal:c.signal}}).then(r=>r.text().then(
         let status = item["s"].as_i64().unwrap_or(0);
         let text = item["t"].as_str().unwrap_or_default();
         if status == 429 {
-            out.push(Err(BladeError::Other("rate limited (HTTP 429)".into())));
+            out.push(Err(ObuError::Other("rate limited (HTTP 429)".into())));
         } else if status != 200 {
             out.push(Err(classify_gate_body(url, text)
-                .unwrap_or_else(|| BladeError::Other(format!("HTTP {status}")))));
+                .unwrap_or_else(|| ObuError::Other(format!("HTTP {status}")))));
         } else if text.trim().is_empty() {
-            out.push(Err(BladeError::Other("empty response (throttled?)".into())));
+            out.push(Err(ObuError::Other("empty response (throttled?)".into())));
         } else {
             out.push(serde_json::from_str(text).map_err(|e| {
                 classify_gate_body(url, text)
-                    .unwrap_or_else(|| BladeError::Other(format!("non-JSON response ({e})")))
+                    .unwrap_or_else(|| ObuError::Other(format!("non-JSON response ({e})")))
             }));
         }
     }
@@ -217,14 +217,14 @@ return fetch(u,{{credentials:'include',signal:c.signal}}).then(r=>r.text().then(
 /// "429"/"throttled": other errors carry the request path, and base36 ids
 /// or a subreddit name can spell either (a plain HTTP 500 then read as
 /// "rate limit, retry in a minute").
-pub(super) fn is_rate_limit(e: &BladeError) -> bool {
+pub(super) fn is_rate_limit(e: &ObuError) -> bool {
     let s = e.to_string();
     s.ends_with("rate limited (HTTP 429)") || s.ends_with("empty response (throttled?)")
 }
 
 /// Security-wall signal: the sweep hit reddit's network-security block page
 /// and must stop — it is transient, and hammering extends it.
-pub fn is_security_block(e: &BladeError) -> bool {
+pub fn is_security_block(e: &ObuError) -> bool {
     e.to_string().contains("network-security block")
 }
 
@@ -282,8 +282,6 @@ mod retry_tests {
         let error = fetch_json(&cdp, "/fixture.json").await.unwrap_err();
         assert!(error.to_string().contains("HTTP 503"));
         assert_eq!(task.await.unwrap(), 3);
-        assert!(!transient_read(&BladeError::Timeout(Duration::from_secs(
-            5
-        ))));
+        assert!(!transient_read(&ObuError::Timeout(Duration::from_secs(5))));
     }
 }

@@ -16,14 +16,14 @@ impl Fixture {
             .unwrap()
             .as_nanos();
         let root =
-            std::env::temp_dir().join(format!("blade-rb-discovery-{}-{nanos}", std::process::id()));
+            std::env::temp_dir().join(format!("obu-rb-discovery-{}-{nanos}", std::process::id()));
         for dir in [
             "home",
             "config",
             "helium-config/net.imput.helium/Default",
             "bin",
             "shadow/helium",
-            "blade",
+            "obu",
         ] {
             std::fs::create_dir_all(root.join(dir)).unwrap();
         }
@@ -42,18 +42,18 @@ impl Fixture {
     }
 
     fn cli(&self, args: &[&str]) -> Value {
-        let output = Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        let output = Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(["--json", "rb"])
             .args(args)
             .env("HOME", self.0.join("home"))
             .env("XDG_CONFIG_HOME", self.0.join("config"))
             .env("HELIUM_CONFIG_HOME", self.0.join("helium-config"))
-            .env("BLADE_HOME", self.0.join("blade"))
+            .env("OBU_HOME", self.0.join("obu"))
             .env(
                 "PATH",
                 std::env::join_paths([self.0.join("shadow"), self.0.join("bin")]).unwrap(),
             )
-            .env_remove("BLADE_LANE")
+            .env_remove("OBU_LANE")
             .output()
             .unwrap();
         assert!(
@@ -131,7 +131,7 @@ fn profile_metadata_cannot_select_deleted_profiles_or_escape_the_root() {
     // Persisted selection can outlive a removed profile. Listing and picking
     // a replacement must not require the old key to resolve successfully.
     std::fs::write(
-        f.0.join("blade/realbrowser.json"),
+        f.0.join("obu/realbrowser.json"),
         json!({"browser":"helium","profile":"Deleted"}).to_string(),
     )
     .unwrap();
@@ -147,11 +147,11 @@ fn relative_and_empty_config_homes_do_not_select_cwd_profiles() {
     std::fs::create_dir_all(root.join("Default")).unwrap();
     std::fs::write(root.join("Default/Preferences"), "{}").unwrap();
     for invalid in ["", "relative"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        let output = Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(["--json", "rb", "use"])
             .current_dir(&f.0)
             .env("HOME", f.0.join("home"))
-            .env("BLADE_HOME", f.0.join("blade"))
+            .env("OBU_HOME", f.0.join("obu"))
             .env("XDG_CONFIG_HOME", invalid)
             .env("HELIUM_CONFIG_HOME", invalid)
             .env("PATH", f.0.join("bin"))
@@ -176,20 +176,20 @@ fn relative_and_empty_config_homes_do_not_select_cwd_profiles() {
 #[test]
 fn forget_refuses_path_ids_without_deleting_outside_its_namespace() {
     let f = Fixture::new();
-    let blade = f.0.join("blade");
-    std::fs::create_dir(blade.join("realbrowser")).unwrap();
-    let victim = blade.join("keep");
+    let obu = f.0.join("obu");
+    std::fs::create_dir(obu.join("realbrowser")).unwrap();
+    let victim = obu.join("keep");
     std::fs::create_dir(&victim).unwrap();
     std::fs::write(victim.join("sentinel"), "must remain").unwrap();
     for id in ["../keep", "", "..", "C:\\keep", victim.to_str().unwrap()] {
         std::fs::write(
-            blade.join("realbrowser.json"),
+            obu.join("realbrowser.json"),
             json!({"browser": id}).to_string(),
         )
         .unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        let output = Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(["--json", "rb", "forget"])
-            .env("BLADE_HOME", &blade)
+            .env("OBU_HOME", &obu)
             .output()
             .unwrap();
         assert!(!output.status.success(), "unsafe id {id:?} was accepted");
@@ -207,10 +207,10 @@ fn forget_refuses_path_ids_without_deleting_outside_its_namespace() {
         );
     }
     // The guard must not break actual clone removal.
-    std::fs::create_dir(blade.join("realbrowser/helium")).unwrap();
-    std::fs::write(blade.join("realbrowser.json"), r#"{"browser":"helium"}"#).unwrap();
+    std::fs::create_dir(obu.join("realbrowser/helium")).unwrap();
+    std::fs::write(obu.join("realbrowser.json"), r#"{"browser":"helium"}"#).unwrap();
     assert_eq!(f.cli(&["forget"])["removed"], true);
-    assert!(!blade.join("realbrowser/helium").exists());
+    assert!(!obu.join("realbrowser/helium").exists());
     assert!(victim.join("sentinel").is_file());
 }
 

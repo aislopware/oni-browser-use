@@ -31,14 +31,14 @@ impl fmt::Display for Status {
 
 /// Run all diagnostic checks and print the report.
 pub async fn run() -> Result<()> {
-    ui::header("Bladebro Doctor");
+    ui::header("Obu Doctor");
 
     let mut checks: Vec<Check> = Vec::new();
 
     // 1. Operating system
     checks.push(check_os());
 
-    // 2. Data directory (where state resolves: BLADE_HOME/XDG/legacy)
+    // 2. Data directory (where state resolves: OBU_HOME/XDG/legacy)
     checks.push(check_data_dir());
 
     // 3. Chrome/Chromium
@@ -114,7 +114,7 @@ pub async fn run() -> Result<()> {
     println!();
     let total = checks.len();
     if fails == 0 && warns == 0 {
-        ui::success(&format!("All {total} checks passed. Bladebro is healthy."));
+        ui::success(&format!("All {total} checks passed. Obu is healthy."));
     } else if fails == 0 {
         println!(
             "  {} {}/{} passed, {} warning{}",
@@ -135,11 +135,11 @@ pub async fn run() -> Result<()> {
             if warns == 1 { "" } else { "s" }
         );
         println!();
-        ui::hint("Fix the failures above, then run bladebro doctor again.");
+        ui::hint("Fix the failures above, then run obu doctor again.");
     }
 
     if fails > 0 {
-        return Err(crate::error::BladeError::Other(format!(
+        return Err(crate::error::ObuError::Other(format!(
             "doctor: {fails} failed check(s)"
         )));
     }
@@ -172,13 +172,13 @@ fn check_os() -> Check {
 }
 
 fn check_data_dir() -> Check {
-    let dir = crate::platform::blade_dir();
-    let home = crate::platform::home_dir().join(".blade");
-    let reason = if std::env::var("BLADE_HOME")
+    let dir = crate::platform::obu_dir();
+    let home = crate::platform::home_dir().join(".obu");
+    let reason = if std::env::var("OBU_HOME")
         .map(|v| !v.trim().is_empty())
         .unwrap_or(false)
     {
-        "BLADE_HOME"
+        "OBU_HOME"
     } else if std::env::var("XDG_STATE_HOME")
         .map(|v| !v.trim().is_empty())
         .unwrap_or(false)
@@ -206,22 +206,22 @@ fn check_data_dir() -> Check {
     Check {
         name: "Data directory",
         status: Status::Pass,
-        detail: format!("{} ({reason}; override with BLADE_HOME)", dir.display()),
+        detail: format!("{} ({reason}; override with OBU_HOME)", dir.display()),
         fix: None,
     }
 }
 
 fn check_browser_mode() -> Check {
-    // Every launch parses BLADE_CHROME_FLAGS first, and so does the incognito
+    // Every launch parses OBU_CHROME_FLAGS first, and so does the incognito
     // policy: a malformed value is its own failure with its own fix, never a
-    // BLADE_INCOGNITO problem.
+    // OBU_INCOGNITO problem.
     if let Err(error) = crate::browser::env_chrome_flags() {
         return Check {
             name: "Chrome flags",
             status: Status::Fail,
             detail: error.to_string(),
             fix: Some(
-                "Fix or unset BLADE_CHROME_FLAGS; every browser launch fails until then".into(),
+                "Fix or unset OBU_CHROME_FLAGS; every browser launch fails until then".into(),
             ),
         };
     }
@@ -230,7 +230,7 @@ fn check_browser_mode() -> Check {
             name: "Agent browser mode",
             status: Status::Warn,
             detail: "incognito compatibility (cookies/named sessions supported; history/cache and automatic localStorage persistence unavailable)".into(),
-            fix: Some("BLADE_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility; restart the client/daemon".into()),
+            fix: Some("OBU_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility; restart the client/daemon".into()),
         },
         Ok(false) => Check {
             name: "Agent browser mode",
@@ -242,7 +242,7 @@ fn check_browser_mode() -> Check {
             name: "Agent browser mode",
             status: Status::Fail,
             detail: error.to_string(),
-            fix: Some("Set BLADE_INCOGNITO to auto, 0 or 1".into()),
+            fix: Some("Set OBU_INCOGNITO to auto, 0 or 1".into()),
         },
     }
 }
@@ -375,7 +375,7 @@ fn check_xvfb() -> Check {
 /// The window manager the virtual display starts. Xvfb alone is not the
 /// headful lane: with no WM the screen has no decorations at all —
 /// `outerWidth == innerWidth`, `screen.availHeight == screen.height` — which
-/// is an Xvfb signature only `bladebro audit` otherwise catches. The binary
+/// is an Xvfb signature only `obu audit` otherwise catches. The binary
 /// lookup is the lane's own (`browser::display::window_manager`), so doctor
 /// cannot pass a machine on which the lane would silently degrade.
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -410,11 +410,11 @@ fn wm_check(found: Option<String>) -> Check {
 }
 
 fn check_profile_dir() -> Check {
-    // Honor BLADE_PROFILE_DIR: the effective profile root, not just the
+    // Honor OBU_PROFILE_DIR: the effective profile root, not just the
     // template inside the data dir.
-    let dir = std::env::var("BLADE_PROFILE_DIR")
+    let dir = std::env::var("OBU_PROFILE_DIR")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| crate::platform::blade_dir().join("profile"));
+        .unwrap_or_else(|_| crate::platform::obu_dir().join("profile"));
     if !dir.exists() {
         return Check {
             name: "Profile directory",
@@ -430,10 +430,7 @@ fn check_profile_dir() -> Check {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let test_file = dir.join(format!(
-        ".bladebro-write-test-{}-{nanos}",
-        std::process::id()
-    ));
+    let test_file = dir.join(format!(".obu-write-test-{}-{nanos}", std::process::id()));
     match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -458,7 +455,7 @@ fn check_profile_dir() -> Check {
 }
 
 fn check_login_sidecar() -> Check {
-    let path = crate::platform::blade_dir().join("logins.json");
+    let path = crate::platform::obu_dir().join("logins.json");
     if !path.exists() {
         return Check {
             name: "Login persistence",
@@ -509,7 +506,7 @@ fn check_login_sidecar() -> Check {
 }
 
 fn check_profile_hygiene() -> Check {
-    profile_hygiene_at(&crate::platform::blade_dir())
+    profile_hygiene_at(&crate::platform::obu_dir())
 }
 
 fn profile_hygiene_at(dir: &std::path::Path) -> Check {
@@ -580,18 +577,18 @@ fn fs_items(dir: &std::path::Path) -> std::io::Result<Vec<std::fs::Metadata>> {
 
 fn check_stale_locks() -> Check {
     // Same rule as SessionProfile::create: an empty override is no override.
-    let custom = std::env::var("BLADE_PROFILE_DIR")
+    let custom = std::env::var("OBU_PROFILE_DIR")
         .ok()
         .filter(|v| !v.is_empty())
         .map(std::path::PathBuf::from);
-    profile_locks_at(&crate::platform::blade_dir(), custom.as_deref())
+    profile_locks_at(&crate::platform::obu_dir(), custom.as_deref())
 }
 
 /// Chrome holds `SingletonLock` only in the dir it runs on: the operator's
-/// BLADE_PROFILE_DIR, otherwise each session's `profiles/sess-*` dir. The
+/// OBU_PROFILE_DIR, otherwise each session's `profiles/sess-*` dir. The
 /// template (`profile/`) is never run and its copies skip the lock, so it
 /// can never show one.
-fn profile_locks_at(blade_dir: &std::path::Path, custom: Option<&std::path::Path>) -> Check {
+fn profile_locks_at(obu_dir: &std::path::Path, custom: Option<&std::path::Path>) -> Check {
     if let Some(dir) = custom {
         return custom_profile_lock(dir);
     }
@@ -599,7 +596,7 @@ fn profile_locks_at(blade_dir: &std::path::Path, custom: Option<&std::path::Path
     // what the reaper must clear — unless a browser still runs on it.
     let mut running = Vec::new();
     let mut stale = Vec::new();
-    for root in crate::session_profile::session_roots(blade_dir) {
+    for root in crate::session_profile::session_roots(obu_dir) {
         let Ok(entries) = std::fs::read_dir(root.join("profiles")) else {
             continue;
         };
@@ -652,7 +649,7 @@ fn profile_locks_at(blade_dir: &std::path::Path, custom: Option<&std::path::Path
     }
 }
 
-/// BLADE_PROFILE_DIR is run directly, so any lock in it matters.
+/// OBU_PROFILE_DIR is run directly, so any lock in it matters.
 fn custom_profile_lock(dir: &std::path::Path) -> Check {
     let lock = dir.join("SingletonLock");
     // symlink_metadata, not exists(): on Unix the lock is a `host-pid`
@@ -673,8 +670,8 @@ fn custom_profile_lock(dir: &std::path::Path) -> Check {
                 Check {
                     name: "Profile locks",
                     status: Status::Warn,
-                    detail: format!("lock held by PID {p} (another bladebro may be running)"),
-                    fix: Some("Close other bladebro instances, or use BLADE_PROFILE_DIR pointing at an empty directory only you can write".into()),
+                    detail: format!("lock held by PID {p} (another obu may be running)"),
+                    fix: Some("Close other obu instances, or use OBU_PROFILE_DIR pointing at an empty directory only you can write".into()),
                 }
             } else {
                 Check {
@@ -753,7 +750,7 @@ fn check_binary() -> Check {
             name: "Binary integrity",
             status: Status::Warn,
             detail: format!("{detail} unusual size"),
-            fix: Some("Reinstall: npm install -g bladebro".into()),
+            fix: Some("Reinstall: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu".into()),
         }
     }
 }
@@ -835,7 +832,7 @@ async fn check_version() -> Check {
                         super::CURRENT_VERSION,
                         latest.tag_name
                     ),
-                    fix: Some("Run: bladebro -u".into()),
+                    fix: Some("Run: obu -u".into()),
                 }
             } else {
                 Check {
@@ -898,7 +895,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     fn scratch(tag: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("blade-doctor-{tag}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-doctor-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
@@ -907,7 +904,7 @@ mod tests {
     fn session(root: &Path, name: &str, owner: u32) -> PathBuf {
         let dir = root.join("profiles").join(name);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(".blade-owner"), owner.to_string()).unwrap();
+        std::fs::write(dir.join(".obu-owner"), owner.to_string()).unwrap();
         dir
     }
 
@@ -937,7 +934,7 @@ mod tests {
         session(&root, "sess-999999998", 999_999_998); // dead: reaped
         session(&root, &format!("sess-{me}"), me); // live: kept
 
-        // Never created by bladebro and never reaped: promising otherwise
+        // Never created by obu and never reaped: promising otherwise
         // is a warning that never clears.
         std::fs::create_dir_all(root.join("profiles/pid-999999996")).unwrap();
         std::fs::create_dir_all(root.join("profiles/junk")).unwrap();
@@ -961,7 +958,7 @@ mod tests {
         // it and always answers false.
         let custom = scratch("locks-custom");
         std::os::unix::fs::symlink("host-999999999", custom.join("SingletonLock")).unwrap();
-        let custom_check = profile_locks_at(Path::new("/nonexistent-blade"), Some(&custom));
+        let custom_check = profile_locks_at(Path::new("/nonexistent-obu"), Some(&custom));
 
         // No Chrome ever runs on the template; session dirs are where locks live.
         let root = scratch("locks-sessions");

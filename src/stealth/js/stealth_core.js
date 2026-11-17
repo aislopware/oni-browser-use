@@ -69,7 +69,7 @@ if(!window.chrome.loadTimes){window.chrome.loadTimes=_fix(_mkN(function(){return
 }catch(e){}
 
 // Speech synthesis voices: NO PATCH (removed v3.9.12). The fixed 3-voice
-// Google set was a cluster signature shared by every Bladebro profile;
+// Google set was a cluster signature shared by every Obu profile;
 // the machine truth (0 voices without speech-dispatcher, the real list
 // with it) is coherent and unremarkable — the differential oracle shows
 // stock Chrome on the same box reports 0.
@@ -99,7 +99,7 @@ if(!navigator.getBattery){
 // layer. Stripping srflx/host candidates from every session BREAKS
 // legit WebRTC (empty candidate lists are themselves a detection
 // surface) for zero benefit without a proxy. The patch is now applied
-// ONLY when BLADE_PROXY is set — the one case where the real IP must
+// ONLY when OBU_PROXY is set — the one case where the real IP must
 // not appear in candidates. See RTC_PATCH in apply().
 
 // Error-stack normalization REMOVED (v3.9): the wrapper broke every

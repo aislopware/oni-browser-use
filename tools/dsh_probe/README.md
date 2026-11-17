@@ -1,16 +1,16 @@
 Run against an actual installed DeepSeek Harness, with this checkout's packed
-Bladebro package installed in the same disposable project:
+Obu package installed in the same disposable project:
 
 ```sh
 npm install --prefix work/dsh/runtime @deepseek-ai/dsh
-npm pack ./npm/bladebro --pack-destination work/dsh
-npm install --prefix work/dsh/runtime ./work/dsh/bladebro-$(node -p "require('./npm/bladebro/package.json').version").tgz
-DSH_RUNTIME=work/dsh/runtime BLADEBRO="$PWD/target/release/bladebro" node tools/dsh_probe/run.mjs
+npm pack ./npm/obu --pack-destination work/dsh
+npm install --prefix work/dsh/runtime ./work/dsh/obu-$(node -p "require('./npm/obu/package.json').version").tgz
+DSH_RUNTIME=work/dsh/runtime OBU="$PWD/target/release/obu" node tools/dsh_probe/run.mjs
 ```
 
 Node >=22.19 and Chromium are required. Each run creates fresh temporary browser
 and harness data. It uses real Cordis, ToolRuntime, the host's native MCP bridge,
-Bladebro and Chromium. The only model adapter supplies image-capability metadata;
+Obu and Chromium. The only model adapter supplies image-capability metadata;
 its inference entry throws. No credentials or paid API are needed.
 
 Assertions cover exact live schemas/descriptions, all five tools, an exact
@@ -28,12 +28,12 @@ steps, so an error containing the expected text cannot pass.
 `CHROME_PATH=/absolute/browser node tools/dsh_probe/stock-browser.mjs` separately
 checks stock CDP evaluation, DOM layout reads and WebGL access with disposable
 data. It adds no driver patches and makes no stealth claim. On failed Mac CI,
-this and a separate DSH run with `BLADE_WEBGL=real` diagnose browser/driver
+this and a separate DSH run with `OBU_WEBGL=real` diagnose browser/driver
 boundaries. Diagnostic passes cannot turn the failed required job green.
 An optional script-path argument registers that exact generated injection in a
 second isolated Chrome, then verifies navigation, layout and WebGL readback.
 Further failure-only Mac controls keep the mask while skipping hardware
-detection, and select the native Metal backend. `BLADE_DSH_FAILURE_DIR` enables
+detection, and select the native Metal backend. `OBU_DSH_FAILURE_DIR` enables
 bounded desktop screenshots and samples of owned MCP child processes before
 cleanup; these fixture diagnostics are preserved as CI artifacts.
 
@@ -42,7 +42,7 @@ Run `node tools/dsh_probe/package.mjs` for portable package/resolver boundaries
 optional binaries). These simulated branches do not claim native OS coverage.
 
 `profile.mjs` additionally boots a full real Web profile containing the packed
-plugin. Set explicit disposable `DSH_HOME` and `BLADE_HOME` and `DSH_RUNTIME` to
+plugin. Set explicit disposable `DSH_HOME` and `OBU_HOME` and `DSH_RUNTIME` to
 the harness installation. It verifies the Plugins inventory, authenticated HTML,
 Standard/PTC/Cordis agent capability visibility, and native Plugins disable /
 re-enable while preserving a second independent real MCP server. Its metadata

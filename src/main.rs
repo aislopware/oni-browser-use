@@ -1,15 +1,15 @@
-//! Bladebro binary entry point.
+//! Obu binary entry point.
 //!
 //! Process-level wiring only: logging, the exit-code contract, global flag
 //! parsing, and dispatch. The command surfaces live in the library modules —
 //! the CLI (daemon + nav/see/act/state/run/vision/rb/help) in
-//! [`bladebro::cli`], the stealth audit in [`bladebro::audit`], the update
-//! hub in [`bladebro::updater`], the MCP server in [`bladebro::mcp`]. The
+//! [`obu::cli`], the stealth audit in [`obu::audit`], the update
+//! hub in [`obu::updater`], the MCP server in [`obu::mcp`]. The
 //! legacy debug commands kept here (`targets`, `probe`) drive raw CDP.
 
-use bladebro::cdp;
-use bladebro::ui;
-use bladebro::Result;
+use obu::cdp;
+use obu::ui;
+use obu::Result;
 
 fn main() {
     // argv as the OS hands it over: std::env::args() panics on an argument
@@ -24,7 +24,7 @@ fn main() {
     let default_filter = if raw.iter().any(|a| a == "mcp") {
         "warn"
     } else {
-        "warn,bladebro=info"
+        "warn,obu=info"
     };
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -48,7 +48,7 @@ fn main() {
                 print_json_error(&e.to_string());
             }
             print_error(&e);
-            if matches!(e, bladebro::BladeError::Usage(_)) {
+            if matches!(e, obu::ObuError::Usage(_)) {
                 2
             } else {
                 1
@@ -68,7 +68,7 @@ fn main() {
 /// `Runtime::drop` waits for all blocking tasks to finish.
 /// The parked read never finishes (the harness holds the
 /// pipe open) → the process hangs forever AFTER all cleanup
-/// already ran. Observed live: bladebro survived SIGTERM by
+/// already ran. Observed live: obu survived SIGTERM by
 /// minutes with Chrome long dead.
 ///
 /// At this point every teardown step is complete (Chrome
@@ -77,22 +77,22 @@ fn main() {
 /// is safe.
 fn exit_immediately(code: i32) -> ! {
     // A command a termination signal interrupted has closed its browser by
-    // now: die of that signal, as bladebro did before it caught them, so the
+    // now: die of that signal, as obu did before it caught them, so the
     // shell or harness that sent it sees it.
-    let code = bladebro::platform::reraise_termination_signal().unwrap_or(code);
+    let code = obu::platform::reraise_termination_signal().unwrap_or(code);
     std::process::exit(code);
 }
 
-/// One error line: `bladebro:` dim, message red — or yellow for usage errors
+/// One error line: `obu:` dim, message red — or yellow for usage errors
 /// (a typo is not a failure).
-fn print_error(e: &bladebro::BladeError) {
+fn print_error(e: &obu::ObuError) {
     let msg = e.to_string();
-    let styled = if matches!(e, bladebro::BladeError::Usage(_)) {
+    let styled = if matches!(e, obu::ObuError::Usage(_)) {
         ui::err::yellow(&msg)
     } else {
         ui::err::red(&msg)
     };
-    eprintln!("{} {styled}", ui::err::dim("bladebro:"));
+    eprintln!("{} {styled}", ui::err::dim("obu:"));
 }
 
 /// The `--json` failure object — the same shape run_cli prints.
@@ -110,8 +110,8 @@ fn utf8_args(raw: Vec<std::ffi::OsString>) -> Result<Vec<String>> {
         .enumerate()
         .map(|(i, a)| {
             a.into_string().map_err(|a| {
-                bladebro::BladeError::Usage(format!(
-                    "argument {} is not valid UTF-8 ('{}') — bladebro takes UTF-8 arguments only; \
+                obu::ObuError::Usage(format!(
+                    "argument {} is not valid UTF-8 ('{}') — obu takes UTF-8 arguments only; \
                      rename the file or pass a UTF-8 symlink to it",
                     i + 1,
                     a.to_string_lossy()
@@ -142,7 +142,7 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
                 match args.get(i) {
                     Some(v) if !v.is_empty() => host = v.clone(),
                     _ => {
-                        return Err(bladebro::BladeError::Usage(
+                        return Err(obu::ObuError::Usage(
                             "--host needs a value (e.g. --host 127.0.0.1)".into(),
                         ));
                     }
@@ -156,12 +156,12 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
                 // `--port 0` — the user saw an unrelated error, or the run
                 // targeted the wrong endpoint.
                 let v = args.get(i).ok_or_else(|| {
-                    bladebro::BladeError::Usage(
+                    obu::ObuError::Usage(
                         "--port needs a value (e.g. --port 9222; 0 = auto-launch)".into(),
                     )
                 })?;
                 port = v.parse().map_err(|_| {
-                    bladebro::BladeError::Usage(format!("--port needs a number, got '{v}'"))
+                    obu::ObuError::Usage(format!("--port needs a number, got '{v}'"))
                 })?;
                 port_given = true;
             }
@@ -193,25 +193,25 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // run_cli serves their per-command help, in its --json form too.
     // Unknown commands fall through to the unknown-command error.
     let help_after = positional.iter().any(|a| a == "-h" || a == "--help");
-    let (cmd, positional) =
-        if help_flag || (help_after && !is_cli_command(&cmd) && is_known_command(&cmd)) {
-            let topic =
-                Some(cmd).filter(|c| c != "help" && bladebro::cli::command_help_text(c).is_some());
-            let json = positional
-                .iter()
-                .any(|a| a == "--json")
-                .then(|| "--json".to_string());
-            ("help".to_string(), topic.into_iter().chain(json).collect())
-        } else {
-            (cmd, positional)
-        };
+    let (cmd, positional) = if help_flag
+        || (help_after && !is_cli_command(&cmd) && is_known_command(&cmd))
+    {
+        let topic = Some(cmd).filter(|c| c != "help" && obu::cli::command_help_text(c).is_some());
+        let json = positional
+            .iter()
+            .any(|a| a == "--json")
+            .then(|| "--json".to_string());
+        ("help".to_string(), topic.into_iter().chain(json).collect())
+    } else {
+        (cmd, positional)
+    };
 
-    // S18: pick this process's lane (config + BLADE_LANE env override). Every
+    // S18: pick this process's lane (config + OBU_LANE env override). Every
     // surface — one-shot CLI, daemon, MCP — reads the same switch.
-    bladebro::realbrowser::init_lane();
+    obu::realbrowser::init_lane();
 
     // Restore the default SIGPIPE for CLI-output commands so an early pipe
-    // reader (`bladebro ... | head -1`) exits quietly instead of panicking —
+    // reader (`obu ... | head -1`) exits quietly instead of panicking —
     // Rust std ignores SIGPIPE, which turns EPIPE into a println! panic.
     // NOT for `daemon`/`mcp`: they must survive client disconnects (their
     // teardown still runs and their socket writes handle EPIPE as an error).
@@ -228,29 +228,26 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(bladebro::BladeError::other)?;
+        .map_err(obu::ObuError::other)?;
 
     let is_update_cmd = is_update_command(&cmd);
     let is_cli_cmd = is_cli_command(&cmd);
 
     // Reject unknown commands BEFORE launching Chrome. Without this,
-    // `bladebro bogus` would launch a full Chrome+Xvfb tree just to print
+    // `obu bogus` would launch a full Chrome+Xvfb tree just to print
     // an error.
     let is_known = is_known_command(&cmd);
     if !is_known {
-        let suggestion = bladebro::cli::suggest_command(&cmd)
+        let suggestion = obu::cli::suggest_command(&cmd)
             .map(|s| format!(" — did you mean `{s}`?"))
             .unwrap_or_default();
         if json_mode {
             print_json_error(&format!(
-                "unknown command `{cmd}`{suggestion} (run `bladebro help` for the command list)"
+                "unknown command `{cmd}`{suggestion} (run `obu help` for the command list)"
             ));
         }
         eprintln!("{} unknown command `{cmd}`{suggestion}", ui::err::red("✗"));
-        eprintln!(
-            "  {}",
-            ui::err::dim("run `bladebro help` for the command list")
-        );
+        eprintln!("  {}", ui::err::dim("run `obu help` for the command list"));
         std::process::exit(2);
     }
 
@@ -260,13 +257,13 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // hide it is a JS mask that lie engines catch (measured: CreepJS
     // `webDriverIsOn` + 33% headless; `Emulation.setAutomationOverride` does
     // NOT clear it — accepted, no effect). WS keeps the native `false` with
-    // zero patches — the same lane the CLI daemon uses. `BLADE_TRANSPORT=pipe`
+    // zero patches — the same lane the CLI daemon uses. `OBU_TRANSPORT=pipe`
     // opts back into the zero-port transport.
     // CLI one-shot commands always use WS since they depend on HTTP target
     // discovery. Windows uses WS (pipe fds 3/4 don't exist on Windows).
     let use_pipe = port == 0
         && cmd == "mcp"
-        && std::env::var("BLADE_TRANSPORT")
+        && std::env::var("OBU_TRANSPORT")
             .map(|v| v == "pipe")
             .unwrap_or(false)
         && cfg!(unix);
@@ -284,13 +281,11 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // signals from before the launch on (see `with_browser_guard`).
     let mut signal = launches_here.then(|| {
         let _rt = rt.enter();
-        bladebro::platform::TerminationSignal::listen()
+        obu::platform::TerminationSignal::listen()
     });
     // `signal` listens exactly when the browser is launched here.
     let mut browser = match signal.as_mut() {
-        Some(signal) => {
-            Some(rt.block_on(signal.during_launch(bladebro::browser::Browser::launch(0)))?)
-        }
+        Some(signal) => Some(rt.block_on(signal.during_launch(obu::browser::Browser::launch(0)))?),
         None => None,
     };
     let base = if launches_here {
@@ -310,7 +305,7 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
         // (It used to spawn a full Chrome + Xvfb just to read /json/version,
         // then exit without dropping it: one orphaned browser per call.)
         "version" => {
-            println!("bladebro {}", env!("CARGO_PKG_VERSION"));
+            println!("obu {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         // CLI commands go through the new CLI module.
@@ -331,24 +326,22 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
                 cli_args.push("--port".to_string());
                 cli_args.push(port.to_string());
             }
-            rt.block_on(bladebro::cli::run_cli(&cli_args))
+            rt.block_on(obu::cli::run_cli(&cli_args))
         }
         // Update hub commands (no Chrome needed).
-        "update" | "-u" => rt.block_on(bladebro::updater::run("update", &positional)),
-        "doctor" | "-doc" => rt.block_on(bladebro::updater::run("doctor", &positional)),
-        "rollback" | "--rollback" => rt.block_on(bladebro::updater::run("rollback", &positional)),
-        "-v" | "--version" => rt.block_on(bladebro::updater::run("version", &positional)),
+        "update" | "-u" => rt.block_on(obu::updater::run("update", &positional)),
+        "doctor" | "-doc" => rt.block_on(obu::updater::run("doctor", &positional)),
+        "rollback" | "--rollback" => rt.block_on(obu::updater::run("rollback", &positional)),
+        "-v" | "--version" => rt.block_on(obu::updater::run("version", &positional)),
         "mcp" if use_pipe => rt.block_on(cmd_mcp_pipe()),
         "mcp" => rt.block_on(cmd_mcp(&host, port)),
         "audit" => rt.block_on(with_browser_guard(&mut browser, &mut signal, || {
-            bladebro::audit::run_audit(&base)
+            obu::audit::run_audit(&base)
         })),
         _ => {
             // Unknown command: NEVER launch a browser (it used to!), and
             // exit 2 as a usage error (see the exit-code contract in cli.rs).
-            Err(bladebro::BladeError::Usage(format!(
-                "unknown command: {cmd}"
-            )))
+            Err(obu::ObuError::Usage(format!("unknown command: {cmd}")))
         }
     };
     // Exit HERE, before `rt` drops: the MCP server reads
@@ -360,7 +353,7 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
         Ok(()) => exit_immediately(0),
         Err(e) => {
             print_error(&e);
-            exit_immediately(if matches!(e, bladebro::BladeError::Usage(_)) {
+            exit_immediately(if matches!(e, obu::ObuError::Usage(_)) {
                 2
             } else {
                 1
@@ -408,7 +401,7 @@ fn is_cli_command(cmd: &str) -> bool {
 /// same guard discipline as the CLI: the browser is ALWAYS shut down,
 /// even on error — `exit_immediately` skips destructors, so a browser left
 /// alive on the stack would leak Chrome + Xvfb on every invocation
-/// (observed: `bladebro version` orphaned a full Chrome tree per call).
+/// (observed: `obu version` orphaned a full Chrome tree per call).
 fn is_debug_command(cmd: &str) -> bool {
     matches!(cmd, "probe" | "targets" | "audit")
 }
@@ -428,8 +421,8 @@ fn is_known_command(cmd: &str) -> bool {
 /// re-raises the signal). Dying on the default action would never close
 /// Chrome, which runs in its own process group.
 async fn with_browser_guard<F, Fut>(
-    browser: &mut Option<bladebro::browser::Browser>,
-    signal: &mut Option<bladebro::platform::TerminationSignal>,
+    browser: &mut Option<obu::browser::Browser>,
+    signal: &mut Option<obu::platform::TerminationSignal>,
     run: F,
 ) -> Result<()>
 where
@@ -508,7 +501,7 @@ async fn cmd_probe(base: &str) -> Result<()> {
 }
 
 async fn cmd_mcp(host: &str, port: u16) -> Result<()> {
-    use bladebro::mcp;
+    use obu::mcp;
     mcp::run(host, port).await
 }
 
@@ -517,7 +510,7 @@ async fn cmd_mcp(host: &str, port: u16) -> Result<()> {
 /// Unix-only: Windows uses WS transport.
 #[cfg(unix)]
 async fn cmd_mcp_pipe() -> Result<()> {
-    bladebro::mcp::run_pipe().await
+    obu::mcp::run_pipe().await
 }
 
 /// Windows stub: pipe transport is Unix-only. This is never called
@@ -525,7 +518,7 @@ async fn cmd_mcp_pipe() -> Result<()> {
 /// symbol to resolve.
 #[cfg(not(unix))]
 async fn cmd_mcp_pipe() -> Result<()> {
-    Err(bladebro::error::BladeError::Other(
+    Err(obu::error::ObuError::Other(
         "pipe transport is Unix-only".into(),
     ))
 }

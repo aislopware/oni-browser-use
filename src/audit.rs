@@ -1,4 +1,4 @@
-//! `bladebro audit` — runs the S13 stealth audit for the CLI.
+//! `obu audit` — runs the S13 stealth audit for the CLI.
 //!
 //! Executed by main.rs with an owned, guarded browser. The vector suite and
 //! the injection-lint fixtures live in `tests/vectors.html` (embedded in the
@@ -12,7 +12,7 @@
 
 use crate::action::Action;
 use crate::cdp;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 use crate::ui;
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 const VECTORS_HTML: &str = include_str!("../tests/vectors.html");
 const NATIVE_BEHAVIOR_JS: &str = include_str!("../tests/fixtures/native_behavior.js");
 
-/// S13: `bladebro audit` — run the stealth vectors, the boot self-check (S2),
+/// S13: `obu audit` — run the stealth vectors, the boot self-check (S2),
 /// and a cross-restart consistency stamp (v3.9.12); print a scorecard.
 /// One-shot CLI command (WS transport).
 pub async fn run_audit(base: &str) -> Result<()> {
@@ -39,13 +39,13 @@ pub async fn run_audit(base: &str) -> Result<()> {
             PathBuf::from("tests/vectors.html"),
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors.html"),
         ],
-        &crate::platform::blade_dir().join("audit"),
+        &crate::platform::obu_dir().join("audit"),
     )?);
 
     if crate::realbrowser::real_lane() {
         eprintln!(
             "{} the real-browser lane is ON — this audit measures YOUR browser (zero page patches); \
-             the mask vectors below are N/A. `bladebro rb off` (or BLADE_LANE=agent) audits the agent lane.",
+             the mask vectors below are N/A. `obu rb off` (or OBU_LANE=agent) audits the agent lane.",
             ui::err::yellow("⚠")
         );
     }
@@ -83,7 +83,7 @@ pub async fn run_audit(base: &str) -> Result<()> {
 
     let bar = "=".repeat(52);
     println!("\n{bar}");
-    println!("  BLADEBRO STEALTH AUDIT");
+    println!("  OBU STEALTH AUDIT");
     println!("{bar}");
 
     // The audit is a gate, not a printout (4.6.1): any vector FAIL,
@@ -148,7 +148,7 @@ var out={};
 try{
 var c=document.createElement('canvas');c.width=240;c.height=60;
 var x=c.getContext('2d');x.textBaseline='top';x.font='16px Arial';x.fillStyle='#f60';
-x.fillRect(10,10,80,20);x.fillStyle='#069';x.fillText('Bladebro,\ud83d\ude00',12,24);
+x.fillRect(10,10,80,20);x.fillStyle='#069';x.fillText('Obu,\ud83d\ude00',12,24);
 var d=c.toDataURL();var hh=5381;for(var i=0;i<d.length;i++)hh=((hh<<5)+hh+d.charCodeAt(i))>>>0;out.canvas=hh.toString(16);
 var ac=new OfflineAudioContext(1,5000,44100);var o=ac.createOscillator();o.frequency.value=1000;
 var k=ac.createDynamicsCompressor();o.connect(k);k.connect(ac.destination);o.start(0);
@@ -178,7 +178,7 @@ return JSON.stringify(out);
                 .map(String::from)
         });
     if let Some(ref s) = stamp {
-        let stamp_path = crate::platform::blade_dir().join("audit-stamp.json");
+        let stamp_path = crate::platform::obu_dir().join("audit-stamp.json");
         let prev = std::fs::read_to_string(&stamp_path)
             .ok()
             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
@@ -207,7 +207,7 @@ return JSON.stringify(out);
         println!("  VERDICT: PASS");
         Ok(())
     } else {
-        Err(BladeError::Other(format!(
+        Err(ObuError::Other(format!(
             "stealth audit FAILED ({} issue(s)): {}",
             failures.len(),
             failures.join(" | ")
@@ -237,7 +237,7 @@ fn vectors_page(candidates: &[PathBuf], dir: &Path) -> Result<PathBuf> {
         })
         .and_then(|()| crate::platform::secure_write_file(&page, VECTORS_HTML.as_bytes()))
         .map_err(|e| {
-            BladeError::Other(format!(
+            ObuError::Other(format!(
                 "cannot write the built-in vector suite to {}: {e}",
                 dir.display()
             ))
@@ -313,7 +313,7 @@ mod embedded_suite_tests {
     use super::{vectors_page, VECTORS_HTML};
 
     fn scratch(tag: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("blade-audit-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-audit-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -373,7 +373,7 @@ mod vector_gate_tests {
 
     #[test]
     fn a_complete_passing_report_passes() {
-        let report = "Bladebro Stealth Vector Suite\nSCORE: 111/111 pass\nPASS webdriver: false";
+        let report = "Obu Stealth Vector Suite\nSCORE: 111/111 pass\nPASS webdriver: false";
         assert_eq!(vector_failures(Ok(()), report), Vec::<String>::new());
     }
 
@@ -381,10 +381,7 @@ mod vector_gate_tests {
     fn a_suite_that_never_finished_fails() {
         // The suite threw or hung: the title never reached DONE and the
         // page still shows its placeholder. This used to print VERDICT: PASS.
-        let f = vector_failures(
-            Err(TIMEOUT.into()),
-            "Bladebro Stealth Vector Suite\nRUNNING",
-        );
+        let f = vector_failures(Err(TIMEOUT.into()), "Obu Stealth Vector Suite\nRUNNING");
         assert!(f.iter().any(|x| x.contains("did not finish")), "{f:?}");
         assert!(f.iter().any(|x| x.contains("no SCORE")), "{f:?}");
     }
@@ -398,7 +395,7 @@ mod vector_gate_tests {
     #[test]
     fn a_missing_or_unparseable_score_fails() {
         for report in [
-            "Bladebro Stealth Vector Suite\nRUNNING",
+            "Obu Stealth Vector Suite\nRUNNING",
             "SCORE: ",
             "SCORE: pending",
             "SCORE: 111 of 111 pass",
@@ -428,8 +425,8 @@ mod file_url_tests {
     #[test]
     fn windows_paths_become_valid_file_urls() {
         assert_eq!(
-            file_url_from_str(r"D:\a\bladebro\tests\vectors.html", true),
-            "file:///D:/a/bladebro/tests/vectors.html"
+            file_url_from_str(r"D:\a\obu\tests\vectors.html", true),
+            "file:///D:/a/obu/tests/vectors.html"
         );
         assert_eq!(
             file_url_from_str(r"\\?\D:\a\b.html", true),

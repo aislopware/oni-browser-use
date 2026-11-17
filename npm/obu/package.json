@@ -1,15 +1,15 @@
 {
-  "name": "bladebro",
+  "name": "obu",
   "version": "4.6.9",
   "description": "Stealthy and efficient agentic browser driver for AI agents. Few tools, full control, real stealth, max token efficiency.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dondai44423/bladebro.git"
+    "url": "git+https://github.com/aislopware/oni-browser-use.git"
   },
-  "homepage": "https://github.com/dondai44423/bladebro#readme",
+  "homepage": "https://github.com/aislopware/oni-browser-use#readme",
   "bugs": {
-    "url": "https://github.com/dondai44423/bladebro/issues"
+    "url": "https://github.com/aislopware/oni-browser-use/issues"
   },
   "keywords": [
     "pi-package",
@@ -40,7 +40,7 @@
     }
   },
   "bin": {
-    "bladebro": "bin.js"
+    "obu": "bin.js"
   },
   "files": [
     "bin.js",
@@ -53,11 +53,11 @@
     "LICENSE"
   ],
   "optionalDependencies": {
-    "bladebro-linux-x64": "4.6.9",
-    "bladebro-linux-arm64": "4.6.9",
-    "bladebro-darwin-x64": "4.6.9",
-    "bladebro-darwin-arm64": "4.6.9",
-    "bladebro-windows-x64": "4.6.9"
+    "obu-linux-x64": "4.6.9",
+    "obu-linux-arm64": "4.6.9",
+    "obu-darwin-x64": "4.6.9",
+    "obu-darwin-arm64": "4.6.9",
+    "obu-windows-x64": "4.6.9"
   },
   "engines": {
     "node": ">=14"

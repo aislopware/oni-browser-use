@@ -1,4 +1,4 @@
-//! `BLADE_PROXY=http://user:pass@host:port` must never reach Chrome's argv.
+//! `OBU_PROXY=http://user:pass@host:port` must never reach Chrome's argv.
 //! Chrome's `--proxy-server` cannot carry credentials (every page load then
 //! fails with ERR_NO_SUPPORTED_PROXIES while the launch "succeeds"), and a
 //! command line is readable by every local user via the process list. The
@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn credentialed_proxy_is_refused_before_chrome_sees_it() {
-    let root = std::env::temp_dir().join(format!("blade-proxy-creds-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("obu-proxy-creds-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let argv_log = root.join("argv.log");
@@ -26,15 +26,15 @@ fn credentialed_proxy_is_refused_before_chrome_sees_it() {
     .unwrap();
     std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o700)).unwrap();
 
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bladebro"))
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_obu"))
         .arg("probe")
-        .env("BLADE_HOME", root.join("home"))
-        .env("BLADE_NO_UPDATE_CHECK", "1")
-        .env("BLADE_NO_WARMING", "1")
+        .env("OBU_HOME", root.join("home"))
+        .env("OBU_NO_UPDATE_CHECK", "1")
+        .env("OBU_NO_WARMING", "1")
         .env("CHROME_PATH", &fake)
-        .env("BLADE_PROXY", "http://user:secretpw@127.0.0.1:9")
-        .env_remove("BLADE_CHROME_FLAGS")
-        .env_remove("BLADE_TRANSPORT")
+        .env("OBU_PROXY", "http://user:secretpw@127.0.0.1:9")
+        .env_remove("OBU_CHROME_FLAGS")
+        .env_remove("OBU_TRANSPORT")
         .output()
         .unwrap();
     let argv = std::fs::read_to_string(&argv_log).unwrap_or_default();

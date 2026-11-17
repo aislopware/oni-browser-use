@@ -32,7 +32,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 mod dom;
@@ -170,11 +170,7 @@ pub async fn extract(page: &Page, kind: &str, cap: usize) -> Result<XPayload> {
                 }
             }
         }
-        other => {
-            return Err(BladeError::Other(format!(
-                "x: unsupported page kind {other}"
-            )))
-        }
+        other => return Err(ObuError::Other(format!("x: unsupported page kind {other}"))),
     };
     Ok(payload)
 }

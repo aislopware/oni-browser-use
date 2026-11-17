@@ -4,7 +4,7 @@
 //! these fails, a change reintroduced a vulnerability — see
 //! SECURITY-AUDIT-2026-08-16.md in the repo root for the full writeup.
 
-use bladebro::platform::{truncate_utf8, validate_write_path};
+use obu::platform::{truncate_utf8, validate_write_path};
 
 // ── FIX: crash-by-URL / crash-by-message (byte slicing mid UTF-8 char) ──
 
@@ -118,7 +118,7 @@ fn write_path_allows_normal_outputs() {
 
 #[test]
 fn checksum_required_policy() {
-    use bladebro::updater::download::checksum_required;
+    use obu::updater::download::checksum_required;
     // The first release that ships .sha256 assets.
     assert!(checksum_required("3.3.0"));
     assert!(checksum_required("4.0.0"));
@@ -130,7 +130,7 @@ fn checksum_required_policy() {
 
 #[test]
 fn checksum_required_fails_closed_for_unparseable_tags() {
-    use bladebro::updater::download::checksum_required;
+    use obu::updater::download::checksum_required;
     // A tag that is not a version (e.g. "releases" from a redirect to the
     // release list) parsed as version [] and sorted below 3.3.0, which
     // downgraded verification to warn-and-skip. Unknown means required.
@@ -141,15 +141,15 @@ fn checksum_required_fails_closed_for_unparseable_tags() {
 
 #[test]
 fn checksum_parsing_accepts_only_valid_sha256() {
-    use bladebro::updater::download::parse_checksum;
+    use obu::updater::download::parse_checksum;
     let hash = "a".repeat(64);
     assert_eq!(
-        parse_checksum(&format!("{hash}  bladebro-linux-x64")),
+        parse_checksum(&format!("{hash}  obu-linux-x64")),
         Some(hash.clone())
     );
     assert_eq!(parse_checksum(&hash), Some(hash.clone()));
     assert_eq!(
-        parse_checksum(&format!("{} bladebro", hash.to_uppercase())),
+        parse_checksum(&format!("{} obu", hash.to_uppercase())),
         Some(hash)
     );
     // Reject: not hex, too short, empty, junk.
@@ -163,8 +163,8 @@ fn checksum_parsing_accepts_only_valid_sha256() {
 
 #[test]
 fn secure_tmp_rejects_preplaced_symlink_and_file() {
-    use bladebro::updater::download::create_secure_tmp;
-    let dir = std::env::temp_dir().join(format!("bladebro-sec-test-{}", std::process::id()));
+    use obu::updater::download::create_secure_tmp;
+    let dir = std::env::temp_dir().join(format!("obu-sec-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -176,7 +176,7 @@ fn secure_tmp_rejects_preplaced_symlink_and_file() {
         .file_name()
         .unwrap()
         .to_string_lossy()
-        .starts_with(".bladebro-update"));
+        .starts_with(".obu-update"));
 
     // Pre-place a symlink + a regular file and verify O_EXCL semantics
     // hold for the API the updater uses (create_new): creation at an
@@ -184,7 +184,7 @@ fn secure_tmp_rejects_preplaced_symlink_and_file() {
     let victim = dir.join("victim.txt");
     std::fs::write(&victim, b"ORIGINAL").unwrap();
     #[cfg(unix)]
-    let link = dir.join(".bladebro-update-link-test");
+    let link = dir.join(".obu-update-link-test");
     #[cfg(unix)]
     std::os::unix::fs::symlink(&victim, &link).unwrap();
     let probe = |p: &std::path::Path| {
@@ -224,17 +224,17 @@ fn cookie_fallback_js_is_valid_json_string() {
 #[test]
 fn secure_dir_all_chmods_created_components() {
     use std::os::unix::fs::PermissionsExt;
-    let base = std::env::temp_dir().join(format!("bladebro-secdir-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("obu-secdir-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let deep = base.join("one/two/three");
-    bladebro::platform::secure_create_dir_all(&deep).unwrap();
+    obu::platform::secure_create_dir_all(&deep).unwrap();
     for p in [base.join("one"), base.join("one/two"), deep.clone()] {
         let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o700, "{:?} must be 0700", p);
     }
     // Pre-existing dirs are left alone.
     std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755)).unwrap();
-    bladebro::platform::secure_create_dir_all(&base.join("four")).unwrap();
+    obu::platform::secure_create_dir_all(&base.join("four")).unwrap();
     let base_mode = std::fs::metadata(&base).unwrap().permissions().mode() & 0o777;
     assert_eq!(base_mode, 0o755, "pre-existing dir must not be chmodded");
     let four_mode = std::fs::metadata(base.join("four"))

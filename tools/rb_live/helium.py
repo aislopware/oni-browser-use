@@ -2,7 +2,7 @@
 """Helium real-lane regression: discovery, auto/attach, clone, profile, five tools.
 
 HELIUM_BINARY=/path/to/helium python3 tools/rb_live/helium.py
-Uses only disposable HOME/XDG/BLADE_HOME directories and a local HTTP fixture.
+Uses only disposable HOME/XDG/OBU_HOME directories and a local HTTP fixture.
 """
 import base64
 import hashlib
@@ -17,7 +17,7 @@ import threading
 import time
 import urllib.request
 
-BINARY = os.environ.get("BLADEBRO", str(Path(__file__).resolve().parents[2] / "target/release/bladebro"))
+BINARY = os.environ.get("OBU", str(Path(__file__).resolve().parents[2] / "target/release/obu"))
 HELIUM = str(Path(os.environ["HELIUM_BINARY"]).resolve())
 checks = 0
 
@@ -110,19 +110,19 @@ def run():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     origin = f"http://127.0.0.1:{server.server_port}"
     try:
-        with tempfile.TemporaryDirectory(prefix="blade-helium-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="obu-helium-") as tmp:
             root = Path(tmp)
             config = root / "config"
             profile = config / "net.imput.helium"
-            blade = root / "blade"
+            obu = root / "obu"
             bindir = root / "bin"
-            for p in (config, blade, bindir, root / "home"):
+            for p in (config, obu, bindir, root / "home"):
                 p.mkdir()
             (bindir / "helium").symlink_to(HELIUM)
             env = dict(os.environ, HOME=str(root / "home"), XDG_CONFIG_HOME=str(config),
-                       BLADE_HOME=str(blade), PATH=str(bindir) + os.pathsep + os.environ["PATH"],
-                       BLADE_NO_WARMING="1", BLADE_NO_UPDATE_CHECK="1")
-            for key in ("BLADE_LANE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "HELIUM_CONFIG_HOME"):
+                       OBU_HOME=str(obu), PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+                       OBU_NO_WARMING="1", OBU_NO_UPDATE_CHECK="1")
+            for key in ("OBU_LANE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "HELIUM_CONFIG_HOME"):
                 env.pop(key, None)
 
             def cli(*args, ok=True):
@@ -133,7 +133,7 @@ def run():
                 return value
 
             def cfg(mode):
-                (blade / "realbrowser.json").write_text(json.dumps({
+                (obu / "realbrowser.json").write_text(json.dumps({
                     "enabled": True, "browser": "helium", "mode": mode,
                     "visible": False, "idle_hum": False,
                 }))
@@ -222,7 +222,7 @@ def run():
                 finally:
                     m.close()
             check("clone never modifies its source profile", snapshot(profile) == before)
-            check("Helium owns its separate clone namespace", (blade / "realbrowser/helium/template").is_dir())
+            check("Helium owns its separate clone namespace", (obu / "realbrowser/helium/template").is_dir())
 
             cfg("profile")
             with (root / "mcp-profile.log").open("wb") as log:

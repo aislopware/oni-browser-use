@@ -1,5 +1,5 @@
 //! Real-lane clone template integrity, through real CLI subprocesses with an
-//! isolated HOME/PATH/BLADE_HOME. Fake user-data dirs only — no browser is
+//! isolated HOME/PATH/OBU_HOME. Fake user-data dirs only — no browser is
 //! launched and no real profile is ever read.
 #![cfg(target_os = "linux")]
 
@@ -17,13 +17,13 @@ impl Fixture {
             .unwrap()
             .as_nanos();
         let root =
-            std::env::temp_dir().join(format!("blade-rb-clone-{}-{nanos}", std::process::id()));
+            std::env::temp_dir().join(format!("obu-rb-clone-{}-{nanos}", std::process::id()));
         for dir in [
             "home",
             "config",
             "helium-config/net.imput.helium/Default",
             "bin",
-            "blade",
+            "obu",
         ] {
             std::fs::create_dir_all(root.join(dir)).unwrap();
         }
@@ -42,7 +42,7 @@ impl Fixture {
     }
 
     fn rb_root(&self) -> PathBuf {
-        self.0.join("blade/realbrowser/helium")
+        self.0.join("obu/realbrowser/helium")
     }
 
     fn identity(&self) -> String {
@@ -50,15 +50,15 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(["--json", "rb"])
             .args(args)
             .env("HOME", self.0.join("home"))
             .env("XDG_CONFIG_HOME", self.0.join("config"))
             .env("HELIUM_CONFIG_HOME", self.0.join("helium-config"))
-            .env("BLADE_HOME", self.0.join("blade"))
+            .env("OBU_HOME", self.0.join("obu"))
             .env("PATH", self.0.join("bin"))
-            .env_remove("BLADE_LANE")
+            .env_remove("OBU_LANE")
             .output()
             .unwrap()
     }
@@ -148,7 +148,7 @@ fn refresh_and_forget_refuse_while_a_clone_session_is_live() {
     let me = std::process::id();
     let sess = root.join(format!("profiles/sess-{me}"));
     std::fs::create_dir_all(&sess).unwrap();
-    std::fs::write(sess.join(".blade-owner"), me.to_string()).unwrap();
+    std::fs::write(sess.join(".obu-owner"), me.to_string()).unwrap();
 
     for sub in ["refresh", "forget"] {
         let text = f.refused(&[sub]);
@@ -178,7 +178,7 @@ fn refresh_and_forget_abort_when_the_daemon_does_not_stop() {
     f.cli(&["on"]);
     let root = f.rb_root();
     std::fs::write(root.join("template/Default/agent-state"), "kept").unwrap();
-    let listener = std::os::unix::net::UnixListener::bind(f.0.join("blade/cli.sock")).unwrap();
+    let listener = std::os::unix::net::UnixListener::bind(f.0.join("obu/cli.sock")).unwrap();
     std::thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
             let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));

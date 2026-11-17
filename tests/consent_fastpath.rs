@@ -12,9 +12,9 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use bladebro::cdp::{CdpClient, CdpSession};
-use bladebro::page::dismiss_consent_with_stored;
 use futures_util::{SinkExt, StreamExt};
+use obu::cdp::{CdpClient, CdpSession};
+use obu::page::dismiss_consent_with_stored;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
@@ -44,7 +44,7 @@ out.clicked = clicked;
 console.log(JSON.stringify(out));
 "#;
 
-/// `BLADE_CONSENT` is process-global: every case holds this while it runs.
+/// `OBU_CONSENT` is process-global: every case holds this while it runs.
 static POLICY_ENV: Mutex<()> = Mutex::new(());
 
 #[derive(Debug)]
@@ -73,7 +73,7 @@ fn evaluate(ids: &[String], expr: &str) -> (Value, Eval) {
         serde_json::to_string(expr).unwrap()
     );
     let path = std::env::temp_dir().join(format!(
-        "bladebro-consent-page-{}-{}.js",
+        "obu-consent-page-{}-{}.js",
         std::process::id(),
         N.fetch_add(1, Ordering::Relaxed)
     ));
@@ -117,8 +117,8 @@ fn run_case(
     }
     let _env = POLICY_ENV.lock().unwrap_or_else(|e| e.into_inner());
     match policy {
-        Some(p) => std::env::set_var("BLADE_CONSENT", p),
-        None => std::env::remove_var("BLADE_CONSENT"),
+        Some(p) => std::env::set_var("OBU_CONSENT", p),
+        None => std::env::remove_var("OBU_CONSENT"),
     }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -167,7 +167,7 @@ fn run_case(
         let evals = std::mem::take(&mut *log.lock().unwrap());
         (got, evals)
     });
-    std::env::remove_var("BLADE_CONSENT");
+    std::env::remove_var("OBU_CONSENT");
     Some(result)
 }
 
@@ -189,7 +189,7 @@ fn clicked(evals: &[Eval]) -> Vec<String> {
 }
 
 /// P5: the stored selector is not keyed by the policy it was learned under.
-/// A selector learned under BLADE_CONSENT=accept must never be replayed
+/// A selector learned under OBU_CONSENT=accept must never be replayed
 /// under the default reject policy — that would accept tracking AND report
 /// "consent: rejected (...)". The ladder must reject instead.
 #[test]
@@ -208,7 +208,7 @@ fn stored_accept_selector_is_not_clicked_under_default_reject() {
 }
 
 /// The mirror: a reject selector learned under the default policy is not
-/// replayed once the user opts into BLADE_CONSENT=accept.
+/// replayed once the user opts into OBU_CONSENT=accept.
 #[test]
 fn stored_reject_selector_is_not_clicked_under_accept() {
     let Some((got, evals)) = run_case(Some("accept"), &[&ACCEPT[1..], &REJECT[1..]], REJECT) else {

@@ -6,7 +6,7 @@
 //! hidden/unaddressable matches, near-miss selectors — because a bare
 //! "not found" is the bug class this file exists to kill.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 /// M3: Resolve a text query to an element ref. Searches the LPM (page model)
@@ -184,7 +184,7 @@ pub(super) async fn resolve_text_target(
                 if tied.len() == 1 {
                     return Ok(tied[0].0.clone());
                 }
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "ambiguous \"{query}\": {} equally ranked visible matches: {}. Use ref, selector or nth (1-based).",
                     tied.len(), tied.iter().take(8).map(|m| format!("{} {} \"{}\" [{}]", m.0, m.1, m.2, page.model().element(&m.0).map(|e|e.raw.ctx.as_str()).unwrap_or(""))).collect::<Vec<_>>().join("; ")
                 )));
@@ -222,7 +222,7 @@ pub(super) async fn resolve_text_target(
                 return Ok(candidates[0].ref_id.clone());
             }
             if candidates.len() > 1 {
-                return Err(BladeError::Other(format!("ambiguous \"{query}\": {} possible fields: {}. Use ref, selector or an explicit field label.", candidates.len(), candidates.iter().take(8).map(|e| format!("{} {} \"{}\" [{}]",e.ref_id,e.raw.role,e.raw.name,e.raw.ctx)).collect::<Vec<_>>().join("; "))));
+                return Err(ObuError::Other(format!("ambiguous \"{query}\": {} possible fields: {}. Use ref, selector or an explicit field label.", candidates.len(), candidates.iter().take(8).map(|e| format!("{} {} \"{}\" [{}]",e.ref_id,e.raw.role,e.raw.name,e.raw.ctx)).collect::<Vec<_>>().join("; "))));
             }
         }
     }
@@ -244,7 +244,7 @@ pub(super) async fn resolve_text_target(
         // language so the fix is one step (localized label / selector=).
         let lang = page_lang_note(page.cdp_ref()).await;
         let view = page.view(2000);
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "no element matching \"{}\" found{}{}\n\n--- current page state ---\n{}",
             query, note, lang, view
         )));
@@ -254,7 +254,7 @@ pub(super) async fn resolve_text_target(
             let m = &matches[n - 1];
             return Ok(page.model_mut().adopt(&m.sig, &m.role, &m.name, &m.frame));
         }
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "nth={n} requested but \"{query}\" has only {} visible match(es) (nth is 1-based; choose a valid nth or a unique ref/selector)",
             matches.len()
         )));
@@ -271,7 +271,7 @@ pub(super) async fn resolve_text_target(
         let _ = page.model_mut().adopt(&m.sig, &m.role, &m.name, &m.frame);
     }
     if matches.iter().filter(|m| m.score == top.score).count() > 1 {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "ambiguous \"{query}\": {} visible matches. Use ref, selector or nth (1-based).",
             matches.len()
         )));
@@ -366,7 +366,7 @@ fn selector_diag_note(diag: Option<&crate::action::SelectorDiag>) -> String {
         );
     }
     // W3: the selector matched nothing anywhere - say the counts outright so
-    // "the selector is wrong" and "bladebro cannot match" are distinguishable
+    // "the selector is wrong" and "obu cannot match" are distinguishable
     // (the HN `a.titleline` detour: only a manual querySelectorAll proved 0).
     " - 0 raw matches, 0 actionable: the selector matched nothing - check its spelling against the live page (see mode=model lists the real tags/classes)".to_string()
 }
@@ -419,14 +419,14 @@ pub(super) async fn resolve_selector_target(
                     format!("{} \"{}\" [{}]{}", m.role, m.name, m.reason, ctx)
                 })
                 .collect();
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "selector \"{selector}\" matched {} element(s) but none is visible: {} - a hidden control cannot be clicked by a mouse; if the site wires it programmatically, drive it with act eval (el.click())",
                 matches.len(),
                 ex.join("; ")
             )));
         }
         let diag_note = selector_diag_note(lookup.diag.as_ref());
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "no actionable element matches selector \"{selector}\" (searched light DOM + open shadow roots){diag_note}"
         )));
     }
@@ -446,7 +446,7 @@ pub(super) async fn resolve_selector_target(
         } else {
             String::new()
         };
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "nth={n} requested but selector \"{selector}\" has only {} visible match(es){hidden_note} (nth is 1-based among visible matches)",
             visible.len()
         )));
@@ -471,7 +471,7 @@ pub(super) async fn resolve_selector_target(
     if visible.len() > 5 {
         lines.push(format!("…(+{} more)", visible.len() - 5));
     }
-    Err(BladeError::Other(format!(
+    Err(ObuError::Other(format!(
         "selector \"{selector}\" matches {} visible elements - add nth=N (1-based) to pick one:\n  {}",
         visible.len(),
         lines.join("\n  ")

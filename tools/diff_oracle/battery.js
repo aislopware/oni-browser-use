@@ -1,5 +1,5 @@
 // Differential-oracle battery — executed IDENTICALLY in a stock Chrome and in
-// a bladebro browser; oracle.py flattens + diffs the two JSON maps.
+// a obu browser; oracle.py flattens + diffs the two JSON maps.
 // Wrapped by the driver as: (async()=>{ <this body> })()
 // Keys are flat; every key is compared unless classified EXPECTED by the
 // driver's (documented) deviation table.
@@ -106,7 +106,7 @@ try {
   const c = document.createElement("canvas"); c.width = 240; c.height = 60;
   const x = c.getContext("2d"); x.textBaseline = "top"; x.font = "16px Arial";
   x.fillStyle = "#f60"; x.fillRect(10, 10, 80, 20); x.fillStyle = "#069";
-  x.fillText("Bladebro,\ud83d\ude00", 12, 24);
+  x.fillText("Obu,\ud83d\ude00", 12, 24);
   out.canvas = fnv(c.toDataURL());
 } catch (e) { out.canvas = "ERR"; }
 try {

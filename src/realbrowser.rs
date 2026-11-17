@@ -1,6 +1,6 @@
-//! Real-browser lane (`bladebro rb`).
+//! Real-browser lane (`obu rb`).
 //!
-//! Bladebro's default lane owns an isolated Chromium + seasoned profile on a
+//! Obu's default lane owns an isolated Chromium + seasoned profile on a
 //! virtual display, and manufactures coherence with a page-injection layer.
 //! The real-browser lane is the opposite trade, and for protected sites the
 //! stronger one: the agent drives the user's OWN Chromium-family browser —
@@ -17,7 +17,7 @@
 //!
 //! Three mechanisms, chosen by [`Mode`]:
 //! - **Clone** (default): the user's profile is imported once into a
-//!   blade-owned template and per-process session dirs (the exact machinery
+//!   obu-owned template and per-process session dirs (the exact machinery
 //!   the agent lane already uses for seasoning), then launched with the
 //!   user's real browser binary. Works while their browser is running,
 //!   works for Google-Chrome-branded builds (whose 136+ CDP hardening
@@ -92,16 +92,16 @@ pub fn real_lane() -> bool {
     REAL_LANE.load(Ordering::Relaxed)
 }
 
-/// Initialise the lane for this process: `BLADE_LANE=real|agent` overrides,
+/// Initialise the lane for this process: `OBU_LANE=real|agent` overrides,
 /// otherwise the persisted config decides. Called once at process start.
 pub fn init_lane() {
     set_real_lane(lane_from(
-        std::env::var("BLADE_LANE").ok().as_deref(),
+        std::env::var("OBU_LANE").ok().as_deref(),
         config().enabled,
     ));
 }
 
-/// Effective lane: the `BLADE_LANE=real|agent` env override wins, else the
+/// Effective lane: the `OBU_LANE=real|agent` env override wins, else the
 /// persisted config. Pure — the decision is unit-testable, and every reader
 /// of the lane (init, refresh, fingerprint) goes through it.
 pub fn lane_from(env_override: Option<&str>, cfg_enabled: bool) -> bool {
@@ -118,10 +118,7 @@ pub fn lane_from(env_override: Option<&str>, cfg_enabled: bool) -> bool {
 /// / `rb off` is silently ignored by a long-lived MCP or daemon session
 /// until its browser happens to die (the observed "rb on does nothing").
 pub fn refresh_lane() -> bool {
-    let want = lane_from(
-        std::env::var("BLADE_LANE").ok().as_deref(),
-        config().enabled,
-    );
+    let want = lane_from(std::env::var("OBU_LANE").ok().as_deref(), config().enabled);
     let had = real_lane();
     if want != had {
         set_real_lane(want);
@@ -139,7 +136,7 @@ pub fn refresh_lane() -> bool {
 /// the fingerprint is constant there — an agent session never pays a
 /// relaunch for config that does not concern it.
 pub fn launch_fingerprint() -> u64 {
-    launch_fingerprint_from(std::env::var("BLADE_LANE").ok().as_deref(), &config())
+    launch_fingerprint_from(std::env::var("OBU_LANE").ok().as_deref(), &config())
 }
 
 /// Testable core of [`launch_fingerprint`] (no env/disk reads).
@@ -241,7 +238,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn profile_in_use_reads_live_and_stale_singleton_locks() {
-        let root = std::env::temp_dir().join(format!("blade-rb-lock-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-rb-lock-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         assert_eq!(profile_in_use(&root), None, "no lock → not in use");
@@ -464,7 +461,7 @@ mod tests {
     fn auto_attaches_to_a_fixed_port_only_while_something_listens() {
         // A dead fixed port must leave `auto` on the clone (no
         // DevToolsActivePort in this empty root either).
-        let root = std::env::temp_dir().join(format!("blade-rb-port-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-rb-port-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -518,7 +515,7 @@ mod tests {
 
     #[test]
     fn binary_override_must_exist_and_be_executable() {
-        let dir = std::env::temp_dir().join(format!("blade-rb-bin-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-rb-bin-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("chrome");
@@ -529,7 +526,7 @@ mod tests {
             std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         assert!(validate_binary_override(&exe.display().to_string()).is_ok());
-        assert!(validate_binary_override("/nonexistent/bladebro-browser").is_err());
+        assert!(validate_binary_override("/nonexistent/obu-browser").is_err());
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -577,7 +574,7 @@ mod tests {
         // the app from argv[0]. Resolving the link stores the dispatcher, and
         // the launch then runs snap itself with Chrome's flags.
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("blade-rb-snap-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-rb-snap-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let dispatcher = dir.join("snap");
@@ -596,7 +593,7 @@ mod tests {
 
     #[test]
     fn config_round_trips_and_survives_corruption() {
-        let dir = std::env::temp_dir().join(format!("blade-rb-cfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-rb-cfg-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("realbrowser.json");
 
@@ -635,7 +632,7 @@ mod tests {
 
     #[test]
     fn list_profiles_reads_local_state_and_scans_dirs() {
-        let root = std::env::temp_dir().join(format!("blade-rb-prof-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-rb-prof-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("Default")).unwrap();
         std::fs::create_dir_all(root.join("Profile 1")).unwrap();
@@ -672,13 +669,13 @@ mod tests {
 
     #[test]
     fn pause_marker_round_trips_via_env_home() {
-        // blade_dir() is env-driven; point it at a scratch home so the test
+        // obu_dir() is env-driven; point it at a scratch home so the test
         // never touches a real install. (set_var is process-global — same
         // pattern the platform tests use, and this test owns the name.)
-        let home = std::env::temp_dir().join(format!("blade-rb-pause-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("obu-rb-pause-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).unwrap();
-        let key = "BLADE_HOME";
+        let key = "OBU_HOME";
         let prev = std::env::var(key).ok();
         std::env::set_var(key, &home);
         assert!(!input_paused());

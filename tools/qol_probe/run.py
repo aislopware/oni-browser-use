@@ -48,9 +48,9 @@ Asserted behaviors (the contract):
       works as a batch/run step alias; see --format json is pure parseable
       JSON (zero preamble); a zero-match selector miss reports raw counts.
 
-Environment is isolated (own BLADE_HOME, own fixture port, no display leak).
-Run:  python3 tools/qol_probe/run.py            (uses target/release/bladebro)
-      BLADEBRO=/path/to/bladebro python3 tools/qol_probe/run.py
+Environment is isolated (own OBU_HOME, own fixture port, no display leak).
+Run:  python3 tools/qol_probe/run.py            (uses target/release/obu)
+      OBU=/path/to/obu python3 tools/qol_probe/run.py
 Exit code 0 = all passed.
 """
 import json
@@ -66,7 +66,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(ROOT, "..", ".."))
 HOME = os.environ.get("QOL_PROBE_HOME", "/tmp/qol_probe_home")
 PORT = int(os.environ.get("QOL_PROBE_PORT", "8794"))
-BINARY = os.environ.get("BLADEBRO", os.path.join(REPO, "target", "release", "bladebro"))
+BINARY = os.environ.get("OBU", os.path.join(REPO, "target", "release", "obu"))
 URL = f"http://127.0.0.1:{PORT}/editor.html"
 
 passed, failed = 0, 0
@@ -84,7 +84,7 @@ def check(name, ok, detail=""):
 
 def cli_rc(*args, timeout=120):
     env = dict(os.environ)
-    env.update({"BLADE_HOME": HOME, "BLADE_NO_WARMING": "1", "BLADE_LANE": "agent"})
+    env.update({"OBU_HOME": HOME, "OBU_NO_WARMING": "1", "OBU_LANE": "agent"})
     for k in ("WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY"):
         env.pop(k, None)
     r = subprocess.run([BINARY, *args], env=env, capture_output=True, text=True, timeout=timeout)

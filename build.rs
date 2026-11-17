@@ -1,5 +1,5 @@
 //! Build script: embed the git commit SHA + dirty flag into
-//! the binary so `bladebro -v` can identify exactly what code
+//! the binary so `obu -v` can identify exactly what code
 //! it's running. When the tree is clean, the SHA matches a
 //! commit; when dirty, "-dirty" marks an unreleased build.
 //!
@@ -33,7 +33,7 @@ fn main() {
         sha
     };
 
-    println!("cargo:rustc-env=BLADE_BUILD_ID={build_id}");
+    println!("cargo:rustc-env=OBU_BUILD_ID={build_id}");
     // Rebuild when the HEAD commit or tree state changes.
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/index");

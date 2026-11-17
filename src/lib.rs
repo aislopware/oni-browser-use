@@ -1,4 +1,4 @@
-//! Bladebro — an agentic browser driver for AI.
+//! Obu — an agentic browser driver for AI.
 //!
 //! Core thesis: the agent driving the browser should perceive the page as a
 //! side-effect of acting, not by pulling snapshots every turn. The driver
@@ -36,4 +36,4 @@ pub mod ui;
 pub mod updater;
 pub mod x;
 
-pub use error::{BladeError, Result};
+pub use error::{ObuError, Result};

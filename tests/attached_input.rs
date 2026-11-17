@@ -13,10 +13,10 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bladebro::action::{perform, Action};
-use bladebro::cdp::{CdpClient, CdpSession};
-use bladebro::page::LivePageModel;
 use futures_util::{SinkExt, StreamExt};
+use obu::action::{perform, Action};
+use obu::cdp::{CdpClient, CdpSession};
+use obu::page::LivePageModel;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
@@ -74,7 +74,7 @@ async fn hidden_page() -> (CdpSession, Arc<Mutex<Vec<String>>>) {
     (CdpSession::root(client), log)
 }
 
-async fn click(cdp: &CdpSession) -> bladebro::Result<(bladebro::page::PageDelta, String)> {
+async fn click(cdp: &CdpSession) -> obu::Result<(obu::page::PageDelta, String)> {
     perform(
         cdp,
         &mut LivePageModel::new(),
@@ -90,9 +90,9 @@ static FLAG: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 #[tokio::test]
 async fn a_click_on_a_hidden_page_lands_only_where_the_window_is_never_raised() {
     let _turn = FLAG.lock().await;
-    // A browser bladebro owns: it raises a hidden tab before input, so an
+    // A browser obu owns: it raises a hidden tab before input, so an
     // unacked move still means a stuck browser — an error, not a click.
-    bladebro::browser::set_attached_browser(false);
+    obu::browser::set_attached_browser(false);
     let (cdp, log) = hidden_page().await;
     let err = tokio::time::timeout(Duration::from_secs(8), click(&cdp))
         .await
@@ -102,7 +102,7 @@ async fn a_click_on_a_hidden_page_lands_only_where_the_window_is_never_raised() 
     assert_eq!(*log.lock().unwrap(), ["mouseMoved"], "no press was sent");
 
     // The user's browser: the moves stay queued and the press goes through.
-    bladebro::browser::set_attached_browser(true);
+    obu::browser::set_attached_browser(true);
     let (cdp, log) = hidden_page().await;
     let started = std::time::Instant::now();
     tokio::time::timeout(Duration::from_secs(8), click(&cdp))
@@ -176,7 +176,7 @@ async fn blank_page() -> (CdpSession, Arc<Mutex<Vec<(String, Value)>>>) {
 /// without the anti-backgrounding flags — every earlier check here ran on one
 /// that had them, and saw "visible"). The page must be given focus emulation
 /// before anything is read from it or sent to it — and only there: a browser
-/// bladebro owns is raised instead.
+/// obu owns is raised instead.
 #[tokio::test]
 async fn an_attached_page_is_shown_to_itself_before_anything_else_happens() {
     let _turn = FLAG.lock().await;
@@ -191,9 +191,9 @@ async fn an_attached_page_is_shown_to_itself_before_anything_else_happens() {
         (at.map(|i| log[i].1.clone()), at, first_script)
     };
 
-    bladebro::browser::set_attached_browser(true);
+    obu::browser::set_attached_browser(true);
     let (cdp, log) = blank_page().await;
-    let _page = bladebro::page::Page::attach(cdp, "127.0.0.1:1", None).await;
+    let _page = obu::page::Page::attach(cdp, "127.0.0.1:1", None).await;
     let (params, at, first_script) = emulation(&log);
     assert_eq!(
         params,
@@ -205,9 +205,9 @@ async fn an_attached_page_is_shown_to_itself_before_anything_else_happens() {
         "before the first script or input: {at:?} vs {first_script:?}"
     );
 
-    bladebro::browser::set_attached_browser(false);
+    obu::browser::set_attached_browser(false);
     let (cdp, log) = blank_page().await;
-    let _page = bladebro::page::Page::attach(cdp, "127.0.0.1:1", None).await;
+    let _page = obu::page::Page::attach(cdp, "127.0.0.1:1", None).await;
     assert_eq!(
         emulation(&log).1,
         None,

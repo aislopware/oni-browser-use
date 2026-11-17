@@ -7,8 +7,8 @@
 //! routes through here: write the file, return the path + a small
 //! preview + the total size.
 //!
-//! Files land in `~/.blade/artifacts/` named
-//! `blade-<pid>-<seq>.<ext>` — the pid namespace means two
+//! Files land in `~/.obu/artifacts/` named
+//! `obu-<pid>-<seq>.<ext>` — the pid namespace means two
 //! concurrent sessions can never overwrite each other's
 //! artifacts (they used to share a bare sequence counter).
 //! Each name is claimed with an exclusive create before the
@@ -37,7 +37,7 @@ pub fn write_artifact(data: &str, ext: &str) -> Result<String> {
 pub fn write_artifact_bytes(data: &[u8], ext: &str) -> Result<String> {
     let dir = artifact_dir();
     crate::platform::secure_create_dir_all(&dir)
-        .map_err(|e| crate::error::BladeError::Other(format!("artifact dir: {e}")))?;
+        .map_err(|e| crate::error::ObuError::Other(format!("artifact dir: {e}")))?;
     let path = write_in(&dir, data, ext)?;
     rotate_artifacts(&dir);
     Ok(path.display().to_string())
@@ -48,14 +48,14 @@ fn write_in(dir: &std::path::Path, data: &[u8], ext: &str) -> Result<std::path::
     if let Err(e) = crate::platform::secure_write_file(&path, data) {
         // Release the claimed (still empty) name.
         let _ = std::fs::remove_file(&path);
-        return Err(crate::error::BladeError::Other(format!(
+        return Err(crate::error::ObuError::Other(format!(
             "artifact write: {e}"
         )));
     }
     Ok(path)
 }
 
-/// Reserve the next free `blade-<pid>-<seq>` name. SEQ restarts at 1 in
+/// Reserve the next free `obu-<pid>-<seq>` name. SEQ restarts at 1 in
 /// every process, so with a reused pid the next name can belong to an
 /// earlier session whose path an agent still holds; the atomic write
 /// renames over whatever is there. An exclusive create claims the name
@@ -65,7 +65,7 @@ fn claim_name(dir: &std::path::Path, ext: &str) -> Result<std::path::PathBuf> {
     let pid = std::process::id();
     loop {
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-        let path = dir.join(format!("blade-{pid}-{seq:04}.{ext}"));
+        let path = dir.join(format!("obu-{pid}-{seq:04}.{ext}"));
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -77,7 +77,7 @@ fn claim_name(dir: &std::path::Path, ext: &str) -> Result<std::path::PathBuf> {
             Ok(_) => return Ok(path),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => {
-                return Err(crate::error::BladeError::Other(format!(
+                return Err(crate::error::ObuError::Other(format!(
                     "artifact write: {e}"
                 )))
             }
@@ -92,7 +92,7 @@ fn rotate_artifacts(dir: &std::path::Path) {
     let mut files: Vec<_> = match std::fs::read_dir(dir) {
         Ok(rd) => rd
             .flatten()
-            .filter(|e| e.file_name().to_string_lossy().starts_with("blade-"))
+            .filter(|e| e.file_name().to_string_lossy().starts_with("obu-"))
             .filter_map(|e| {
                 let modified = e.metadata().ok()?.modified().ok()?;
                 Some((e.path(), modified))
@@ -127,12 +127,12 @@ fn artifact_path(path: &str) -> Result<std::path::PathBuf> {
     let dir = artifact_dir();
     let dir_canon = dir
         .canonicalize()
-        .map_err(|e| crate::error::BladeError::Other(format!("artifact dir: {e}")))?;
-    let canon = std::path::Path::new(path).canonicalize().map_err(|e| {
-        crate::error::BladeError::Other(format!("artifact not found: {path} ({e})"))
-    })?;
+        .map_err(|e| crate::error::ObuError::Other(format!("artifact dir: {e}")))?;
+    let canon = std::path::Path::new(path)
+        .canonicalize()
+        .map_err(|e| crate::error::ObuError::Other(format!("artifact not found: {path} ({e})")))?;
     if !canon.starts_with(&dir_canon) {
-        return Err(crate::error::BladeError::Other(format!(
+        return Err(crate::error::ObuError::Other(format!(
             "artifact read refused: {path} is outside the artifacts directory ({}) — use the CLI or any file tool for arbitrary paths",
             dir_canon.display()
         )));
@@ -144,7 +144,7 @@ fn artifact_path(path: &str) -> Result<std::path::PathBuf> {
         .to_ascii_lowercase();
     if !matches!(ext.as_str(), "json" | "txt" | "log" | "csv" | "md" | "html") {
         let size = std::fs::metadata(&canon).map(|m| m.len()).unwrap_or(0);
-        return Err(crate::error::BladeError::Other(format!(
+        return Err(crate::error::ObuError::Other(format!(
             "artifact is binary ({ext}, {size} bytes) — not text: {}",
             canon.display()
         )));
@@ -155,7 +155,7 @@ fn artifact_path(path: &str) -> Result<std::path::PathBuf> {
 fn artifact_chunk(path: &str, offset: usize, limit: usize) -> Result<ArtifactChunk> {
     let canon = artifact_path(path)?;
     let bytes = std::fs::read(&canon)
-        .map_err(|e| crate::error::BladeError::Other(format!("artifact read: {e}")))?;
+        .map_err(|e| crate::error::ObuError::Other(format!("artifact read: {e}")))?;
     let text = String::from_utf8_lossy(&bytes);
     let total = text.chars().count();
     let limit = limit.clamp(1, 200_000);
@@ -219,7 +219,7 @@ pub fn read_artifact_json(path: &str, offset: usize, limit: usize) -> Result<Str
 pub(crate) fn read_artifact_value(path: &str) -> Result<serde_json::Value> {
     let canon = artifact_path(path)?;
     if std::fs::metadata(&canon)?.len() > 32 * 1024 * 1024 {
-        return Err(crate::error::BladeError::Other(
+        return Err(crate::error::ObuError::Other(
             "JSON item reads require <=32 MiB; use char paging or a file tool".into(),
         ));
     }
@@ -228,7 +228,7 @@ pub(crate) fn read_artifact_value(path: &str) -> Result<serde_json::Value> {
         .take(32 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > 32 * 1024 * 1024 {
-        return Err(crate::error::BladeError::Other(
+        return Err(crate::error::ObuError::Other(
             "artifact grew beyond 32 MiB".into(),
         ));
     }
@@ -238,7 +238,7 @@ pub(crate) fn read_artifact_value(path: &str) -> Result<serde_json::Value> {
 pub fn read_artifact_items(path: &str, offset: usize, limit: usize) -> Result<String> {
     let canon = artifact_path(path)?;
     let value = read_artifact_value(path)?;
-    let rows = value.as_array().or_else(|| value.get("items").and_then(|v| v.as_array())).or_else(|| value.get("data").and_then(|v| v.as_array())).or_else(|| value.get("pages").and_then(|v|v.as_array())).ok_or_else(|| crate::error::BladeError::Other("items=true requires a JSON array, or an items/data array; use char paging for other shapes".into()))?;
+    let rows = value.as_array().or_else(|| value.get("items").and_then(|v| v.as_array())).or_else(|| value.get("data").and_then(|v| v.as_array())).or_else(|| value.get("pages").and_then(|v|v.as_array())).ok_or_else(|| crate::error::ObuError::Other("items=true requires a JSON array, or an items/data array; use char paging for other shapes".into()))?;
     let offset = offset.min(rows.len());
     let mut end = offset;
     let mut bytes = 0;
@@ -246,7 +246,7 @@ pub fn read_artifact_items(path: &str, offset: usize, limit: usize) -> Result<St
         bytes += serde_json::to_vec(row)?.len();
         if bytes > 200_000 {
             if end == offset {
-                return Err(crate::error::BladeError::Other(
+                return Err(crate::error::ObuError::Other(
                     "one item exceeds 200000 bytes; use char paging or a file tool".into(),
                 ));
             }
@@ -257,29 +257,29 @@ pub fn read_artifact_items(path: &str, offset: usize, limit: usize) -> Result<St
     Ok(serde_json::json!({"path":canon.display().to_string(),"offset":offset,"next_offset":if end < rows.len(){Some(end)}else{None},"total_items":rows.len(),"items":rows[offset..end]}).to_string())
 }
 
-/// The artifact directory: `~/.blade/artifacts/`.
+/// The artifact directory: `~/.obu/artifacts/`.
 pub fn artifact_dir() -> std::path::PathBuf {
-    crate::platform::blade_dir().join("artifacts")
+    crate::platform::obu_dir().join("artifacts")
 }
 
 #[cfg(test)]
 mod artifact_tests {
     use super::*;
 
-    /// Names are `blade-<pid>-<seq>` with the sequence restarting at 1 in
+    /// Names are `obu-<pid>-<seq>` with the sequence restarting at 1 in
     /// every process. A reused pid (containers start at pid 1; pids wrap
     /// after reboots) therefore renamed a new artifact over an earlier
     /// session's file, whose path an agent may still hold.
     #[test]
     fn a_reused_pid_never_overwrites_an_earlier_artifact() {
-        let dir = std::env::temp_dir().join(format!("blade-artifact-pid-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-artifact-pid-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         // An earlier process with this pid left the next names behind.
         let pid = std::process::id();
         let next = SEQ.load(Ordering::Relaxed);
         let earlier: Vec<_> = (next..next + 64)
-            .map(|seq| dir.join(format!("blade-{pid}-{seq:04}.json")))
+            .map(|seq| dir.join(format!("obu-{pid}-{seq:04}.json")))
             .collect();
         for path in &earlier {
             std::fs::write(path, "earlier").unwrap();

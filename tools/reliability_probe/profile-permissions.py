@@ -2,21 +2,21 @@
 """Own disposable profiles only: fresh sessions are private; guessed-name
 pre-plants are never adopted, entered, or mutated.
 
-Contract 2026-10-07: BLADE_FRESH=1 sessions land in an unpredictable
-`bladebro-chrome-<entropy>` dir created with exclusive mkdir — a pre-plant
+Contract 2026-10-07: OBU_FRESH=1 sessions land in an unpredictable
+`obu-chrome-<entropy>` dir created with exclusive mkdir — a pre-plant
 at any GUESSED name (including the pre-4.2.0 pid-based scheme) can never be
 hit, and a name collision fails creation and retries instead of adopting.
 The deterministic pockets that remain under attacker influence are the
-BLADE_PROFILE_DIR override and reused-owned dirs; both refuse symlinks and
+OBU_PROFILE_DIR override and reused-owned dirs; both refuse symlinks and
 non-dirs and secure (0700) anything they adopt.
 
 Checked against a real MCP + Chromium:
   1-3. guessed-name plant (0777 / symlink / 0755) at the old pid name:
        navigate succeeds, plant content and mode stay untouched, and the
        ACTUAL fresh dir appears private (0700) and is removed on exit
-  4.   BLADE_PROFILE_DIR = symlink      -> refused before Chrome writes
-  5.   BLADE_PROFILE_DIR = plain file   -> refused before Chrome writes
-  6.   BLADE_PROFILE_DIR = owned 0777   -> chmodded 0700, session works
+  4.   OBU_PROFILE_DIR = symlink      -> refused before Chrome writes
+  5.   OBU_PROFILE_DIR = plain file   -> refused before Chrome writes
+  6.   OBU_PROFILE_DIR = owned 0777   -> chmodded 0700, session works
 """
 import http.server
 import json
@@ -31,7 +31,7 @@ import threading
 
 if os.name != 'posix':
     raise SystemExit('This permission probe requires Unix; Windows uses profile ACLs.')
-binary = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+binary = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 
 
 class Fixture(http.server.BaseHTTPRequestHandler):
@@ -77,19 +77,19 @@ def close_mcp(proc):
 
 
 def fresh_dirs():
-    return {p.name for p in Path(tempfile.gettempdir()).glob('bladebro-chrome-*')}
+    return {p.name for p in Path(tempfile.gettempdir()).glob('obu-chrome-*')}
 
 
-def base_env(blade_home):
-    env = dict(os.environ, BLADE_HOME=str(blade_home), BLADE_FRESH='1',
-               BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1', BLADE_LANE='agent')
-    for key in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'BLADE_PROFILE_DIR'):
+def base_env(obu_home):
+    env = dict(os.environ, OBU_HOME=str(obu_home), OBU_FRESH='1',
+               OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1', OBU_LANE='agent')
+    for key in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'OBU_PROFILE_DIR'):
         env.pop(key, None)
     return env
 
 
 checks = 0
-with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
+with tempfile.TemporaryDirectory(prefix='obu-profile-probe-') as tmp:
     root = Path(tmp)
     fixture = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Fixture)
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
@@ -102,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
             # The pid name is a GUESS now (the real name is entropy-based):
             # plant it exactly where the old scheme would have looked.
-            profile = Path(tempfile.gettempdir()) / f'bladebro-chrome-{proc.pid}'
+            profile = Path(tempfile.gettempdir()) / f'obu-chrome-{proc.pid}'
             assert not profile.exists(), 'test cannot adopt an existing directory'
             target = root / f'symlink-target-{kind}'
             if kind == 'symlink':
@@ -146,21 +146,21 @@ with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
                 for name in fresh_dirs() - before:
                     shutil.rmtree(Path(tempfile.gettempdir()) / name, ignore_errors=True)
 
-        # ── 4-6: the deterministic BLADE_PROFILE_DIR override.
+        # ── 4-6: the deterministic OBU_PROFILE_DIR override.
         # 4: symlink -> refused.
         link = root / 'pd-link'
         target = root / 'pd-target'
         target.mkdir()
         link.symlink_to(target, target_is_directory=True)
         env = base_env(root / 'pd-symlink')
-        env['BLADE_PROFILE_DIR'] = str(link)
+        env['OBU_PROFILE_DIR'] = str(link)
         proc = subprocess.Popen([binary, 'mcp'], env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         try:
             response = navigate(proc, fixture.server_port)
             assert rejected(response) and 'symlink' in json.dumps(response), response
             checks += 1
-            print('PASS BLADE_PROFILE_DIR symlink refused', flush=True)
+            print('PASS OBU_PROFILE_DIR symlink refused', flush=True)
         finally:
             close_mcp(proc)
 
@@ -168,14 +168,14 @@ with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
         notdir = root / 'pd-file'
         notdir.write_text('not a dir')
         env = base_env(root / 'pd-file-home')
-        env['BLADE_PROFILE_DIR'] = str(notdir)
+        env['OBU_PROFILE_DIR'] = str(notdir)
         proc = subprocess.Popen([binary, 'mcp'], env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         try:
             response = navigate(proc, fixture.server_port)
             assert rejected(response) and 'not a directory' in json.dumps(response), response
             checks += 1
-            print('PASS BLADE_PROFILE_DIR plain file refused', flush=True)
+            print('PASS OBU_PROFILE_DIR plain file refused', flush=True)
         finally:
             close_mcp(proc)
 
@@ -184,7 +184,7 @@ with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
         pd.mkdir()
         pd.chmod(0o777)
         env = base_env(root / 'pd-writable-home')
-        env['BLADE_PROFILE_DIR'] = str(pd)
+        env['OBU_PROFILE_DIR'] = str(pd)
         proc = subprocess.Popen([binary, 'mcp'], env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         try:
@@ -192,7 +192,7 @@ with tempfile.TemporaryDirectory(prefix='blade-profile-probe-') as tmp:
             assert not rejected(response), response
             assert stat.S_IMODE(pd.stat().st_mode) == 0o700, oct(stat.S_IMODE(pd.stat().st_mode))
             checks += 1
-            print('PASS BLADE_PROFILE_DIR loose owned dir secured to 0700', flush=True)
+            print('PASS OBU_PROFILE_DIR loose owned dir secured to 0700', flush=True)
         finally:
             close_mcp(proc)
     finally:

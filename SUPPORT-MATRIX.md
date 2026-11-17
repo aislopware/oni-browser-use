@@ -62,7 +62,7 @@ is still needed to remove those toolchain diagnostics without suppression.
 | Geometry coherence, WebRTC under proxy | `tools/gap44/webrtc_proxy.py` |
 | Proxy credential redaction | `cargo test --profile gate` (`browser/proxy` tests) + G13 in `tools/gap44/probe.py` |
 | Updater retries, install integrity | `cargo test --profile gate` (`updater` tests) |
-| Stealth posture | `bladebro audit` (the local vector suite at its own host-dependent total, cross-run stamps, nonzero on failure) |
+| Stealth posture | `obu audit` (the local vector suite at its own host-dependent total, cross-run stamps, nonzero on failure) |
 | Stock-parity (page-visible differences) | `tools/diff_oracle/oracle.py` |
 | Cold start, all 5 lanes, owned-process hygiene | `tools/lane_matrix.py all 5` |
 | Real-browser lane attachment | `tools/rb_live/attach_drift.py` (run when the lane changes) |
@@ -87,7 +87,7 @@ is still needed to remove those toolchain diagnostics without suppression.
 
 ```bash
 cargo fmt --check && cargo clippy --release -- -D warnings && cargo test --profile gate
-./target/release/bladebro audit
+./target/release/obu audit
 python3 tools/reliability_probe/agent_contract.py
 python3 tools/reliability_probe/persistence.py
 python3 tools/qol_probe/run.py

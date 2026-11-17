@@ -1,9 +1,9 @@
-//! The agent's own tab in a browser bladebro attached to but did not launch.
+//! The agent's own tab in a browser obu attached to but did not launch.
 //!
 //! An attached browser (`rb mode attach`, `--host/--port`) is the user's, and
 //! its first page target is the tab they are looking at. Adopting it — what
 //! every attach did before — navigated that tab under them. A session there
-//! starts on a tab bladebro created instead: its own window, opened in the
+//! starts on a tab obu created instead: its own window, opened in the
 //! background, so the user's tab keeps both its content and its visibility.
 //! Its tabs are remembered per endpoint under the data dir, so one-shot
 //! commands land on the same tab instead of opening a window each.
@@ -13,7 +13,7 @@ use crate::cdp::{list_page_targets, TargetInfo};
 use std::path::{Path, PathBuf};
 
 /// The page target a fresh session starts on, and the process-wide record of
-/// which kind of browser it is. A browser bladebro launched: its first tab.
+/// which kind of browser it is. A browser obu launched: its first tab.
 /// One it only attached to: the agent's own tab — never one the user has open.
 pub async fn session_target(base: &str, attached: bool) -> Result<TargetInfo> {
     crate::browser::set_attached_browser(attached);
@@ -24,14 +24,14 @@ pub async fn session_target(base: &str, attached: bool) -> Result<TargetInfo> {
 }
 
 /// `<data-dir>/agent-tab.json`: per endpoint (`host:port`), the tab the
-/// session is on and the tabs bladebro itself opened there:
+/// session is on and the tabs obu itself opened there:
 /// `{"127.0.0.1:9222": {"current": "<targetId>", "own": ["<targetId>", …]}}`.
 pub(super) fn record_path() -> PathBuf {
-    crate::platform::blade_dir().join("agent-tab.json")
+    crate::platform::obu_dir().join("agent-tab.json")
 }
 
 /// One endpoint's entry. `own` is newest-first and only ever holds tabs
-/// bladebro created: it is what a session may fall back to — a tab reached
+/// obu created: it is what a session may fall back to — a tab reached
 /// by an explicit `switch-tab` can be the user's, and is `current` only.
 #[derive(Default, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Entry {
@@ -57,22 +57,22 @@ fn read_record(record: &Path) -> Record {
 fn write_record(record: &Path, map: &Record) -> Result<()> {
     if let Some(parent) = record.parent() {
         crate::platform::secure_create_dir_all(parent)
-            .map_err(|e| BladeError::Other(format!("cannot create data dir: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot create data dir: {e}")))?;
     }
     let body = serde_json::to_string(map)
-        .map_err(|e| BladeError::Other(format!("cannot serialize the agent-tab record: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot serialize the agent-tab record: {e}")))?;
     crate::platform::secure_write_file(record, body.as_bytes())
-        .map_err(|e| BladeError::Other(format!("cannot write {}: {e}", record.display())))
+        .map_err(|e| ObuError::Other(format!("cannot write {}: {e}", record.display())))
 }
 
 /// Record the tab the session is on — what the next session (a later
 /// one-shot command, a restarted daemon) resumes on. `created` marks a tab
-/// bladebro opened itself.
+/// obu opened itself.
 pub(super) fn remember(record: &Path, base: &str, target_id: &str, created: bool) -> Result<()> {
     note(record, base, target_id, created, true)
 }
 
-/// A tab bladebro opened that the session has not moved to (and may never:
+/// A tab obu opened that the session has not moved to (and may never:
 /// the download helper tab is opened, used and closed). It joins `own`;
 /// `current` stays where the session is — recorded as current, a helper that
 /// was then closed sent the next command to another tab of the agent's
@@ -96,7 +96,7 @@ fn note(record: &Path, base: &str, target_id: &str, created: bool, current: bool
 }
 
 /// The tab to resume on among the `live` page targets: the one the session
-/// was on, else the newest tab bladebro opened that still exists. Never a
+/// was on, else the newest tab obu opened that still exists. Never a
 /// tab it neither opened nor was switched to.
 fn resume_on(entry: &Entry, live: &[TargetInfo]) -> Option<String> {
     let alive = |id: &String| {
@@ -117,7 +117,7 @@ pub(super) async fn browser_client(base: &str) -> Result<CdpClient> {
     let ws = crate::cdp::version(base)
         .await?
         .web_socket_debugger_url
-        .ok_or_else(|| BladeError::Other("browser has no webSocketDebuggerUrl".into()))?;
+        .ok_or_else(|| ObuError::Other("browser has no webSocketDebuggerUrl".into()))?;
     CdpClient::connect(&ws).await
 }
 
@@ -144,7 +144,7 @@ pub(super) async fn create_tab(
             Ok(res) => return created_id(&res),
             // A browser without window control (headless shell, Android)
             // rejects the pair: a background tab still steals nothing.
-            Err(BladeError::Cdp { .. }) => params["background"] = json!(true),
+            Err(ObuError::Cdp { .. }) => params["background"] = json!(true),
             Err(e) => return Err(e),
         }
     }
@@ -155,7 +155,7 @@ fn created_id(res: &Value) -> Result<String> {
     res.get("targetId")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .ok_or_else(|| BladeError::Other("no targetId from Target.createTarget".into()))
+        .ok_or_else(|| ObuError::Other("no targetId from Target.createTarget".into()))
 }
 
 /// The agent's tab on `base`: the one it was on (or another it opened)
@@ -179,7 +179,7 @@ pub(super) async fn agent_target(base: &str, record: &Path) -> Result<TargetInfo
         if before != (entry.current.clone(), entry.own.len()) {
             // Housekeeping only: the tab to resume on is already known.
             if let Err(e) = write_record(record, &map) {
-                eprintln!("[bladebro] {e} — the agent-tab record was not updated");
+                eprintln!("[obu] {e} — the agent-tab record was not updated");
             }
         }
         if let Some(t) = resume.and_then(|id| find(live, &id)) {
@@ -196,15 +196,15 @@ pub(super) async fn agent_target(base: &str, record: &Path) -> Result<TargetInfo
         let _ = client
             .send("Target.closeTarget", Some(json!({"targetId": id})))
             .await;
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "cannot record the agent's own tab in {} ({e}) — without that record every \
              command would open another window in your browser, so the tab was closed \
-             again. Make the data dir writable (BLADE_HOME) and retry.",
+             again. Make the data dir writable (OBU_HOME) and retry.",
             record.display()
         )));
     }
     eprintln!(
-        "[bladebro] opened the agent's own tab {id} (background window) — your open tabs are \
+        "[obu] opened the agent's own tab {id} (background window) — your open tabs are \
          left alone"
     );
     // HTTP discovery can lag a just-created target.
@@ -214,7 +214,7 @@ pub(super) async fn agent_target(base: &str, record: &Path) -> Result<TargetInfo
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    Err(BladeError::Other(format!(
+    Err(ObuError::Other(format!(
         "the agent tab {id} was created but never appeared in the browser's target list"
     )))
 }
@@ -337,8 +337,7 @@ mod tests {
     }
 
     fn scratch(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("blade-agent-tab-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-agent-tab-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("agent-tab.json")
     }
@@ -400,7 +399,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_owned_browser_opens_plain_tabs() {
-        // A browser bladebro launched has no user to disturb: tabs open the
+        // A browser obu launched has no user to disturb: tabs open the
         // way they always did (same window, foreground).
         let (base, browser) = fake_browser(false).await;
         let client = browser_client(&base).await.unwrap();
@@ -488,7 +487,7 @@ mod tests {
 
         let err = agent_target(&base, &record).await.unwrap_err().to_string();
         assert!(err.contains("cannot record the agent's own tab"), "{err}");
-        assert!(err.contains("BLADE_HOME"), "names the way out: {err}");
+        assert!(err.contains("OBU_HOME"), "names the way out: {err}");
         let b = browser.lock().unwrap();
         assert_eq!(b.closes, ["AGENT1"], "the window it opened is closed again");
         assert_eq!(b.pages, ["USER"], "the user's tab is all that is left");

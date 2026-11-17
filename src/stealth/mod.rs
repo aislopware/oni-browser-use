@@ -1,4 +1,4 @@
-//! The stealth module — three layers that make Bladebro hard to detect.
+//! The stealth module — three layers that make Obu hard to detect.
 //!
 //! 1. **Protocol-level**: don't send `Runtime.enable` (defuses DataDome console
 //!    serialization detection). Already handled in `page::Page::attach`.
@@ -8,7 +8,7 @@
 //!    (bezier + overshoot), typing cadence (log-normal), action timing.
 //!
 //! The unique angle: most stealth makes the browser *look* like a non-bot.
-//! Bladebro also makes it *act* like a human. Behavioral signals (mouse
+//! Obu also makes it *act* like a human. Behavioral signals (mouse
 //! linearity, click precision, inter-action timing) are scored by anti-bot
 //! systems and ignored by every other open-source tool.
 

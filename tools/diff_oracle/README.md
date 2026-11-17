@@ -1,6 +1,6 @@
 # Differential Oracle
 
-Stock Chrome and a bladebro browser, side by side on the same machine under
+Stock Chrome and a obu browser, side by side on the same machine under
 the same display conditions, running the identical probe battery
 (`battery.js`). Every deviation is classified:
 
@@ -11,27 +11,27 @@ the same display conditions, running the identical probe battery
   it must be **0**.
 
 This is the anti-drift gate: it re-derives "what a real browser shows on this
-exact machine" and compares it against what bladebro shows. It catches the
+exact machine" and compares it against what obu shows. It catches the
 whole class of "stealth is fine but the tool mislaunches / misprobes /
 drifts" bugs.
 
 Lanes: `--lane agent` (default) compares the masked agent lane against stock
 and classifies the documented mask surface as EXPECTED. `--lane real`
-compares the real-browser lane (clone mechanism, isolated BLADE_HOME, forced
-via `BLADE_LANE=real`) and **disables the EXPECTED table entirely** — the
+compares the real-browser lane (clone mechanism, isolated OBU_HOME, forced
+via `OBU_LANE=real`) and **disables the EXPECTED table entirely** — the
 lane's contract is that its page-visible surface equals a stock browser's, so
 every diff is DIVERGENT. Window geometry is pinned on both sides (WM placement
 jitter is not a fingerprint surface and must not masquerade as one).
-Both lanes run on scratch `BLADE_HOME`s — every run gets its own temp home (the
-agent lane also sets `BLADE_NO_WARMING=1`) and never touches the user's real
+Both lanes run on scratch `OBU_HOME`s — every run gets its own temp home (the
+agent lane also sets `OBU_NO_WARMING=1`) and never touches the user's real
 data dir.
 
 ## Requirements
 
 - Linux + Xvfb (the stock baseline runs on its own Xvfb display so the
-  comparison mirrors bladebro's isolated headful environment).
+  comparison mirrors obu's isolated headful environment).
 - `python3` with `websockets` (`pip install websockets`).
-- A built `bladebro` (on `PATH`, or `BLADEBRO=/path/to/bladebro`).
+- A built `obu` (on `PATH`, or `OBU=/path/to/obu`).
 - `CHROME_PATH` or a Chrome/Chromium on `PATH` for the stock baseline.
 
 ## Usage
@@ -53,11 +53,11 @@ Exit codes: `0` clean · `1` DIVERGENT present · `2` setup error.
 
 ## Binary under test
 
-Resolution order: `BLADEBRO` env → the repo build (`target/release/bladebro`,
-when present) → `bladebro` on PATH. The chosen binary is printed at startup —
+Resolution order: `OBU` env → the repo build (`target/release/obu`,
+when present) → `obu` on PATH. The chosen binary is printed at startup —
 a stale installed binary silently changes what is measured. For `--lane real`
 the oracle **refuses to run** when the resolved binary predates the real-browser
-lane (`rb` missing in `help --json`): such a binary ignores `BLADE_LANE=real`,
+lane (`rb` missing in `help --json`): such a binary ignores `OBU_LANE=real`,
 and the run would measure the AGENT lane while claiming to measure the real one.
 
 ## Extending
@@ -73,7 +73,7 @@ throws separately from promise rejection, error type/message, rejection order
 relative to a queued microtask, descriptor getter/Proxy reads and status shape.
 Chromium's promise-returning WebIDL methods reject invalid calls; assertions
 must not manufacture synchronous throws. These rows have no EXPECTED exemptions.
-`bladebro audit` uses the same probes. Run with `BLADE_PERMS=patch BLADE_MEDIA=patch`
+`obu audit` uses the same probes. Run with `OBU_PERMS=patch OBU_MEDIA=patch`
 to exercise optional masks even on a headful host that does not need them.
 
 Both lanes pin the same 1600x900 window below the virtual screen's automatic

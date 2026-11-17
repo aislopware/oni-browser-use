@@ -1,6 +1,6 @@
 //! Version checking against GitHub releases.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// A GitHub release.
 #[derive(Debug)]
@@ -34,21 +34,21 @@ pub struct Asset {
 ///
 /// No API key needed. No rate limits. Works for all users out of the box.
 pub async fn fetch_latest_tag() -> Result<String> {
-    if std::env::var("BLADE_NO_UPDATE_CHECK")
+    if std::env::var("OBU_NO_UPDATE_CHECK")
         .map(|v| v == "1")
         .unwrap_or(false)
     {
-        return Err(BladeError::Other(
-            "update check disabled (BLADE_NO_UPDATE_CHECK)".into(),
+        return Err(ObuError::Other(
+            "update check disabled (OBU_NO_UPDATE_CHECK)".into(),
         ));
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("bladebro-updater")
+        .user_agent("obu-updater")
         .redirect(reqwest::redirect::Policy::none()) // don't follow, read Location
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(|e| BladeError::Other(format!("http client: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("http client: {e}")))?;
 
     // 1. GitHub releases/latest redirect.
     let url = format!("https://github.com/{}/releases/latest", super::GITHUB_REPO);
@@ -65,25 +65,13 @@ pub async fn fetch_latest_tag() -> Result<String> {
         // Some CDNs/proxies eat the 301. Fall through to npm.
     }
 
-    // 2. npm registry fallback.
-    let npm_url = "https://registry.npmjs.org/bladebro/latest";
-    if let Ok(resp) = client.get(npm_url).send().await {
-        if resp.status().is_success() {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                if let Some(ver) = json
-                    .get("version")
-                    .and_then(|v| v.as_str())
-                    .filter(|v| is_version_tag(v))
-                {
-                    return Ok(ver.to_string());
-                }
-            }
-        }
-    }
-
-    Err(BladeError::Other(
-        "cannot reach GitHub or npm registry for version check".into(),
-    ))
+    // 2. No npm registry fallback in the fork: it publishes nothing there,
+    // and a name nobody owns is one anyone can publish a "newer version" under.
+    Err(ObuError::Other(format!(
+        "no release found at github.com/{} (the fork ships from source: \
+         git pull && cargo build --release)",
+        super::GITHUB_REPO
+    )))
 }
 
 /// Extract the release tag from the `releases/latest` redirect. Only a 3xx
@@ -100,7 +88,7 @@ pub(crate) fn tag_from_latest_redirect(
     if !status.is_redirection() {
         return None;
     }
-    // URL format: https://github.com/dondai44423/bladebro/releases/tag/v3.0.12
+    // URL format: https://github.com/aislopware/oni-browser-use/releases/tag/v3.0.12
     let path = location.split(['?', '#']).next()?;
     let (_, tag) = path.rsplit_once("/releases/tag/")?;
     let tag = tag.strip_prefix('v').unwrap_or(tag);
@@ -120,7 +108,7 @@ pub(crate) fn is_version_tag(v: &str) -> bool {
 
 /// Construct a Release from a tag.
 /// Download URLs are predictable:
-///   https://github.com/{repo}/releases/download/v{tag}/bladebro-{os}-{arch}
+///   https://github.com/{repo}/releases/download/v{tag}/obu-{os}-{arch}
 /// Both new and legacy asset names are included so `find_asset` can match.
 pub fn synthetic_release(tag: &str) -> Release {
     let tag_name = format!("v{tag}");
@@ -133,14 +121,14 @@ pub fn synthetic_release(tag: &str) -> Release {
     let mut assets = Vec::new();
     let ext = if cfg!(windows) { ".exe" } else { "" };
 
-    // New naming: bladebro-{os}-{arch}
+    // New naming: obu-{os}-{arch}
     assets.push(Asset {
         name: platform_asset_name(),
         browser_download_url: format!("{}/{}", base, platform_asset_name()),
         size: 0, // unknown, skip pre-flight disk check
     });
 
-    // Legacy naming: bladebro-{os}-{x86_64|aarch64}
+    // Legacy naming: obu-{os}-{x86_64|aarch64}
     let legacy = legacy_platform_asset_name();
     if legacy != platform_asset_name() {
         assets.push(Asset {
@@ -208,16 +196,16 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
 // ── platform asset naming ────────────────────────────────────────
 
 /// The expected asset name for this platform.
-/// Uses npm-consistent naming: `bladebro-{os}-{arch}{ext}`
-///   Linux x86_64  → bladebro-linux-x64
-///   Windows x64   → bladebro-windows-x64.exe
-///   macOS Intel   → bladebro-darwin-x64
-///   macOS ARM     → bladebro-darwin-arm64
+/// Uses npm-consistent naming: `obu-{os}-{arch}{ext}`
+///   Linux x86_64  → obu-linux-x64
+///   Windows x64   → obu-windows-x64.exe
+///   macOS Intel   → obu-darwin-x64
+///   macOS ARM     → obu-darwin-arm64
 pub fn platform_asset_name() -> String {
     let os = platform_os_name();
     let arch = platform_arch_name();
     let ext = if cfg!(windows) { ".exe" } else { "" };
-    format!("bladebro-{os}-{arch}{ext}")
+    format!("obu-{os}-{arch}{ext}")
 }
 
 /// Legacy asset name (x86_64, macos) — for old releases pre-v3.0.3.
@@ -235,7 +223,7 @@ fn legacy_platform_asset_name() -> String {
         "unknown"
     };
     let ext = if cfg!(windows) { ".exe" } else { "" };
-    format!("bladebro-{os}-{arch}{ext}")
+    format!("obu-{os}-{arch}{ext}")
 }
 
 fn platform_os_name() -> &'static str {
@@ -412,7 +400,7 @@ mod tests {
     #[test]
     fn latest_redirect_yields_only_real_version_tags() {
         use reqwest::StatusCode;
-        let repo = "https://github.com/dondai44423/bladebro";
+        let repo = "https://github.com/aislopware/oni-browser-use";
         let found = StatusCode::FOUND;
         assert_eq!(
             tag_from_latest_redirect(found, &format!("{repo}/releases/tag/v4.6.7")).as_deref(),
@@ -436,7 +424,7 @@ mod tests {
         assert_eq!(
             tag_from_latest_redirect(
                 StatusCode::MOVED_PERMANENTLY,
-                "https://github.com/other/bladebro/releases/latest"
+                "https://github.com/other/obu/releases/latest"
             ),
             None
         );
@@ -476,7 +464,7 @@ mod tests {
     #[test]
     fn platform_asset_name_format() {
         let name = platform_asset_name();
-        assert!(name.starts_with("bladebro-"));
+        assert!(name.starts_with("obu-"));
         assert!(
             name.contains("x64") || name.contains("arm64"),
             "expected arch in name: {name}"
@@ -517,7 +505,7 @@ mod tests {
 
     #[test]
     fn find_asset_fuzzy_match() {
-        // A non-standard name like "bladebro_linux_amd64_v3" would NOT match:
+        // A non-standard name like "obu_linux_amd64_v3" would NOT match:
         // "linux" matches, but "amd64" is not in our keyword list.
         // Use a name that contains our keywords.
         let release2 = Release {

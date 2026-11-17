@@ -17,13 +17,13 @@ function launchFailed(error) {
   // The binary could not be spawned (missing exec bit, wrong arch, deleted
   // file). Without this the shim exited 0 while nothing ran — a silent no-op
   // that scripts and agents read as success.
-  process.stderr.write('bladebro: failed to launch ' + binPath + ': ' + error.message + '\n');
+  process.stderr.write('obu: failed to launch ' + binPath + ': ' + error.message + '\n');
   if (process.platform === 'linux' && error.code === 'ENOENT') {
     // The kernel reports ENOENT for a present ELF whose dynamic loader is
     // missing too. Reinstalling the same glibc prebuild cannot help musl hosts.
-    process.stderr.write('The executable or its loader is missing. Prebuilt Linux binaries require glibc >= 2.28; on Alpine/musl, build from source: https://github.com/dondai44423/bladebro#from-source\n');
+    process.stderr.write('The executable or its loader is missing. Prebuilt Linux binaries require glibc >= 2.28; on Alpine/musl, build from source: https://github.com/aislopware/oni-browser-use#from-source\n');
   } else {
-    process.stderr.write('Reinstall: npm install bladebro\n');
+    process.stderr.write('Reinstall: npm install obu\n');
   }
   process.exit(1);
 }
@@ -65,7 +65,7 @@ child.on('exit', (code, signal) => {
     for (const s of FORWARDED) process.removeListener(s, forward);
     process.kill(process.pid, signal);
     // Still running: Node ignores SIGPIPE, so that re-raise was a no-op and the
-    // launcher fell through to exit 0 — `npx bladebro see | head` reported
+    // launcher fell through to exit 0 — `npx obu see | head` reported
     // success after the binary died. Report the death the way a shell does.
     process.exit(128 + (constants.signals[signal] || 0));
   }

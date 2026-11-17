@@ -2,7 +2,7 @@
 """Verify owned-profile storage flush across CLI/MCP exits, a Ctrl-C to a one-shot
 command's process group, and forked launchers.
 
-BLADEBRO selects the candidate. POLISH_OUT retains actual calls/readbacks.
+OBU selects the candidate. POLISH_OUT retains actual calls/readbacks.
 --baseline records old-binary failures. Only disposable profiles are used.
 """
 import hashlib
@@ -18,7 +18,7 @@ import sys
 import tempfile
 import threading
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 OUT = Path(os.environ.get('POLISH_OUT', 'work/persistence/receipts.json'))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 VALUE = 'persistent π🦀 ' + 'value=' * 40
@@ -62,15 +62,15 @@ def check(name, passed):
 
 
 def environment(home, chrome=None, transport=None):
-    env = dict(os.environ, BLADE_HOME=str(home), BLADE_LANE='agent',
-               BLADE_INCOGNITO='0', BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1')
-    for key in ('BLADE_PROFILE_DIR', 'BLADE_TRANSPORT', 'BLADE_FRESH', 'BLADE_PROXY',
-                'BLADE_CHROME_FLAGS', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
+    env = dict(os.environ, OBU_HOME=str(home), OBU_LANE='agent',
+               OBU_INCOGNITO='0', OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1')
+    for key in ('OBU_PROFILE_DIR', 'OBU_TRANSPORT', 'OBU_FRESH', 'OBU_PROXY',
+                'OBU_CHROME_FLAGS', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
         env.pop(key, None)
     if chrome:
         env['CHROME_PATH'] = str(chrome)
     if transport:
-        env['BLADE_TRANSPORT'] = transport
+        env['OBU_TRANSPORT'] = transport
     return env
 
 
@@ -179,7 +179,7 @@ server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 origin = 'http://127.0.0.1:' + str(server.server_port)
 try:
-    with tempfile.TemporaryDirectory(prefix='blade-persistence-') as scratch:
+    with tempfile.TemporaryDirectory(prefix='obu-persistence-') as scratch:
         root = Path(scratch)
         one_shot(root / 'one-shot', origin)
         mcp(root / 'mcp-ws', origin)
