@@ -68,7 +68,7 @@ echo "committed and tagged v$VERSION"
 if [[ "$PUSH" == "--push" ]]; then
     git push origin main
     git push origin "v$VERSION"
-    echo "pushed — .github/workflows/release.yml is building all five artifacts in parallel"
+    echo "pushed — .github/workflows/release.yml is building the release binaries in parallel"
 else
     echo "push with:  git push origin main --tags"
     echo "then watch: gh run watch --workflow Release"

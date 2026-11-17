@@ -75,12 +75,9 @@ Requires Chrome/Chromium; prebuilt Linux binaries require glibc 2.28 or newer. N
 | Platform | Package | Size | Status |
 |---|---|---|---|
 | Linux x86_64 | `obu-linux-x64` | 7.4 MB | Live-verified |
-| Linux ARM64 | `obu-linux-arm64` | 6.5 MB | Not live-verified |
-| Windows x86_64 | `obu-windows-x64` | 6.9 MB | CI-verified |
-| macOS Intel | `obu-darwin-x64` | 6.9 MB | CI-verified |
 | macOS Apple Silicon | `obu-darwin-arm64` | 6.4 MB | CI-verified |
 
-<sub>Every release builds and passes CI on Ubuntu, macOS and Windows. Linux ARM64 and macOS binaries are cross-compiled from Linux with cargo-zigbuild.</sub>
+<sub>The fork publishes binaries for these two platforms; build from source on any other. Every release passes CI on Ubuntu, macOS and Windows.</sub>
 
 A Linux `ENOENT` launch error can mean the executable's loader is missing even when the file exists. The prebuilt binaries require glibc >=2.28; use a source build on Alpine/musl rather than reinstalling the same prebuild. A missing optional platform package is a separate error: reinstall with optional dependencies enabled.
 
