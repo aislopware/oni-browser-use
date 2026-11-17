@@ -124,6 +124,47 @@ pub fn devtools_port(root: &Path) -> Option<u16> {
         .and_then(|b| parse_devtools_active_port(&b))
 }
 
+/// Is anything accepting connections on this loopback port right now? The
+/// liveness probe for a fixed attach port (`rb port`), which has no
+/// `DevToolsActivePort` file to vouch for it. A refused loopback connect
+/// returns at once; the timeout only bounds a filtered port.
+pub fn loopback_listening(port: u16) -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(250)).is_ok()
+}
+
+/// Does a DevTools endpoint answer on this loopback port? `auto` attaches to
+/// a fixed port only then: a listener alone can be anything (a dev server on
+/// the configured port made `auto` pick attach and fail, instead of cloning),
+/// and off Linux there is no process check to tell them apart. One bounded
+/// HTTP/1.1 request — Brave's endpoint ignores HTTP/1.0.
+pub fn devtools_listening(port: u16) -> bool {
+    use std::io::{Read, Write};
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let wait = std::time::Duration::from_millis(400);
+    let Ok(mut stream) = std::net::TcpStream::connect_timeout(&addr, wait) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(wait));
+    let _ = stream.set_write_timeout(Some(wait));
+    let request = format!(
+        "GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut reply = Vec::new();
+    let mut buf = [0u8; 2048];
+    while reply.len() < 8192 {
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => reply.extend_from_slice(&buf[..n]),
+        }
+    }
+    let reply = String::from_utf8_lossy(&reply);
+    reply.starts_with("HTTP/1.1 200") && reply.contains("\"Browser\"")
+}
+
 /// Parse a Chrome `SingletonLock` symlink target (`<hostname>-<pid>`).
 pub fn parse_singleton_owner(target: &str) -> Option<u32> {
     target.rsplit('-').next()?.parse::<u32>().ok()

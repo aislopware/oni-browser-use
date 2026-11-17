@@ -223,10 +223,33 @@ pub fn session_drifted(
     session_live && (lane_switched || fingerprint != launched)
 }
 
-/// Resolve `auto`: attach when a live debug endpoint already exists on the
-/// selected profile's user-data root (best fidelity, zero disruption, never
-/// owned), else clone. Profile mode is never picked silently — it needs the
-/// user's browser closed, so it stays an explicit choice.
+/// The fixed port (`rb port`) the lane attaches to right now, if it applies.
+/// Explicit `attach` always uses it — a dead endpoint is then an error that
+/// names the port, never a silent fall back to another browser. `auto` uses
+/// it only while a browser of this user holds it, so a closed browser still
+/// falls through to the clone. Needs no browser/profile discovery: the port
+/// alone identifies the endpoint.
+pub fn fixed_attach_port(cfg: &Config) -> Option<u16> {
+    fixed_attach_port_with(cfg, |p| {
+        devtools_listening(p) && crate::browser::endpoint_owned_by_own_browser(p)
+    })
+}
+
+/// Testable core of [`fixed_attach_port`] (`live` = the liveness probe).
+pub(super) fn fixed_attach_port_with(cfg: &Config, live: impl Fn(u16) -> bool) -> Option<u16> {
+    let port = cfg.port?;
+    match cfg.mode {
+        Mode::Attach => Some(port),
+        Mode::Auto if live(port) => Some(port),
+        _ => None,
+    }
+}
+
+/// Resolve `auto`: attach when a live debug endpoint already exists — the
+/// fixed `rb port`, or one on the selected profile's user-data root (best
+/// fidelity, zero disruption, never owned) — else clone. Profile mode is
+/// never picked silently — it needs the user's browser closed, so it stays an
+/// explicit choice.
 pub fn effective_mode(cfg: &Config, user_data_root: &Path) -> Mode {
     match cfg.mode {
         Mode::Auto => {
@@ -235,8 +258,9 @@ pub fn effective_mode(cfg: &Config, user_data_root: &Path) -> Mode {
             // graceful exit) could be squatted. Require a live browser of
             // this user to actually hold the port (Linux; elsewhere the
             // file's existence remains the signal).
-            if devtools_port(user_data_root)
-                .is_some_and(crate::browser::endpoint_owned_by_own_browser)
+            if fixed_attach_port(cfg).is_some()
+                || devtools_port(user_data_root)
+                    .is_some_and(crate::browser::endpoint_owned_by_own_browser)
             {
                 Mode::Attach
             } else {

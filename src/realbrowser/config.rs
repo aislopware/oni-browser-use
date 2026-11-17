@@ -60,6 +60,13 @@ pub struct Config {
     /// discovered binary for the selected browser.
     #[serde(default)]
     pub binary: Option<String>,
+    /// Fixed loopback debug port of the browser to attach to (`rb port`).
+    /// Chromium writes `DevToolsActivePort` only for an ephemeral
+    /// `--remote-debugging-port=0` arm, and Brave never writes it — a browser
+    /// armed on a fixed port is invisible to discovery, so the port is named
+    /// here. `None` = discover via `DevToolsActivePort`.
+    #[serde(default)]
+    pub port: Option<u16>,
     /// Launch a visible window (the point of the feature on a desktop). An
     /// invisible lane falls back to `--headless=new` — honest, but a
     /// degraded environment; only for servers.
@@ -84,6 +91,7 @@ impl Default for Config {
             browser: None,
             profile: None,
             binary: None,
+            port: None,
             visible: true,
             idle_shutdown: false,
             idle_hum: true,

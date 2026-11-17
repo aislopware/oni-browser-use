@@ -515,6 +515,10 @@ launch Helium once to create its profile, select it, then set
 `bladebro rb use --binary /absolute/path/to/helium.AppImage` (or executable).
 
 `rb mode auto` (default) attaches when a live endpoint exists, else clones.
+Fixed debug port: a browser started with `--remote-debugging-port=<N>` writes
+no `DevToolsActivePort` (Brave never writes one), so discovery cannot see it —
+`rb port <N>` names it once (`rb port auto` clears it); `attach` then uses it
+directly and `auto` attaches whenever a browser is listening there.
 Browser override: `rb use <id>` · custom binary (nix/flatpak wrapper):
 `rb use --binary <path|auto>` · profile pick: `rb profile <key>` (validated;
 an absolute profile path also works) · re-import: `rb refresh` · wipe the

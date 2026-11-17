@@ -64,12 +64,13 @@ pub use self::controls::{
     hum_enabled, input_paused, pause_path, paused_error, set_paused, should_idle_shutdown,
 };
 pub use self::profiles::{
-    devtools_port, list_profiles, parse_devtools_active_port, parse_singleton_owner,
-    profile_in_use, profile_owner_pid, same_dir, ProfileInfo,
+    devtools_listening, devtools_port, list_profiles, loopback_listening,
+    parse_devtools_active_port, parse_singleton_owner, profile_in_use, profile_owner_pid, same_dir,
+    ProfileInfo,
 };
 pub use self::select::{
-    effective_mode, ensure_current_import, ensure_import, resolve_selection, session_drifted,
-    sole_root_id, validate_binary_override,
+    effective_mode, ensure_current_import, ensure_import, fixed_attach_port, resolve_selection,
+    session_drifted, sole_root_id, validate_binary_override,
 };
 pub use self::template::{
     forget, has_template, human_bytes, import_template, live_clone_sessions, root_for,
@@ -152,6 +153,13 @@ pub fn launch_fingerprint_from(env_override: Option<&str>, cfg: &Config) -> u64 
         cfg.browser.hash(&mut h);
         cfg.profile.hash(&mut h);
         cfg.binary.hash(&mut h);
+        // The fixed attach port names WHICH browser an attach drives: a
+        // changed port must re-attach, or the session keeps steering the old
+        // endpoint.
+        // (Owned modes never read it — no relaunch for a port they ignore.)
+        if matches!(cfg.mode, Mode::Attach | Mode::Auto) {
+            cfg.port.hash(&mut h);
+        }
         // `visible` shapes launches we OWN. An attach session never launches
         // (the browser belongs to the user), so toggling it must not reset an
         // attached page; every other mode still gets the relaunch.
@@ -164,7 +172,7 @@ pub fn launch_fingerprint_from(env_override: Option<&str>, cfg: &Config) -> u64 
 
 #[cfg(test)]
 mod tests {
-    use super::select::pick_recency_index;
+    use super::select::{fixed_attach_port_with, pick_recency_index};
     use super::*;
 
     #[test]
@@ -313,6 +321,41 @@ mod tests {
             "profile is a launch input"
         );
 
+        // The fixed attach port names which browser an attach drives...
+        for mode in [Mode::Attach, Mode::Auto] {
+            let a = Config {
+                enabled: true,
+                mode,
+                port: Some(9222),
+                ..Default::default()
+            };
+            let b = Config {
+                port: Some(9333),
+                ..a.clone()
+            };
+            assert_ne!(
+                launch_fingerprint_from(None, &a),
+                launch_fingerprint_from(None, &b),
+                "{mode:?}: a changed attach port must re-attach"
+            );
+        }
+        // ...and is ignored by the mechanisms that launch their own browser.
+        let c1 = Config {
+            enabled: true,
+            mode: Mode::Clone,
+            port: Some(9222),
+            ..Default::default()
+        };
+        let c2 = Config {
+            port: None,
+            ..c1.clone()
+        };
+        assert_eq!(
+            launch_fingerprint_from(None, &c1),
+            launch_fingerprint_from(None, &c2),
+            "clone never reads the attach port"
+        );
+
         // The lane itself is part of the fingerprint: on→off must drift.
         let off = Config {
             enabled: false,
@@ -383,6 +426,72 @@ mod tests {
             launch_fingerprint_from(None, &cl1),
             launch_fingerprint_from(None, &cl2)
         );
+    }
+
+    #[test]
+    fn fixed_attach_port_applies_to_attach_always_and_auto_only_when_live() {
+        let cfg = |mode, port| Config {
+            enabled: true,
+            mode,
+            port,
+            ..Default::default()
+        };
+        let (live, dead) = (|_: u16| true, |_: u16| false);
+        // Explicit attach: the port is THE endpoint, live or not — a dead
+        // one must surface as an error naming it, never a silent fallback.
+        assert_eq!(
+            fixed_attach_port_with(&cfg(Mode::Attach, Some(9333)), dead),
+            Some(9333)
+        );
+        // Auto: only while a browser holds it; closed → falls through (clone).
+        assert_eq!(
+            fixed_attach_port_with(&cfg(Mode::Auto, Some(9333)), live),
+            Some(9333)
+        );
+        assert_eq!(
+            fixed_attach_port_with(&cfg(Mode::Auto, Some(9333)), dead),
+            None
+        );
+        // Owned mechanisms launch their own browser: the port never applies.
+        for mode in [Mode::Clone, Mode::Profile] {
+            assert_eq!(fixed_attach_port_with(&cfg(mode, Some(9333)), live), None);
+        }
+        // No port configured → nothing fixed, whatever the mode.
+        assert_eq!(fixed_attach_port_with(&cfg(Mode::Attach, None), live), None);
+    }
+
+    #[test]
+    fn auto_attaches_to_a_fixed_port_only_while_something_listens() {
+        // A dead fixed port must leave `auto` on the clone (no
+        // DevToolsActivePort in this empty root either).
+        let root = std::env::temp_dir().join(format!("blade-rb-port-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(loopback_listening(port), "bound listener reads as live");
+        // …but something that merely listens (a dev server on the configured
+        // port) is not a browser: `auto` must keep cloning, not attach to it.
+        assert!(
+            !devtools_listening(port),
+            "a silent listener is no DevTools"
+        );
+        drop(listener);
+        assert!(!loopback_listening(port), "closed port reads as dead");
+        let cfg = Config {
+            enabled: true,
+            port: Some(port),
+            ..Default::default()
+        };
+        assert_eq!(effective_mode(&cfg, &root), Mode::Clone);
+        assert_eq!(fixed_attach_port(&cfg), None);
+        // Explicit attach keeps the fixed port even while it is dead.
+        let attach = Config {
+            mode: Mode::Attach,
+            ..cfg
+        };
+        assert_eq!(fixed_attach_port(&attach), Some(port));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -497,14 +606,22 @@ mod tests {
         assert!(cfg.visible, "visible must default on");
         assert!(!cfg.idle_shutdown, "idle shutdown must default off");
         assert!(cfg.binary.is_none(), "no binary override by default");
+        assert!(cfg.port.is_none(), "no fixed attach port by default");
         cfg.enabled = true;
         cfg.mode = Mode::Clone;
         cfg.browser = Some("brave".into());
+        cfg.port = Some(9333);
         save_config_to(&path, &cfg).expect("save");
         let back = config_from(&path);
         assert!(
             back.enabled && back.mode == Mode::Clone && back.browser.as_deref() == Some("brave")
         );
+        assert_eq!(back.port, Some(9333));
+
+        // A config written before `port` existed still loads (no port).
+        std::fs::write(&path, br#"{"enabled":true,"mode":"attach"}"#).unwrap();
+        let old = config_from(&path);
+        assert!(old.enabled && old.mode == Mode::Attach && old.port.is_none());
 
         std::fs::write(&path, b"{ not json").unwrap();
         let corrupt = config_from(&path);

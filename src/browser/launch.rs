@@ -601,6 +601,12 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
     }
 
     let cfg = crate::realbrowser::config();
+    // A fixed attach port (`rb port`) identifies the endpoint by itself —
+    // attach before any browser/profile discovery, which a browser armed on
+    // a fixed port may not even pass (Brave writes no DevToolsActivePort).
+    if let Some(port) = crate::realbrowser::fixed_attach_port(&cfg) {
+        return attach_fixed_port(port).await.map(|base| (None, base));
+    }
     let (spec, profile) = crate::realbrowser::resolve_selection(&cfg)?;
     let mode = crate::realbrowser::effective_mode(&cfg, &profile.root);
 
@@ -611,11 +617,11 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
                     "no live debug endpoint found for `{}`. Auto-discovery reads Chrome's \
                      DevToolsActivePort file, which browsers write when started with \
                      `--remote-debugging-port=0` (or via chrome://inspect#remote-debugging on \
-                     Chrome 144+). For a browser on a FIXED debug port, point bladebro at it \
-                     directly: `bladebro nav <url> --port <N>` — a fixed port is also the \
-                     stealthier arm: Chrome reports navigator.webdriver=true for an ephemeral \
-                     port (measured, 151), and the lane never masks Chrome's own value. Or \
-                     switch mechanism: `bladebro rb mode clone`.",
+                     Chrome 144+). For a browser on a FIXED debug port (the only arm Brave \
+                     supports), name the port once: `bladebro rb port <N>` — a fixed port is \
+                     also the stealthier arm: Chrome reports navigator.webdriver=true for an \
+                     ephemeral port (measured, 151), and the lane never masks Chrome's own \
+                     value. Or switch mechanism: `bladebro rb mode clone`.",
                     profile.path.display()
                 ))
             })?;
@@ -698,6 +704,41 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
         }
         crate::realbrowser::Mode::Auto => unreachable!("effective_mode resolves Auto"),
     }
+}
+
+/// Attach to the browser on the fixed port (`rb port`): prove a DevTools
+/// endpoint answers there, then hand back its CDP base. Never owned — no
+/// launch, no shutdown.
+async fn attach_fixed_port(port: u16) -> Result<String> {
+    let base = format!("127.0.0.1:{port}");
+    // Liveness first: a fixed port has no DevToolsActivePort file to vouch
+    // for it, and "nothing is listening" is the common failure (browser
+    // closed, or started without the flag) — name it and the way out.
+    let version = crate::cdp::version(&base).await.map_err(|_| {
+        BladeError::Other(format!(
+            "no browser debug endpoint answers on 127.0.0.1:{port} — the fixed attach port \
+             (`bladebro rb port`). Start your browser with \
+             `--remote-debugging-port={port}`, or clear the port (`bladebro rb port auto`), or \
+             switch mechanism (`bladebro rb mode clone`)."
+        ))
+    })?;
+    // SECURITY: same proof as the DevToolsActivePort path — a browser of this
+    // user must hold the port, not whatever else answers JSON there (Linux;
+    // elsewhere the check is skipped, documented residual).
+    if !crate::browser::endpoint_owned_by_own_browser(port) {
+        return Err(BladeError::Other(format!(
+            "the debug endpoint on 127.0.0.1:{port} (the fixed attach port, `bladebro rb \
+             port`) is not served by any live browser of this user — refusing it. Start your \
+             browser with `--remote-debugging-port={port}`, or clear the port (`bladebro rb \
+             port auto`)."
+        )));
+    }
+    eprintln!(
+        "[realbrowser] attaching to {} on fixed port {port} — the browser stays yours (no \
+         launch, no shutdown)",
+        version.browser
+    );
+    Ok(base)
 }
 
 /// The agent-lane browser process. A Flatpak export is started through

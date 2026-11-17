@@ -336,19 +336,20 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             "notes": ["the single self-teaching surface — fetch 'help --json' once"]
         }),
         "rb" | "realbrowser" => json!({
-            "usage": "bladebro rb [on|off|status|mode <m>|use [id|--binary <path|auto>]|profile [key|auto]|visible on|off|idle-hum on|off|idle-shutdown on|off|refresh|forget|pause|resume]",
+            "usage": "bladebro rb [on|off|status|mode <m>|port [N|auto]|use [id|--binary <path|auto>]|profile [key|auto]|visible on|off|idle-hum on|off|idle-shutdown on|off|refresh|forget|pause|resume]",
             "tool": null,
             "examples": [
                 "bladebro rb on",
                 "bladebro rb status --json",
                 "bladebro rb mode attach",
+                "bladebro rb port 9222",
                 "bladebro rb use --binary /usr/bin/chromium",
                 "bladebro rb pause"
             ],
             "notes": [
                 "real-browser lane: the agent drives YOUR Chromium-family browser (your profile data, your display) with zero page patches; the driver-side stack (perception, LPM, refs, adapters, token efficiency, biometrics) is unchanged",
                 "mechanisms: clone (default — imported copy; your browser may stay open), profile (your live profile — close the browser first), attach (a running browser exposing a debug endpoint, incl. Chrome 144+ chrome://inspect#remote-debugging); auto = attach if one is live, else clone",
-                "attach caveat (measured, Chrome 151): an ephemeral `--remote-debugging-port=0` arm — and Chrome's approval flow — makes Chrome itself report navigator.webdriver=true; arm a FIXED port for a false reading (the lane never masks Chrome's own value)",
+                "attach caveat (measured, Chrome 151): an ephemeral `--remote-debugging-port=0` arm — and Chrome's approval flow — makes Chrome itself report navigator.webdriver=true; arm a FIXED port for a false reading (the lane never masks Chrome's own value) and name it with `rb port <N>` — a fixed-port browser writes no DevToolsActivePort (Brave never does), so discovery cannot see it",
                 "every surface picks a switch up at its next action — the CLI daemon restarts immediately; a running MCP session switches its browser on the next call (owned browsers relaunch; an attached browser is detached, not closed)",
                 "`rb pause` refuses input, navigation, history, downloads, collecting and tab operations (reads, waits and eval stay available); `rb forget` wipes the imported copy; `rb refresh` re-imports; `rb use --binary` supports custom/nix/flatpak-wrapper binaries"
             ]
@@ -733,6 +734,9 @@ USAGE
   bladebro rb                     status (same as `rb status`)
   bladebro rb on | off            switch the lane (true/false also accepted)
   bladebro rb mode <m>            auto | clone | profile | attach
+  bladebro rb port [N|auto]       fixed debug port to attach to (a browser
+                                  started with --remote-debugging-port=N;
+                                  `auto` = discover via DevToolsActivePort)
   bladebro rb use [id]            list / choose the browser
   bladebro rb use --binary <path|auto>
                                   custom browser binary (nix wrapper, flatpak
@@ -766,7 +770,10 @@ browser that already exposes a debug endpoint — classic
 with per-connection approval). Attach caveat (measured, Chrome 151): an
 ephemeral `--remote-debugging-port=0` arm — and the approval flow — makes
 Chrome itself report navigator.webdriver=true on every page; arm a FIXED
-port for a false reading. The lane never masks Chrome's own value.
+port for a false reading. The lane never masks Chrome's own value. A
+fixed-port browser writes no DevToolsActivePort (Brave never writes one), so
+name the port once with `rb port <N>`: attach then uses it directly, and
+auto attaches whenever a browser is listening there.
 
 The switch applies to the CLI daemon and to MCP sessions — the daemon
 restarts immediately, and a running MCP relaunches its browser at the next
