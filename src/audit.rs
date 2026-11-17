@@ -67,7 +67,8 @@ pub async fn run_audit(base: &str) -> Result<()> {
     let content = page.content(16000).await?;
 
     // S2: boot self-check — verify key stealth properties.
-    let session = page.cdp_ref();
+    // The audit measures what a page's own script reads: the page's world.
+    let session = &page.cdp_ref().main_world();
     let selfcheck = session
         .send(
             "Runtime.evaluate",

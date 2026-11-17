@@ -153,6 +153,10 @@ fn extract_reply(v: &serde_json::Value) -> OnceReply {
 pub async fn probe_gl_live(session: &crate::cdp::CdpSession) -> GlLive {
     let mut saw_no_context = false;
     let mut worker = WorkerEvidence::Unavailable;
+    // The page's world: the probe has to read through the page's own GL
+    // mask, exactly as a page script would (a page session otherwise reads
+    // apart from it and would see the unmasked renderer).
+    let session = &session.main_world();
     for _ in 0..3 {
         if let Ok(v) = session
             .send_with_timeout(

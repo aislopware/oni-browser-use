@@ -90,6 +90,7 @@ ENVIRONMENT
   BLADE_CMD_TIMEOUT    client wait for a daemon response, seconds (default 300)
   BLADE_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
   BLADE_NO_COMPRESS=1  disable response compression
+  BLADE_MAIN_WORLD=1   run the driver's page reads in the page's JS world (default: isolated)
   BLADE_LANE           real|agent — force the real-browser lane for this process
   BLADE_RB_DEBUG=1     real lane: surface the browser's own stderr on launch failures
   BLADE_PLAIN          plain output — no ANSI even on a terminal
@@ -494,6 +495,7 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
             "BLADE_CMD_TIMEOUT": "client wait for a daemon response, seconds (default 300)",
             "BLADE_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
             "BLADE_NO_COMPRESS": "set 1 to disable response compression",
+            "BLADE_MAIN_WORLD": "set 1 to run the driver's page reads in the page's JS world (default: an isolated world the page cannot observe)",
             "BLADE_LANE": "real|agent — force the real-browser lane for this process",
             "BLADE_RB_DEBUG": "real lane: set 1 to surface the browser's own stderr on launch failures",
             "BLADE_PLAIN": "plain CLI output — no ANSI even on a TTY (NO_COLOR also honored; CLICOLOR_FORCE=1 forces color off-TTY)",

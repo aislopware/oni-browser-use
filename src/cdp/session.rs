@@ -12,6 +12,7 @@
 //!   domains (Target.*), child sessions drive page domains; events are
 //!   filtered to the child's session id.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -19,6 +20,7 @@ use tokio::sync::broadcast;
 
 use crate::cdp::client::CdpClient;
 use crate::cdp::protocol::CdpEvent;
+use crate::cdp::reader::{self, Reader};
 use crate::error::Result;
 
 /// A handle to one CDP session on a shared connection. Cheap to clone.
@@ -27,6 +29,9 @@ pub struct CdpSession {
     client: CdpClient,
     session_id: Option<String>,
     cookie_context: Option<(CdpClient, String)>,
+    /// When set, plain `Runtime.evaluate` calls on this handle run in the
+    /// reader world (see [`reader`](crate::cdp::reader)). Shared by clones.
+    reader: Option<Arc<Reader>>,
 }
 
 impl CdpSession {
@@ -37,6 +42,7 @@ impl CdpSession {
             client,
             session_id: None,
             cookie_context: None,
+            reader: None,
         }
     }
 
@@ -46,6 +52,7 @@ impl CdpSession {
             client,
             session_id: Some(session_id.into()),
             cookie_context: None,
+            reader: None,
         }
     }
 
@@ -87,20 +94,56 @@ impl CdpSession {
         }
     }
 
+    /// This session, with its own page reads moved out of the page's world:
+    /// every plain `Runtime.evaluate` sent through the returned handle (and
+    /// its clones) runs in an isolated world of the main frame, where the
+    /// page's scripts cannot observe it. For page sessions.
+    pub fn reading_apart(mut self) -> Self {
+        if reader::enabled() {
+            self.reader = Some(Arc::new(Reader::default()));
+        }
+        self
+    }
+
+    /// Whether this handle's reads run outside the page's world — where the
+    /// page's own JavaScript (globals, handlers it assigned) is not visible.
+    pub fn reads_apart(&self) -> bool {
+        self.reader.as_ref().is_some_and(|r| r.apart())
+    }
+
+    /// A handle on the same session whose `Runtime.evaluate` runs in the
+    /// page's own world — for what must see the page's JavaScript: the
+    /// agent's `eval`, a site adapter calling the page's API, a stealth
+    /// self-check reading what the page reads.
+    pub fn main_world(&self) -> Self {
+        let mut page = self.clone();
+        page.reader = None;
+        page
+    }
+
     /// Send a command with the default timeout.
     pub async fn send(&self, method: &str, params: Option<Value>) -> Result<Value> {
-        self.client
-            .send_session_with_timeout(
-                self.session_id.as_deref(),
-                method,
-                params,
-                crate::cdp::client::DEFAULT_TIMEOUT,
-            )
+        self.send_with_timeout(method, params, crate::cdp::client::DEFAULT_TIMEOUT)
             .await
     }
 
     /// Send a command with an explicit timeout.
     pub async fn send_with_timeout(
+        &self,
+        method: &str,
+        params: Option<Value>,
+        deadline: Duration,
+    ) -> Result<Value> {
+        if method == "Runtime.evaluate" {
+            if let Some(reader) = &self.reader {
+                return reader::evaluate(self, reader, params, deadline).await;
+            }
+        }
+        self.raw(method, params, deadline).await
+    }
+
+    /// The command as written, on this session.
+    pub(super) async fn raw(
         &self,
         method: &str,
         params: Option<Value>,
