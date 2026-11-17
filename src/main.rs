@@ -210,6 +210,11 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // surface — one-shot CLI, daemon, MCP — reads the same switch.
     obu::realbrowser::init_lane();
 
+    // An invalid session name must never read as "no session": the command
+    // would run on the tabs every unnamed command shares.
+    obu::platform::parse_session(std::env::var("OBU_SESSION").ok().as_deref())
+        .map_err(obu::ObuError::Usage)?;
+
     // Restore the default SIGPIPE for CLI-output commands so an early pipe
     // reader (`obu ... | head -1`) exits quietly instead of panicking —
     // Rust std ignores SIGPIPE, which turns EPIPE into a println! panic.

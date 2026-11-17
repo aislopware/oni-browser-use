@@ -264,3 +264,31 @@ fn stderr_styling_follows_stderr_not_stdout() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// An `OBU_SESSION` that is not a plain name is a usage error. Read as "no
+/// session" it would run the command on the tabs every unnamed agent
+/// shares; taken as a path it would leave the data dir.
+#[test]
+fn an_invalid_session_name_is_refused_before_anything_runs() {
+    let home = home("session-name");
+    for bad in ["../elsewhere", "a/b", ".hidden"] {
+        let out = command(&home)
+            .env("OBU_SESSION", bad)
+            .args(["stop"])
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(2), "{bad}: {out:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("OBU_SESSION"), "{bad}: {err}");
+    }
+    assert!(
+        !home.join("agent-sessions").exists(),
+        "a refused name must not create anything"
+    );
+    let out = command(&home)
+        .env("OBU_SESSION", "oni-1a2b")
+        .args(["stop"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+}

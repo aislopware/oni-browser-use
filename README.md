@@ -24,7 +24,7 @@ cargo install --locked --git https://github.com/aislopware/oni-browser-use obu &
 
 > **This is a fork.** `obu` is [aislopware/oni-browser-use](https://github.com/aislopware/oni-browser-use): [dondai44423/bladebro](https://github.com/dondai44423/bladebro) (Apache-2.0), renamed throughout by [`scripts/fork-rename.py`](scripts/fork-rename.py) and extended for driving a browser you are working in (own background tab, refs that survive one-shot commands, isolated-world reads). <!-- fork-rename:keep -->
 >
-> The fork publishes **no npm packages and no GitHub releases**. What upstream ships through npm is built from source here, and `obu update` finds nothing to download; the `npx` and npm-package lines below describe upstream's packaging and do not work — a package called `obu` on npm is **not this project**. Build with `cargo build --release`, then run `./target/release/obu`.
+> The fork publishes **no npm packages**: the `npx` and npm-package lines below describe upstream's packaging and do not work — a package called `obu` on npm is **not this project**. Prebuilt binaries for Linux, macOS and Windows, each with a `.sha256`, are on the [GitHub releases](https://github.com/aislopware/oni-browser-use/releases) page, and `obu -u` updates from there. Or build with `cargo build --release`, then run `./target/release/obu`.
 
 **Obu is an agentic browser driver** — it gives an AI agent full control of a real browser through **5 tools**, not thirty. Built in Rust on a self-built CDP transport: one static binary, no Node.js, no Playwright, no runtime. It holds a persistent **Live Page Model** across tool calls, so every action returns **what changed** — never the whole page again.
 
@@ -523,12 +523,14 @@ Fixed debug port: a browser started with `--remote-debugging-port=<N>` writes
 no `DevToolsActivePort` (Brave never writes one), so discovery cannot see it —
 `rb port <N>` names it once (`rb port auto` clears it); `attach` then uses it
 directly and `auto` attaches whenever a browser is listening there.
-Several agents in one attached browser: the agent's tab and its refs belong to
-the data dir, so give each agent its own (`OBU_HOME=<dir>`, with the same
-`rb` settings) and each works in its own window. The tab outlives the process
-so the next command resumes on it; when the work is over,
-`obu stop --close-tabs` closes the tabs obu opened there — never one of
-yours — and says what a readback of the tab list shows.
+Several agents in one attached browser: name each one's session
+(`OBU_SESSION=<name>`) and each works in its own window, with its own tab
+record and its own daemon, while logins, knowledge, fingerprint and `rb`
+settings stay shared in the one data dir. Without a name, every agent in a
+data dir shares one tab. The tab outlives the process so the next command
+resumes on it; when the work is over, `obu stop --close-tabs` closes the
+tabs obu opened there — that session's only, never one of yours — and
+says what a readback of the tab list shows.
 Browser override: `rb use <id>` · custom binary (nix/flatpak wrapper):
 `rb use --binary <path|auto>` · profile pick: `rb profile <key>` (validated;
 an absolute profile path also works) · re-import: `rb refresh` · wipe the
@@ -639,6 +641,7 @@ Everything optional; configuration is environment variables.
 |---|---|---|
 | `OBU_HOME` | auto | Data root override (highest priority): knowledge, logins, artifacts, fingerprint |
 | `XDG_STATE_HOME` | XDG spec | Data root becomes `$XDG_STATE_HOME/obu` when set |
+| `OBU_SESSION` | unset | Names this agent's session inside the data root (letters, digits, `-`, `_`, `.`, up to 32): its own tabs in an attached browser and its own CLI daemon, kept under `agent-sessions/<name>/`; everything else stays shared |
 | `OBU_PROFILE_DIR` | `<data root>/profile` | Persistent browser profile location — point it at a directory only you can write (it holds the live cookie jar) |
 | `OBU_FRESH` | unset | `1` = ephemeral profile (no persistence) |
 | `CHROME_PATH` | auto-detected | Chrome/Chromium binary |

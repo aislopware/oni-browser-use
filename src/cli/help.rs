@@ -87,6 +87,8 @@ EXIT CODES
 
 ENVIRONMENT
   OBU_HOME           isolate everything (daemon, Chrome, sessions, knowledge) in a directory
+  OBU_SESSION        name this agent's session inside the data dir: its own tabs in an
+                       attached browser and its own daemon; logins and knowledge stay shared
   OBU_CMD_TIMEOUT    client wait for a daemon response, seconds (default 300)
   OBU_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
   OBU_NO_COMPRESS=1  disable response compression
@@ -328,7 +330,7 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             "usage": "obu stop [--close-tabs]",
             "tool": null,
             "examples": [],
-            "notes": ["graceful (flushes logins + knowledge); idempotent — exit 0 when nothing is running", "--close-tabs: attached browser only — also closes the tabs obu opened there (never the user's); run it when the work is over"]
+            "notes": ["graceful (flushes logins + knowledge); idempotent — exit 0 when nothing is running", "--close-tabs: attached browser only — also closes the tabs obu opened there (never the user's); run it when the work is over", "OBU_SESSION set: stops that session's daemon and closes that session's tabs only"]
         }),
         "help" => json!({
             "usage": "obu help [command] [--json]",
@@ -492,6 +494,7 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
         },
         "env": {
             "OBU_HOME": "isolate daemon/Chrome/sessions/knowledge in a directory",
+            "OBU_SESSION": "name this agent's session inside the data dir (letters, digits, - _ . up to 32): its own tabs in an attached browser and its own daemon; logins, knowledge and fingerprint stay shared",
             "OBU_CMD_TIMEOUT": "client wait for a daemon response, seconds (default 300)",
             "OBU_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
             "OBU_NO_COMPRESS": "set 1 to disable response compression",
@@ -807,6 +810,9 @@ and is never closed. The agent's own tab there stays open as well, so the
 next command resumes on it. --close-tabs is for when the work is over: it
 closes every tab obu opened in that browser (never one of the user's)
 and reports, per endpoint, what a readback of the tab list shows.
+
+With OBU_SESSION set, stop acts on that session only: its daemon and,
+with --close-tabs, its tabs. Other sessions in the data dir keep theirs.
 "#
         }
         "help" => {

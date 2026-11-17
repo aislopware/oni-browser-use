@@ -26,8 +26,11 @@ pub async fn session_target(base: &str, attached: bool) -> Result<TargetInfo> {
 /// `<data-dir>/agent-tab.json`: per endpoint (`host:port`), the tab the
 /// session is on and the tabs obu itself opened there:
 /// `{"127.0.0.1:9222": {"current": "<targetId>", "own": ["<targetId>", …]}}`.
+/// A named session (`OBU_SESSION`) keeps its own record under its session
+/// dir: two agents attached to one browser from one data dir would
+/// otherwise resume on — and navigate — each other's tab.
 pub(super) fn record_path() -> PathBuf {
-    crate::platform::obu_dir().join("agent-tab.json")
+    crate::platform::session_dir().join("agent-tab.json")
 }
 
 /// One endpoint's entry. `own` is newest-first and only ever holds tabs
@@ -224,11 +227,26 @@ const CLOSE_SETTLE: Duration = Duration::from_millis(100);
 const CLOSE_SETTLE_ROUNDS: usize = 15;
 
 /// `obu stop --close-tabs`: close the tabs obu opened in every browser
-/// this data dir attached to, and forget them. Without it a finished piece of
+/// this data dir (this session, under `OBU_SESSION`) attached to, and forget
+/// them. Without it a finished piece of
 /// work leaves its background window in the user's browser for good — nothing
 /// else ever closes a tab the next command might resume on.
 pub async fn close_own_tabs() -> String {
-    close_tabs_recorded_in(&record_path(), &super::ref_store::dir()).await
+    let record = record_path();
+    let text = close_tabs_recorded_in(&record, &super::ref_store::dir()).await;
+    if crate::platform::session().is_some() {
+        forget_empty_record(&record);
+    }
+    text
+}
+
+/// A named session that holds no tab any more leaves no file behind: a host
+/// that names one session per task would otherwise grow the data dir by a
+/// directory for every task it ever ran.
+fn forget_empty_record(record: &Path) {
+    if read_record(record).is_empty() {
+        let _ = std::fs::remove_file(record);
+    }
 }
 
 /// One line per endpoint, each from a readback of the browser's target list.
@@ -651,6 +669,43 @@ mod tests {
         assert!(said.contains("1 agent tab(s) not closed"), "{said}");
         assert_eq!(read_record(&record)[&base].own, ["AGENT1"]);
         let _ = std::fs::remove_dir_all(record.parent().unwrap());
+    }
+
+    /// Two named sessions (`OBU_SESSION`) attached to one browser from one
+    /// data dir: with one shared record the second resumed on — and
+    /// navigated — the first one's tab.
+    #[tokio::test]
+    async fn sessions_with_their_own_record_keep_their_own_tabs() {
+        let (base, browser) = fake_browser(false).await;
+        let root = scratch("sessions");
+        let root = root.parent().unwrap();
+        let record_of = |name: &str| {
+            root.join("agent-sessions")
+                .join(name)
+                .join("agent-tab.json")
+        };
+        let (a, b) = (record_of("a"), record_of("b"));
+        let refs = root.join("refs");
+
+        assert_eq!(agent_target(&base, &a).await.unwrap().id, "AGENT1");
+        assert_eq!(agent_target(&base, &b).await.unwrap().id, "AGENT2");
+        assert_eq!(agent_target(&base, &a).await.unwrap().id, "AGENT1");
+
+        // Ending one session closes its tabs only, and leaves no record.
+        assert_eq!(
+            close_tabs_recorded_in(&a, &refs).await,
+            format!("{base}: closed 1 agent tab(s)")
+        );
+        forget_empty_record(&a);
+        assert!(!a.exists(), "an ended session leaves no record behind");
+        assert_eq!(browser.lock().unwrap().pages, ["USER", "AGENT2"]);
+        assert_eq!(agent_target(&base, &b).await.unwrap().id, "AGENT2");
+        forget_empty_record(&b);
+        assert!(
+            b.exists(),
+            "a session that still holds a tab keeps its record"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

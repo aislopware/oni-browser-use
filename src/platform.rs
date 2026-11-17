@@ -88,6 +88,64 @@ pub fn obu_dir() -> PathBuf {
     )
 }
 
+/// Longest `OBU_SESSION` name: it becomes a directory on the way to the
+/// daemon's Unix socket, whose whole path must stay under ~100 bytes.
+const SESSION_NAME_MAX: usize = 32;
+
+/// Pure core of [`session`]: `Ok(None)` when unset or blank, the name when
+/// it is safe as one path component, else why it is not.
+pub fn parse_session(raw: Option<&str>) -> std::result::Result<Option<String>, String> {
+    let name = match raw.map(str::trim) {
+        None | Some("") => return Ok(None),
+        Some(name) => name,
+    };
+    let plain = name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    if !plain || name.starts_with('.') || name.len() > SESSION_NAME_MAX {
+        return Err(format!(
+            "OBU_SESSION must be 1-{SESSION_NAME_MAX} characters of letters, digits, '-', '_' \
+             or '.', and not start with '.' — got '{name}'"
+        ));
+    }
+    Ok(Some(name.to_string()))
+}
+
+/// The named session this process belongs to (`OBU_SESSION`). Sessions
+/// share one data dir — logins, knowledge, fingerprint, the profile
+/// template — and each keeps its own tabs in an attached browser and its
+/// own CLI daemon, so several agents can work side by side without landing
+/// on each other's tab. `main` rejects an invalid name before any command
+/// runs; here it reads as no session.
+pub fn session() -> Option<String> {
+    parse_session(std::env::var("OBU_SESSION").ok().as_deref())
+        .ok()
+        .flatten()
+}
+
+/// Where the per-session state lives: the tab record and the CLI daemon's
+/// socket, lock and pid file. The data dir itself without `OBU_SESSION`,
+/// else `<data-dir>/agent-sessions/<name>`.
+pub fn session_dir() -> PathBuf {
+    session_dir_in(&obu_dir(), session().as_deref())
+}
+
+fn session_dir_in(root: &std::path::Path, session: Option<&str>) -> PathBuf {
+    match session {
+        Some(name) => root.join("agent-sessions").join(name),
+        None => root.to_path_buf(),
+    }
+}
+
+/// Drop a named session's directory once nothing is left in it. A session
+/// that still holds a tab record or a live daemon keeps it: `remove_dir`
+/// only removes an empty directory.
+pub fn forget_empty_session_dir() {
+    if session().is_some() {
+        let _ = std::fs::remove_dir(session_dir());
+    }
+}
+
 /// Where the browser saves downloads (`Page.setDownloadBehavior`). A
 /// sandboxed launch (Flatpak) shares this exact dir into the sandbox, so
 /// both sides take it from here.
@@ -1528,6 +1586,36 @@ pub fn stale_binary() -> bool {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn session_names_are_one_safe_path_component() {
+        assert_eq!(parse_session(None), Ok(None));
+        assert_eq!(parse_session(Some("  ")), Ok(None));
+        assert_eq!(
+            parse_session(Some(" oni-1a2b_3.c ")),
+            Ok(Some("oni-1a2b_3.c".into()))
+        );
+        // Anything that could leave the session dir, or overflow the
+        // daemon's socket path, is refused instead of read as "no session".
+        for bad in ["../x", "a/b", "a\\b", ".hidden", "..", "a b", "é"] {
+            assert!(parse_session(Some(bad)).is_err(), "{bad}");
+        }
+        assert!(parse_session(Some(&"a".repeat(SESSION_NAME_MAX))).is_ok());
+        assert!(parse_session(Some(&"a".repeat(SESSION_NAME_MAX + 1))).is_err());
+    }
+
+    #[test]
+    fn each_session_has_its_own_dir_inside_the_shared_data_dir() {
+        let root = std::path::Path::new("/data");
+        // No session: the data dir itself, where every earlier version
+        // keeps agent-tab.json and cli.sock.
+        assert_eq!(session_dir_in(root, None), root);
+        let a = session_dir_in(root, Some("a"));
+        let b = session_dir_in(root, Some("b"));
+        assert_ne!(a, b);
+        assert!(a.starts_with(root) && b.starts_with(root));
+        assert_ne!(a, root);
+    }
 
     #[cfg(unix)]
     #[test]

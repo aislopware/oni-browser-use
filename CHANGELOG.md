@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `OBU_SESSION=<name>` names an agent's session inside one data dir. Each session keeps its own tabs in an attached browser and its own CLI daemon, under `agent-sessions/<name>/`, while logins, knowledge, fingerprint and `rb` settings stay shared. Several agents can now drive one attached browser from one data dir without landing on each other's tab; before, each needed its own `OBU_HOME`. `obu stop --close-tabs` acts on the named session only and leaves no files behind once its tabs are closed.
+
 ## [4.6.9] - 2026-11-13
 
 ### Added

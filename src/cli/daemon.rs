@@ -702,7 +702,7 @@ fn refusal(req: &Value) -> Option<String> {
 /// checking whether the pid is alive, and only then killed.
 #[cfg(unix)]
 fn pid_path() -> std::path::PathBuf {
-    crate::platform::obu_dir().join("cli.pid")
+    crate::platform::session_dir().join("cli.pid")
 }
 
 #[cfg(unix)]
@@ -856,6 +856,27 @@ pub async fn stop_daemon() -> Result<String> {
     let _ = std::fs::remove_file(&path);
     Ok("daemon not running".into())
 }
+
+/// Remove a named session's daemon lock file once no daemon holds it, so
+/// the session dir can go when the session ends. Taken before it is
+/// unlinked: a daemon that is running or starting keeps its lock.
+#[cfg(unix)]
+pub(super) fn forget_daemon_lock() {
+    use std::os::fd::AsRawFd;
+    if crate::platform::session().is_none() {
+        return;
+    }
+    let path = socket_path().with_extension("lock");
+    let Ok(lock) = std::fs::OpenOptions::new().write(true).open(&path) else {
+        return;
+    };
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(not(unix))]
+pub(super) fn forget_daemon_lock() {}
 
 #[cfg(not(unix))]
 pub async fn stop_daemon() -> Result<String> {

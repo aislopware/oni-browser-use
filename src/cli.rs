@@ -51,10 +51,11 @@ use self::daemon::{run_daemon, stop_daemon};
 pub use self::help::{command_help_text, help_json, help_text, suggest_command};
 use self::rb::run_rb;
 
-/// Unix socket path for the CLI daemon.
+/// Unix socket path for the CLI daemon: one daemon per data dir, or per
+/// named session (`OBU_SESSION`) within it.
 #[cfg(unix)]
 fn socket_path() -> std::path::PathBuf {
-    crate::platform::obu_dir().join("cli.sock")
+    crate::platform::session_dir().join("cli.sock")
 }
 
 /// Trust boundary for the daemon channel. A connect-success test proves
@@ -533,6 +534,9 @@ async fn run_cli_inner(
             // After the daemon let go of the page, never while it drives it.
             if rest.iter().any(|a| a == "--close-tabs") {
                 text = format!("{text}\n{}", crate::page::close_own_tabs().await);
+                // A named session that is over leaves nothing behind.
+                self::daemon::forget_daemon_lock();
+                crate::platform::forget_empty_session_dir();
             }
             print_result(
                 &ToolResult {

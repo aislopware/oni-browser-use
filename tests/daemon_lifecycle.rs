@@ -55,7 +55,13 @@ fn start_daemon(home: &Path) -> Child {
 }
 
 /// [`start_daemon`] with a caller-prepared command (extra env).
-fn start_daemon_with(home: &Path, mut cmd: Command) -> Child {
+fn start_daemon_with(home: &Path, cmd: Command) -> Child {
+    start_daemon_in(home, home, cmd)
+}
+
+/// [`start_daemon_with`] for a daemon whose socket and pidfile live in
+/// `state` (a named session's dir) instead of the data dir itself.
+fn start_daemon_in(home: &Path, state: &Path, mut cmd: Command) -> Child {
     let mut child = cmd
         .arg("daemon")
         .env("OBU_HOME", home)
@@ -64,7 +70,7 @@ fn start_daemon_with(home: &Path, mut cmd: Command) -> Child {
         .stderr(Stdio::null())
         .spawn()
         .expect("daemon must spawn");
-    let sock = home.join("cli.sock");
+    let sock = state.join("cli.sock");
     let deadline = Instant::now() + Duration::from_secs(10);
     while !sock.exists() {
         if let Ok(Some(st)) = child.try_wait() {
@@ -77,7 +83,7 @@ fn start_daemon_with(home: &Path, mut cmd: Command) -> Child {
         );
         std::thread::sleep(Duration::from_millis(25));
     }
-    let pidfile = home.join("cli.pid");
+    let pidfile = state.join("cli.pid");
     let own = child.id().to_string();
     let deadline = Instant::now() + Duration::from_secs(10);
     while std::fs::read_to_string(&pidfile).unwrap_or_default().trim() != own {
@@ -113,6 +119,54 @@ fn wait_exit(child: &mut Child, secs: u64) -> Option<std::process::ExitStatus> {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
+}
+
+/// `OBU_SESSION` gives each agent its own daemon inside one data dir. With
+/// one daemon per data dir, a second agent's commands ran on the first
+/// one's page, and its `stop` took the first one's browser down.
+#[test]
+fn a_named_session_has_its_own_daemon_in_the_shared_data_dir() {
+    let home = tmp_home("session");
+    let state = home.join("agent-sessions").join("a");
+    let mut cmd = Command::new(bin());
+    cmd.env("OBU_SESSION", "a");
+    let mut daemon = start_daemon_in(&home, &state, cmd);
+    assert!(
+        !home.join("cli.sock").exists(),
+        "a session daemon must not take the data dir's own socket"
+    );
+    let stop = |session: Option<&str>, args: &[&str]| {
+        let mut cmd = Command::new(bin());
+        cmd.args(args)
+            .env("OBU_HOME", &home)
+            .env_remove("OBU_SESSION")
+            .stdin(Stdio::null());
+        if let Some(name) = session {
+            cmd.env("OBU_SESSION", name);
+        }
+        let out = cmd.output().unwrap();
+        assert!(out.status.success(), "{out:?}");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    // Neither the unnamed session nor another one reaches it.
+    assert!(stop(None, &["stop"]).contains("daemon not running"));
+    assert!(stop(Some("b"), &["stop"]).contains("daemon not running"));
+    assert!(
+        daemon.try_wait().unwrap().is_none(),
+        "session a's daemon was stopped"
+    );
+
+    // Its own stop does, and an ended session leaves no directory behind.
+    let said = stop(Some("a"), &["stop", "--close-tabs"]);
+    assert!(said.contains("daemon stopped"), "{said}");
+    assert!(wait_exit(&mut daemon, 10).is_some(), "daemon still running");
+    assert!(
+        !state.exists(),
+        "left behind: {:?}",
+        std::fs::read_dir(&state).map(|d| d.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+    );
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
