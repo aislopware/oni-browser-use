@@ -77,6 +77,10 @@ jobs:
             | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
           echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update && sudo apt-get install -y google-chrome-stable xvfb xfwm4 x11-utils
+          # The baseline must be the Chrome installed here: the runner image
+          # also has /usr/bin/chromium, which the oracle would pick first and
+          # which never brings up a debug endpoint under Xvfb.
+          echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
       - name: Differential oracle (divergent must be 0)
         run: |
           chmod +x target/gate/bladebro
