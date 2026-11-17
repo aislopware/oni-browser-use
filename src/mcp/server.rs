@@ -90,14 +90,34 @@ fn instructions() -> String {
     let cfg = crate::realbrowser::config();
     let real =
         crate::realbrowser::lane_from(std::env::var("OBU_LANE").ok().as_deref(), cfg.enabled);
-    instructions_for(real && cfg.mode == crate::realbrowser::Mode::Attach)
+    instructions_for(
+        real && cfg.mode == crate::realbrowser::Mode::Attach,
+        crate::platform::host_note().as_deref(),
+    )
 }
 
-fn instructions_for(attached: bool) -> String {
+fn instructions_for(attached: bool, host_note: Option<&str>) -> String {
+    let mut text = INSTRUCTIONS.to_string();
     if attached {
-        format!("{INSTRUCTIONS}{ATTACHED_NOTE}")
-    } else {
-        INSTRUCTIONS.to_string()
+        text.push_str(ATTACHED_NOTE);
+    }
+    if let Some(note) = host_note {
+        text.push_str(" HOST: ");
+        text.push_str(note);
+    }
+    text
+}
+
+/// The note on the first result after a browser is reached: whose browser
+/// this is. The host application's word (`OBU_HOST_NOTE`) replaces obu's
+/// own guess, which can only tell the real lane from the agent lane.
+fn first_reach_note(real_lane: bool, host_note: Option<&str>) -> Option<String> {
+    match host_note {
+        Some(note) => Some(format!("note: {note}")),
+        None if real_lane => Some(
+            "note: real-browser lane — this Chrome is the user's own browser (their profile data; page patches off).".into(),
+        ),
+        None => None,
     }
 }
 
@@ -175,11 +195,36 @@ mod retry_tests {
     /// isolated one pays for no extra words.
     #[test]
     fn only_an_attached_session_is_told_the_other_tabs_are_the_users() {
-        assert_eq!(instructions_for(false), INSTRUCTIONS);
-        let attached = instructions_for(true);
+        assert_eq!(instructions_for(false, None), INSTRUCTIONS);
+        let attached = instructions_for(true, None);
         assert!(attached.starts_with(INSTRUCTIONS));
         assert!(attached.contains("every other tab is theirs"), "{attached}");
     }
+
+    /// Only the application that attached obu knows whose browser it is: its
+    /// note reaches the agent before the first tool (instructions) and on the
+    /// first result, where obu's own guess would have said "the user's".
+    #[test]
+    fn a_host_note_says_whose_browser_this_is_in_place_of_the_lane_note() {
+        let note = "These tools drive the editor's browser panel.";
+        let told = instructions_for(false, Some(note));
+        assert!(told.starts_with(INSTRUCTIONS));
+        assert!(told.ends_with(" HOST: These tools drive the editor's browser panel."));
+        assert_eq!(
+            first_reach_note(true, Some(note)).as_deref(),
+            Some("note: These tools drive the editor's browser panel.")
+        );
+        assert_eq!(
+            first_reach_note(false, Some(note)).as_deref(),
+            Some("note: These tools drive the editor's browser panel.")
+        );
+        // Without a host: the real lane keeps its warning, the agent lane says nothing.
+        assert!(first_reach_note(true, None)
+            .unwrap()
+            .contains("the user's own browser"));
+        assert_eq!(first_reach_note(false, None), None);
+    }
+
     #[test]
     fn recovery_does_not_replay_mutations_or_unknown_calls() {
         for tool in ["act", "run", "unknown"] {

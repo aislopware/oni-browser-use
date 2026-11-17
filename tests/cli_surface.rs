@@ -344,6 +344,15 @@ fn an_endpoint_path_prefixes_every_discovery_request() {
         "requests outside the prefix: {seen:?}"
     );
 
+    // A host note that is not one line is refused the same way.
+    let out = command(&home)
+        .env("OBU_HOST_NOTE", "first line\nsecond line")
+        .args(["see", "--no-daemon", "--host", "127.0.0.1", "--port", &port])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("OBU_HOST_NOTE"));
+
     let out = command(&home)
         .env("OBU_ENDPOINT_PATH", "k/../elsewhere")
         .args(["see", "--no-daemon", "--host", "127.0.0.1", "--port", &port])

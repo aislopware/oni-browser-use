@@ -123,6 +123,35 @@ pub fn session() -> Option<String> {
         .flatten()
 }
 
+/// Longest `OBU_HOST_NOTE`: it is paid for in every session's instructions.
+const HOST_NOTE_MAX: usize = 600;
+
+/// Pure core of [`host_note`]: `Ok(None)` when unset or blank, the note when
+/// it is one line of text, else why it is not.
+pub fn parse_host_note(raw: Option<&str>) -> std::result::Result<Option<String>, String> {
+    let note = match raw.map(str::trim) {
+        None | Some("") => return Ok(None),
+        Some(note) => note,
+    };
+    if note.chars().any(char::is_control) || note.len() > HOST_NOTE_MAX {
+        return Err(format!(
+            "OBU_HOST_NOTE must be one line of at most {HOST_NOTE_MAX} bytes"
+        ));
+    }
+    Ok(Some(note.to_string()))
+}
+
+/// What the application that runs obu says about the browser it gave it
+/// (`OBU_HOST_NOTE`): an editor's browser panel the user watches, a browser
+/// of the agent's own. Only the host knows, and an agent told nothing takes
+/// an attached browser for the user's own. `main` rejects an invalid note
+/// before any command runs; here it reads as none.
+pub fn host_note() -> Option<String> {
+    parse_host_note(std::env::var("OBU_HOST_NOTE").ok().as_deref())
+        .ok()
+        .flatten()
+}
+
 /// Where the per-session state lives: the tab record and the CLI daemon's
 /// socket, lock and pid file. The data dir itself without `OBU_SESSION`,
 /// else `<data-dir>/agent-sessions/<name>`.
@@ -1602,6 +1631,20 @@ mod tests {
         }
         assert!(parse_session(Some(&"a".repeat(SESSION_NAME_MAX))).is_ok());
         assert!(parse_session(Some(&"a".repeat(SESSION_NAME_MAX + 1))).is_err());
+    }
+
+    #[test]
+    fn a_host_note_is_one_line_or_refused() {
+        assert_eq!(parse_host_note(None), Ok(None));
+        assert_eq!(parse_host_note(Some(" \t")), Ok(None));
+        assert_eq!(
+            parse_host_note(Some(" These tools drive the editor's browser panel. ")),
+            Ok(Some("These tools drive the editor's browser panel.".into()))
+        );
+        // A second line would read as a separate statement of obu's own.
+        assert!(parse_host_note(Some("one\ntwo")).is_err());
+        assert!(parse_host_note(Some(&"a".repeat(HOST_NOTE_MAX))).is_ok());
+        assert!(parse_host_note(Some(&"a".repeat(HOST_NOTE_MAX + 1))).is_err());
     }
 
     #[test]

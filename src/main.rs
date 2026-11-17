@@ -218,6 +218,10 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
     // the bare port for its tabs instead of the host application's bridge.
     obu::cdp::parse_endpoint_path(std::env::var("OBU_ENDPOINT_PATH").ok().as_deref())
         .map_err(obu::ObuError::Usage)?;
+    // And a malformed host note: dropped, the agent would be told the
+    // browser is the user's own when the host meant to say otherwise.
+    obu::platform::parse_host_note(std::env::var("OBU_HOST_NOTE").ok().as_deref())
+        .map_err(obu::ObuError::Usage)?;
 
     // Restore the default SIGPIPE for CLI-output commands so an early pipe
     // reader (`obu ... | head -1`) exits quietly instead of panicking —

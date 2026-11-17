@@ -275,9 +275,10 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     browser = new_browser;
                                     page = Some(new_page);
                                     launched = crate::realbrowser::launch_fingerprint();
-                                    if crate::realbrowser::real_lane() && relaunch_note.is_none() {
-                                        relaunch_note = Some(
-                                            "note: real-browser lane — this Chrome is the user's own browser (their profile data; page patches off).".into()
+                                    if relaunch_note.is_none() {
+                                        relaunch_note = super::first_reach_note(
+                                            crate::realbrowser::real_lane(),
+                                            crate::platform::host_note().as_deref(),
                                         );
                                     }
                                     // Set knowledge base on the new page.
