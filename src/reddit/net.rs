@@ -101,7 +101,9 @@ async fn fetch_json_once(cdp: &CdpSession, path: &str) -> Result<Value> {
 const r=await fetch({url_js},{{credentials:'include',signal:c.signal}});clearTimeout(t);const x=await r.text();\
 return {{s:r.status,t:x}};}}catch(e){{return {{s:0,t:String(e)}}}}}})()"
     );
+    // The page's own fetch, as the site's scripts issue it.
     let res = cdp
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(serde_json::json!({
@@ -162,6 +164,7 @@ return fetch(u,{{credentials:'include',signal:c.signal}}).then(r=>r.text().then(
 .catch(e=>({{s:0,t:String(e)}})).finally(()=>clearTimeout(tm));}}));}})()"
     );
     let res = cdp
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(serde_json::json!({

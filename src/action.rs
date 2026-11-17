@@ -33,6 +33,8 @@ mod verdict;
 
 #[cfg(test)]
 mod dom_tests;
+#[cfg(test)]
+mod leaf_handoff_tests;
 
 pub use self::find::{
     find_by_selector, find_by_text, find_label_route, find_miss_diag, focus, inspect, locate_text,

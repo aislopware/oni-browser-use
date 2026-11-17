@@ -120,6 +120,7 @@ const r=await fetch({url_js},{{credentials:'include',headers:hdrs,signal:c.signa
 const x=await r.text();return {{s:r.status,t:x}};}}catch(e){{return {{s:0,t:String(e)}}}}}})()"
     );
     let res = cdp
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(json!({

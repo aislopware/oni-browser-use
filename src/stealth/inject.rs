@@ -185,7 +185,9 @@ struct EnvProbe {
 /// launched browsers use the launch healthcheck), media device count, and
 /// the notifications permission state. One evaluate round-trip.
 async fn probe_environment(cdp: &CdpSession) -> EnvProbe {
+    // The page's world is what the injection has to match.
     let res = cdp
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(json!({

@@ -752,6 +752,11 @@ impl Page {
             }
         });
 
+        // From here on the session is the driver reading the page (capture,
+        // lookups, waits, verdict probes): those run apart from the page's
+        // scripts. The setup above — the UA probe, the stealth injection and
+        // its environment probe — had to see the page's own world.
+        let cdp = cdp.reading_apart();
         let (lpm, ref_target, refs_saved) = super::ref_store::resume(&cdp).await;
         // M4+M6: Check for consent banners and block pages after initial load.
         let consent = dismiss_consent(&cdp).await.unwrap_or(None);

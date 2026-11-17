@@ -156,7 +156,7 @@ impl Page {
     }
 
     pub async fn clear_console_log(&self) -> Result<()> {
-        self.cdp.send("Runtime.evaluate", Some(json!({"expression":"(()=>{const q=window[Symbol.for('q')];if(Array.isArray(q))q.length=0})()"}))).await?;
+        self.cdp.main_world().send("Runtime.evaluate", Some(json!({"expression":"(()=>{const q=window[Symbol.for('q')];if(Array.isArray(q))q.length=0})()"}))).await?;
         Ok(())
     }
 
@@ -176,6 +176,7 @@ impl Page {
     pub async fn console_log(&self) -> Result<serde_json::Value> {
         let res = self
             .cdp
+            .main_world()
             .send(
                 "Runtime.evaluate",
                 Some(serde_json::json!({

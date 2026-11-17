@@ -55,6 +55,7 @@ return JSON.stringify({{count:items.size,exhausted:idle>=6,items:[...items.value
     );
     let res = page
         .cdp_ref()
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(json!({
@@ -109,6 +110,7 @@ return JSON.stringify({{count:items.size,exhausted:idle>=6,items:[...items.value
 pub(super) async fn is_flaky_render(page: &Page) -> bool {
     let res = page
         .cdp_ref()
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(json!({

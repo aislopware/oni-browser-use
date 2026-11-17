@@ -6,7 +6,7 @@
 //! diagnostics (hidden/unaddressable/shadow counts) — see `find_miss_expr`.
 
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::cdp::CdpSession;
 use crate::error::{BladeError, Result};
@@ -39,6 +39,10 @@ pub(super) struct FoundElement {
     /// to, not the addressed element itself.
     #[serde(default)]
     pub(super) leaf: Option<bool>,
+    /// Box mode: that redirect was chosen with no sign that the addressed
+    /// element handles clicks itself.
+    #[serde(default, rename = "leafOpen")]
+    pub(super) leaf_open: Option<bool>,
     /// When the element is NOT topmost at its click point: a description of
     /// the element that actually receives clicks there (or "outside the
     /// viewport"). Turns a silent no-op into "clicks land on X" - the
@@ -58,6 +62,10 @@ pub(super) struct FoundElement {
     /// "check"/"prepare": the effective host is the addressed element.
     #[serde(default, rename = "hostIsTgt")]
     pub(super) host_is_tgt: Option<bool>,
+    /// "check"/"prepare": the host is a custom element whose `value` is not
+    /// readable in the world the script ran in; `text` is its text content.
+    #[serde(default, rename = "hostCE")]
+    pub(super) host_ce: Option<bool>,
     /// "check"/"selhost": selected character count in the host.
     #[serde(default)]
     pub(super) sel: Option<u64>,
@@ -563,6 +571,8 @@ pub(super) fn find_sig_expr(
     let frame_js = serde_json::to_string(frame)?;
     Ok("((sig,mode,text,frame)=>{".to_string()
         + "const d=document;if(!d||!d.body)return null;"
+        // `box!`: box mode for a node known to handle its own clicks.
+        + "var _lself=mode==='box!';if(_lself)mode='box';"
         + &JS_PREAMBLE
         + "let doc=d;let ox=0,oy=0;const _frs=[];"
         + "for(let i=0;i<frame.length;i++){"
@@ -589,6 +599,11 @@ pub(super) fn find_sig_expr(
         // a page that trimmed or collapsed what was typed. Rich editors
         // reflow whitespace in innerText, so theirs stays normalized.
         + "var _read=function(e){if(!e)return '';if('value' in e&&typeof e.value==='string')return e.value;return _tvr(e.innerText||e.textContent||'');};"
+        // A custom element's own `value` accessor is defined by the page's
+        // script: not visible from the driver's world, where `_read` falls
+        // back to the element's text. Flagged, so the caller can read it
+        // where it exists.
+        + "var _cev=function(e){return !!(e&&e.tagName&&e.tagName.indexOf('-')>0&&!_ced(e)&&!('value' in e));};"
         // `:disabled` also covers a control inside a disabled <fieldset>,
         // which the element's own `disabled` property does not.
         + "var _dis=function(e){try{return !!(e&&e.matches(':disabled'));}catch(_e){return !!(e&&e.disabled);}};"
@@ -632,12 +647,16 @@ pub(super) fn find_sig_expr(
         // read as covered and the untrusted js lane fired first
         // (event.isTrusted=false on every below-the-fold click). Instant, so
         // a smooth-scrolling page cannot leave the box mid-flight.
+        // The node itself, for a caller that needs a handle on it.
+        + "if(mode==='node')return n;"
         + "if(mode==='box'){var _sr=n.getBoundingClientRect();var _sw=doc.defaultView||window;var _sx=_sr.x+_sr.width/2,_sy=_sr.y+_sr.height/2;if(_sx<0||_sy<0||_sx>=_sw.innerWidth||_sy>=_sw.innerHeight||_sx+ox<0||_sy+oy<0||_sx+ox>=window.innerWidth||_sy+oy>=window.innerHeight){try{n.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});}catch(_e){n.scrollIntoView({block:'center',inline:'nearest'});}_reoff();}}"
         + "const rect=n.getBoundingClientRect();"
         + "const cx=rect.x+rect.width/2;const cy=rect.y+rect.height/2;"
         + "const top=doc.elementFromPoint(cx,cy);"
         + "const isTopmost=top===n||n.contains(top);"
         + "var tgt=n;if(n.getAttribute&&n.getAttribute('role')==='combobox'&&n.tagName!=='SELECT'){var ii=n.querySelector('textarea,input:not([type=hidden])');if(ii)tgt=ii;}"
+        // The effective editing host, for the same kind of caller.
+        + "if(mode==='host')return _hostOf(tgt)||tgt;"
         + "if(mode==='box'){"
         + "function _lnb(e){return !!(e&&e.tagName&&(e.tagName==='BUTTON'||e.tagName==='A'||e.tagName==='SELECT'||e.tagName==='TEXTAREA'||(e.tagName==='INPUT'&&e.type!=='hidden'))&&(e.tagName!=='A'||!!e.href));}"
         + "function _lbx(e){var _lr=e.getBoundingClientRect();return [_lr.x+ox,_lr.y+oy,_lr.width,_lr.height];}"
@@ -653,10 +672,10 @@ pub(super) fn find_sig_expr(
         + "var _cmpAnc=function(a,x){var t=x;for(var i=0;i<40&&t;i++){if(t===a)return true;t=t.parentElement||(t.getRootNode&&t.getRootNode().host)||null;}return false;};"
         + "var _ltopOk=(_lfc===n)||_cmpAnc(n,_lfc)||_cmpAnc(_lfc,n);"
         + "var _ltop=_ltopOk?null:(_lfc?_desc(_lfc):'outside the viewport');"
-        + "return{ok:true,box:_lClick,tag:n.tagName.toLowerCase(),type:n.type||null,disabled:!!((lp(n)||n).disabled),isTopmost:_ltopOk,hit_tgt:(_lhr+' ['+String(_lht).slice(0,60)+']'),leaf:_lred,top_desc:_ltop};}"
+        + "return{ok:true,box:_lClick,tag:n.tagName.toLowerCase(),type:n.type||null,disabled:!!((lp(n)||n).disabled),isTopmost:_ltopOk,hit_tgt:(_lhr+' ['+String(_lht).slice(0,60)+']'),leaf:_lred,leafOpen:_lopen,top_desc:_ltop};}"
         // The resolved host gets focus when focusing the target left it
         // elsewhere (a wrapper's inner field): keys go where we read back.
-        + "if(mode==='prepare'){tgt.scrollIntoView({block:'center'});_reoff();tgt.focus();var _ph=_hostOf(tgt);if(_ph&&_ph!==tgt&&_ph!==doc.activeElement){try{_ph.focus();}catch(_e){}}const r3=tgt.getBoundingClientRect();return{ok:true,box:[Math.round(r3.x+ox)||0,Math.round(r3.y+oy)||0,Math.round(r3.width)||0,Math.round(r3.height)||0],disabled:_dis(tgt),text:_read(_ph),hostKind:(_ced(_ph)?'ce':((_ph&&_ph.tagName)?_ph.tagName.toLowerCase():'')),hostIsTgt:_ph===tgt,sel:_selLen(_ph),tgtMissing:false,away:_away(_ph,tgt)};}"
+        + "if(mode==='prepare'){tgt.scrollIntoView({block:'center'});_reoff();tgt.focus();var _ph=_hostOf(tgt);if(_ph&&_ph!==tgt&&_ph!==doc.activeElement){try{_ph.focus();}catch(_e){}}const r3=tgt.getBoundingClientRect();return{ok:true,box:[Math.round(r3.x+ox)||0,Math.round(r3.y+oy)||0,Math.round(r3.width)||0,Math.round(r3.height)||0],disabled:_dis(tgt),text:_read(_ph),hostKind:(_ced(_ph)?'ce':((_ph&&_ph.tagName)?_ph.tagName.toLowerCase():'')),hostIsTgt:_ph===tgt,hostCE:_cev(_ph),sel:_selLen(_ph),tgtMissing:false,away:_away(_ph,tgt)};}"
         // focus also reports what prepare does for typing: a disabled
         // target, or the foreign field still holding focus. The clear
         // ladder's trusted Ctrl+A/Backspace go wherever focus is, so it
@@ -673,7 +692,7 @@ pub(super) fn find_sig_expr(
         + "var _kmk=function(t){var o={bubbles:true,cancelable:true,composed:true,view:window,clientX:_kcx,clientY:_kcy,button:0};if(t.indexOf('pointer')===0){o.pointerId=1;o.pointerType='mouse';o.isPrimary=true;o.buttons=(t==='pointerdown')?1:0;try{return new PointerEvent(t,o);}catch(_e2){}}o.buttons=(t==='mousedown')?1:0;return new MouseEvent(t,o);};"
         + "['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(t){try{_ktgt.dispatchEvent(_kmk(t));}catch(_e3){}});"
         + "return{ok:true};}"
-        + "if(mode==='check'){var _kh=_hostOf(tgt);return{ok:true,text:_read(_kh),hostKind:(_ced(_kh)?'ce':((_kh&&_kh.tagName)?_kh.tagName.toLowerCase():'')),hostIsTgt:_kh===tgt,sel:_selLen(_kh),tgtMissing:(tgt&&tgt.isConnected===false)?true:false};}"
+        + "if(mode==='check'){var _kh=_hostOf(tgt);return{ok:true,text:_read(_kh),hostKind:(_ced(_kh)?'ce':((_kh&&_kh.tagName)?_kh.tagName.toLowerCase():'')),hostIsTgt:_kh===tgt,hostCE:_cev(_kh),sel:_selLen(_kh),tgtMissing:(tgt&&tgt.isConnected===false)?true:false};}"
         + "if(mode==='selhost'){var _sh=_hostOf(tgt);if(!_sh)return{ok:false,reason:'no editable host'};try{_sh.focus();if('setSelectionRange' in _sh&&'value' in _sh){_sh.setSelectionRange(0,(_sh.value||'').length);}else{var _s3=doc.getSelection();var _r3=doc.createRange();_r3.selectNodeContents(_sh);_s3.removeAllRanges();_s3.addRange(_r3);}}catch(_e){}return{ok:true,sel:_selLen(_sh)};}"
         + "if(mode==='type'){var _th=_hostOf(tgt)||tgt;if(!_th||_ced(_th)||!('value' in _th))return{ok:false,reason:'js-type only applies to value fields'};_th.focus();var _tx="
         + &text_js
@@ -727,6 +746,101 @@ pub(super) fn find_sig_expr(
 /// the live DOM and either returns its box (mode "box") or performs an in-page
 /// action (mode "focus", "clear", "select").
 pub(super) async fn find_by_sig(
+    cdp: &CdpSession,
+    sig: &str,
+    frame: &[usize],
+    mode: &str,
+    text: Option<&str>,
+) -> Result<FoundElement> {
+    let mut found = find_once(cdp, sig, frame, mode, text).await?;
+    if !cdp.reads_apart() {
+        return Ok(found);
+    }
+    // The script ran in the driver's world. Two things it decides on exist
+    // only in the page's, as JavaScript the page put on the element; each is
+    // read there, on the one node, only when the answer changes the outcome.
+    //
+    // A click handler assigned as a property (`row.onclick = open`): with
+    // nothing else vouching for the row, the click was about to move onto a
+    // control inside it (its Delete button).
+    if found.leaf == Some(true) && found.leaf_open == Some(true) {
+        const HANDLES: &str = "function(){return typeof this.onclick==='function'}";
+        if in_the_pages_world(cdp, sig, frame, "node", HANDLES).await == Some(Value::Bool(true)) {
+            return find_once(cdp, sig, frame, "box!", text).await;
+        }
+    }
+    // A custom element's `value` accessor: its text content is not what it
+    // holds, and a readback against that reported typed text as missing —
+    // and typed it again.
+    if found.host_ce == Some(true) {
+        const VALUE: &str = "function(){return typeof this.value==='string'?this.value:null}";
+        if let Some(Value::String(value)) = in_the_pages_world(cdp, sig, frame, "host", VALUE).await
+        {
+            found.text = Some(value);
+        }
+    }
+    Ok(found)
+}
+
+/// Call `function` on one node in the page's own world: the node's handle
+/// from the driver's world (`node_mode` of the find script) is traded for
+/// the page's through its backend id. `None` when anything goes unanswered —
+/// the caller keeps what the driver's world told it.
+async fn in_the_pages_world(
+    cdp: &CdpSession,
+    sig: &str,
+    frame: &[usize],
+    node_mode: &str,
+    function: &str,
+) -> Option<Value> {
+    const GROUP: &str = "bladebro-node";
+    let answer = async {
+        let expression = find_sig_expr(sig, node_mode, None, frame).ok()?;
+        let node = cdp
+            .send(
+                "Runtime.evaluate",
+                Some(json!({"expression": expression, "objectGroup": GROUP})),
+            )
+            .await
+            .ok()?;
+        let apart = node.pointer("/result/objectId")?.as_str()?;
+        let described = cdp
+            .send("DOM.describeNode", Some(json!({"objectId": apart})))
+            .await
+            .ok()?;
+        let backend = described.pointer("/node/backendNodeId")?.as_u64()?;
+        let resolved = cdp
+            .send(
+                "DOM.resolveNode",
+                Some(json!({"backendNodeId": backend, "objectGroup": GROUP})),
+            )
+            .await
+            .ok()?;
+        let own = resolved.pointer("/object/objectId")?.as_str()?;
+        let read = cdp
+            .send(
+                "Runtime.callFunctionOn",
+                Some(json!({
+                    "objectId": own,
+                    "functionDeclaration": function,
+                    "returnByValue": true,
+                })),
+            )
+            .await
+            .ok()?;
+        read.pointer("/result/value").cloned()
+    }
+    .await;
+    let _ = cdp
+        .send(
+            "Runtime.releaseObjectGroup",
+            Some(json!({"objectGroup": GROUP})),
+        )
+        .await;
+    answer
+}
+
+async fn find_once(
     cdp: &CdpSession,
     sig: &str,
     frame: &[usize],

@@ -413,8 +413,15 @@ static CAPTURE_SCRIPT: LazyLock<String> = LazyLock::new(|| {
         + "const _fp=fnv(nc(n)+','+n.tagName.toLowerCase()+','+_kids+'|'+_cust);"
         + "out.push({tag:n.tagName.toLowerCase(),role:r,name:nm,type:n.type||null,"
         + "value:n.isContentEditable?((n.innerText||n.textContent||'').replace(/\\s+/g,' ').trim().slice(0,200)||null):(n.value&&n.value.length<=200?n.value:null),"
-        + "disabled:!!((lp(n)||n).disabled),"
-        + "checked:(r==='checkbox'||r==='radio')?!!((lp(n)||n).checked):null,"
+        // State is read the way it holds in any JS world. The capture runs
+        // apart from the page's scripts (see `cdp::reader`), where a custom
+        // element's own `disabled`/`checked` accessors do not exist: an
+        // ARIA checkbox that reflects `aria-checked` read as unchecked
+        // (measured), and did so in the page's world too whenever it was a
+        // plain `<div role=checkbox>`. `:disabled` is what the action path
+        // already trusts, and covers a control inside `<fieldset disabled>`.
+        + "disabled:(function(e){try{return e.matches(':disabled')||e.disabled===true;}catch(_e){return e.disabled===true;}})(lp(n)||n),"
+        + "checked:(r==='checkbox'||r==='radio')?(function(e){var c=e.checked;return typeof c==='boolean'?c:e.getAttribute('aria-checked')==='true';})(lp(n)||n):null,"
         // An SVG <a href> matches `a[href]`, but its `.href` is an
         // SVGAnimatedString object, not a string: returned by value it
         // serialized as `{}` and failed the WHOLE capture ("invalid type:
@@ -674,6 +681,78 @@ console.log(JSON.stringify((0, eval)(S)));
             [
                 Some("http://fixture.test/target"),
                 Some("http://fixture.test/plain")
+            ]
+        );
+    }
+
+    /// The capture runs in an isolated world, where a custom element's own
+    /// `checked` / `disabled` accessors do not exist — the element is a bare
+    /// HTMLElement there. An ARIA checkbox reflecting `aria-checked="true"`
+    /// read as unchecked (live: `<x-aria role=checkbox aria-checked=true>`
+    /// showed ☐), and so did every `<div role=checkbox>` in any world. State
+    /// must come from what holds in every world: the property when the
+    /// element natively has one, else the ARIA attribute; `:disabled` for
+    /// disabledness (which also covers `<fieldset disabled>`).
+    #[test]
+    fn capture_reads_toggle_state_without_page_defined_accessors() {
+        let src = serde_json::to_string(&*super::CAPTURE_SCRIPT).expect("serialize capture");
+        let js = format!(
+            r#"const S = {src};
+globalThis.window = globalThis;
+globalThis.innerHeight = 800;
+globalThis.location = {{ href: 'http://fixture.test/page' }};
+globalThis.getComputedStyle = () => ({{ display: 'inline', visibility: 'visible', opacity: '1' }});
+const doc = {{ title: 'fixture', readyState: 'complete' }};
+const el = (tag, text, attrs, props, disabledPseudo) => Object.assign({{
+  nodeType: 1, tagName: tag, ownerDocument: doc, parentElement: null, id: '',
+  baseURI: 'http://fixture.test/page', children: [],
+  childNodes: [{{ nodeType: 3, textContent: text }}],
+  attrs,
+  getAttribute(k) {{ return this.attrs[k] === undefined ? null : this.attrs[k]; }},
+  hasAttribute(k) {{ return this.attrs[k] !== undefined; }},
+  matches(s) {{ return s === ':disabled' && !!disabledPseudo; }},
+  closest() {{ return null; }}, getRootNode() {{ return doc; }},
+  getBoundingClientRect() {{ return {{ x: 10, y: 20, width: 60, height: 20 }}; }},
+}}, props);
+const all = [
+  // As the isolated world sees a custom element: no accessors at all.
+  el('X-ARIA', 'aria on', {{ role: 'checkbox', 'aria-checked': 'true' }}, {{}}, false),
+  el('X-ARIA', 'aria off', {{ role: 'checkbox', 'aria-checked': 'false' }}, {{}}, false),
+  // A native checkbox: the property is the truth, whatever ARIA says.
+  el('INPUT', 'native', {{ 'aria-checked': 'true', 'aria-label': 'native' }}, {{ type: 'checkbox', checked: false, disabled: false }}, false),
+  // Disabled by an ancestor fieldset: `.disabled` is false, `:disabled` matches.
+  el('BUTTON', 'in fieldset', {{}}, {{ type: 'submit', disabled: false }}, true),
+];
+doc.body = {{}};
+doc.documentElement = {{}};
+doc.querySelectorAll = (s) => (s === '*' || s === 'iframe' || s.startsWith('label') ? [] : all);
+doc.getElementById = () => null;
+globalThis.document = doc;
+console.log(JSON.stringify((0, eval)(S)));
+"#
+        );
+        let Some(out) = node_exec("capture-toggle-state", &js) else {
+            return;
+        };
+        assert!(
+            out.status.success(),
+            "capture script threw:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let cap: super::PageCapture = serde_json::from_slice(&out.stdout)
+            .unwrap_or_else(|e| panic!("capture result must parse: {e}"));
+        let state: Vec<_> = cap
+            .elements
+            .iter()
+            .map(|e| (e.name.as_str(), e.checked, e.disabled))
+            .collect();
+        assert_eq!(
+            state,
+            [
+                ("aria on", Some(true), false),
+                ("aria off", Some(false), false),
+                ("native", Some(false), false),
+                ("in fieldset", None, true),
             ]
         );
     }

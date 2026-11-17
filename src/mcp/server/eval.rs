@@ -86,8 +86,10 @@ pub async fn handle_eval(
     };
 
     for (i, expression) in expressions.iter().enumerate() {
+        // The agent's JavaScript runs in the page's world: it is about the page's own globals.
         let res = match page
             .cdp_ref()
+            .main_world()
             .send(
                 "Runtime.evaluate",
                 Some(json!({
@@ -129,7 +131,7 @@ pub async fn handle_eval(
             if exc.pointer("/exception/className").and_then(|v| v.as_str()) == Some("SyntaxError")
                 && i + 1 < expressions.len()
             {
-                if let Ok(parsed) = page.cdp_ref().send_with_timeout(
+                if let Ok(parsed) = page.cdp_ref().main_world().send_with_timeout(
                     "Runtime.evaluate",
                     Some(json!({"expression": format!("void function(){{return ({expression});}}"), "returnByValue": true})),
                     std::time::Duration::from_secs(3),

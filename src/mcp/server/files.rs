@@ -358,8 +358,10 @@ pub async fn handle_download(page: &mut Page, args: &Value) -> Result<String> {
                 }}
             }})()"#,
         );
+        // Fetched as the page would fetch it.
         let res = page
             .cdp_ref()
+            .main_world()
             .send(
                 "Runtime.evaluate",
                 Some(serde_json::json!({

@@ -381,6 +381,72 @@ ok(r && r.leaf === true, 'the redirect is flagged', r);
     );
 }
 
+#[test]
+fn a_node_the_page_gave_a_handler_is_clicked_itself_once_that_is_known() {
+    // The driver's world never sees `summary.onclick = open` (the property
+    // is `null` there), so nothing vouches for the summary and its click
+    // moves onto the Edit button inside it. The redirect says it was made
+    // blind; `box!` is the same lookup once the page's world has answered
+    // that the node handles its own clicks.
+    let body = r#"
+const d = use(page({},
+  h('summary', {id: 'sum', 'aria-label': 'Billing details', rect: [0, 0, 400, 60]},
+    'Billing details',
+    h('button', {id: 'edit', 'aria-label': 'Edit', rect: [330, 18, 60, 24]}, 'x'))));
+let r = __BOX__();
+eq(r && r.box, [330, 18, 60, 24], 'read apart, the click is forwarded to Edit');
+ok(r && r.leaf === true && r.leafOpen === true, 'and flagged as forwarded with nothing vouching for the summary', r);
+ok(__NODE__() === d.getElementById('sum'), 'the node itself can be handed over');
+r = __OWN__();
+eq(r && r.box, [0, 0, 400, 60], 'known to handle its own clicks: clicked where it is');
+ok(r && !r.leaf && !r.leafOpen, 'no redirect', r);
+// A same-named inner control still stands in (the #15 wrapper class).
+const w = use(page({},
+  h('summary', {id: 'wrap', 'aria-label': 'Account menu', rect: [0, 100, 300, 60]},
+    h('button', {id: 'acct', 'aria-label': 'Account menu', rect: [250, 110, 40, 40]}))));
+r = __WRAP__();
+eq(r && r.box, [250, 110, 40, 40], 'its own same-named button is still its control');
+ok(r && r.leaf === true && !r.leafOpen, 'a redirect, but not a blind one', r);
+"#;
+    let s = "|button|Billing details|1";
+    run(
+        "l3_handoff",
+        body,
+        &[
+            ("__BOX__", sig(s, "box", None)),
+            ("__NODE__", sig(s, "node", None)),
+            ("__OWN__", sig(s, "box!", None)),
+            ("__WRAP__", sig("|button|Account menu|1", "box!", None)),
+        ],
+    );
+}
+
+#[test]
+fn a_custom_element_host_without_a_visible_value_is_flagged() {
+    // Read apart, a custom element has no `value` (the page's class defines
+    // it): the readback is its text, and says so. A native field and a
+    // contenteditable are read as they are.
+    let body = r#"
+const d = use(page({},
+  h('x-edit', {id: 'ce', role: 'textbox', tabindex: '0', 'aria-label': 'Custom editor', rect: [0, 0, 300, 30]}, '*****'),
+  h('input', {id: 'in', 'aria-label': 'Plain field', value: 'abc', rect: [0, 40, 300, 30]})));
+let r = __CE__();
+ok(r && r.ok && r.hostCE === true && r.text === '*****', 'the custom element offers its text and flags it', r);
+ok(__HOST__() === d.getElementById('ce'), 'the host node can be handed over');
+r = __IN__();
+ok(r && r.ok && !r.hostCE && r.text === 'abc', 'a native field is read as it is', r);
+"#;
+    run(
+        "ce_value_flag",
+        body,
+        &[
+            ("__CE__", sig("|textbox|Custom editor|1", "check", None)),
+            ("__HOST__", sig("|textbox|Custom editor|1", "host", None)),
+            ("__IN__", sig("|textbox|Plain field|1", "check", None)),
+        ],
+    );
+}
+
 // ---- L5: offscreen targets are scrolled into view before lanes are chosen ----
 #[test]
 fn offscreen_target_is_scrolled_into_view_before_lane_choice() {

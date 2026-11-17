@@ -694,6 +694,7 @@ async fn solve_reddit_humanity(cdp: &CdpSession) -> HumanityOutcome {
             return HumanityOutcome::Solved;
         }
         let state = cdp
+            .main_world()
             .send(
                 "Runtime.evaluate",
                 Some(serde_json::json!({ "expression": check, "returnByValue": true })),
@@ -744,7 +745,9 @@ enum HumanityOutcome {
 /// anchor iframe), or None while the widget is not mounted at a sane size.
 async fn probe_click_point(cdp: &CdpSession) -> Option<(f64, f64)> {
     let probe = r#"(function(){if(typeof window.grecaptcha==='undefined'||typeof window.grecaptcha.getResponse!=='function')return null;var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){var s=fs[i].src||'';if(s.indexOf('/recaptcha/api2/anchor')>=0){var r=fs[i].getBoundingClientRect();if(r.width<60||r.height<30)return null;return JSON.stringify({x:Math.round(r.x+30),y:Math.round(r.y+r.height/2)});}}return null;})()"#;
+    // `grecaptcha` is a page global.
     let res = cdp
+        .main_world()
         .send(
             "Runtime.evaluate",
             Some(serde_json::json!({ "expression": probe, "returnByValue": true })),
