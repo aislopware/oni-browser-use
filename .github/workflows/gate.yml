@@ -9,6 +9,11 @@ name: Gate
 # could not see.
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: "What to gate; the calling run's commit when empty"
+        type: string
+        default: ""
   workflow_dispatch:
 
 env:
@@ -22,6 +27,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100.0"
@@ -61,6 +68,8 @@ jobs:
             zig: aarch64-linux-gnu
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100.0"
@@ -103,6 +112,8 @@ jobs:
         os: [macos-26, windows-latest]
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100.0"

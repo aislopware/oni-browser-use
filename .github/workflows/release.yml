@@ -8,6 +8,10 @@ name: Release
 #
 # The fork ships GitHub release binaries only: the npm job runs just where
 # the repository variable PUBLISH_NPM is "true", and is skipped here.
+#
+# A run started by hand releases an existing tag from that tag's tree, and
+# builds the two macOS binaries on the organisation's own Mac: hosted macOS
+# runners can be out of capacity for longer than a queued job survives.
 on:
   push:
     tags: ["v*"]
@@ -17,6 +21,11 @@ on:
         description: "Tag to release (e.g. v4.6.9)"
         required: true
         type: string
+      macos_runner:
+        description: "Where the macOS binaries are built"
+        type: choice
+        options: [self-hosted, github]
+        default: self-hosted
 
 permissions:
   contents: write
@@ -38,11 +47,15 @@ jobs:
     outputs:
       tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
+      macos: ${{ steps.v.outputs.macos }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
       - id: v
         env:
           TAG_INPUT: ${{ github.event.inputs.tag }}
+          MACOS_RUNNER: ${{ github.event.inputs.macos_runner }}
         run: |
           set -euo pipefail
           tag="${TAG_INPUT:-${GITHUB_REF_NAME}}"
@@ -51,10 +64,15 @@ jobs:
           python3 scripts/check-release-tree.py "$v"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          # The self-hosted Mac accepts this workflow on main, started by hand, and nothing else.
+          if [[ "$MACOS_RUNNER" == "self-hosted" ]]; then macos="onicode-ios"; else macos="macos-26"; fi
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
 
   gate:
     needs: plan
     uses: ./.github/workflows/gate.yml
+    with:
+      ref: ${{ needs.plan.outputs.tag }}
 
   build:
     needs: plan
@@ -85,18 +103,20 @@ jobs:
             legacy: windows-x86_64
             bin: target/x86_64-pc-windows-gnu/release/obu.exe
             zig: true
-          - os: macos-26
+          - os: ${{ needs.plan.outputs.macos }}
             target: aarch64-apple-darwin
             asset: darwin-arm64
             legacy: macos-aarch64
             bin: target/aarch64-apple-darwin/release/obu
-          - os: macos-26
+          - os: ${{ needs.plan.outputs.macos }}
             target: x86_64-apple-darwin
             asset: darwin-x64
             legacy: macos-x86_64
             bin: target/x86_64-apple-darwin/release/obu
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.100.0"
@@ -145,6 +165,8 @@ jobs:
       tag: ${{ needs.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
       - uses: actions/download-artifact@v7
         with:
           path: dist
