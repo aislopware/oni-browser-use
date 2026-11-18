@@ -18,6 +18,7 @@ pub mod refs;
 
 pub mod agent_tab;
 pub mod attach;
+mod console;
 pub mod heal;
 pub mod logs;
 pub mod navigate;

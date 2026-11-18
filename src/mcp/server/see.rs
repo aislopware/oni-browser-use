@@ -213,7 +213,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
         return Ok(out);
     }
 
-    // V8: logs — console (injection hook) or network (tracker ring).
+    // V8: logs — console (Chrome's own record) or network (tracker ring).
     if !logs.is_empty() {
         let out = handle_logs(page, logs).await?;
         if args.get("clear").and_then(Value::as_bool).unwrap_or(false) {

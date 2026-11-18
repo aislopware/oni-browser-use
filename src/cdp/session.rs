@@ -222,6 +222,20 @@ impl SessionSubscription {
     }
 }
 
+impl SessionSubscription {
+    /// The next event of this session already on the bus, without waiting.
+    pub fn try_recv(&mut self) -> std::result::Result<CdpEvent, broadcast::error::TryRecvError> {
+        loop {
+            let ev = self.rx.try_recv()?;
+            match (&self.session_id, &ev.session_id) {
+                (None, _) => return Ok(ev),
+                (Some(mine), Some(theirs)) if mine == theirs => return Ok(ev),
+                _ => continue,
+            }
+        }
+    }
+}
+
 impl std::fmt::Debug for CdpSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CdpSession")

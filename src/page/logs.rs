@@ -1,5 +1,5 @@
-//! Page logs: dialogs (auto-dismissed), ambient notes, console, network and
-//! the XHR ring the site adapters read their own traffic from.
+//! Page logs: dialogs (auto-dismissed), ambient notes, network and the XHR
+//! ring the site adapters read their own traffic from.
 
 use super::*;
 
@@ -155,11 +155,6 @@ impl Page {
         }
     }
 
-    pub async fn clear_console_log(&self) -> Result<()> {
-        self.cdp.main_world().send("Runtime.evaluate", Some(json!({"expression":"(()=>{const q=window[Symbol.for('q')];if(Array.isArray(q))q.length=0})()"}))).await?;
-        Ok(())
-    }
-
     /// Recent XHR/fetch requests (ring of 128, one entry per endpoint,
     /// start-observed, full URLs).
     pub fn xhr_log(&self) -> Vec<XhrEntry> {
@@ -167,29 +162,6 @@ impl Page {
             .lock()
             .map(|l| l.iter().cloned().collect())
             .unwrap_or_default()
-    }
-
-    /// V8: read the console log captured by the injection hook.
-    /// Returns raw JSON (array of {l, m, t}). The ring buffer lives under
-    /// the same Symbol.for('q') slot the injection script defines — a
-    /// string-keyed window property was a page-readable detection marker.
-    pub async fn console_log(&self) -> Result<serde_json::Value> {
-        let res = self
-            .cdp
-            .main_world()
-            .send(
-                "Runtime.evaluate",
-                Some(serde_json::json!({
-                    "expression": "window[Symbol.for('q')]||[]",
-                    "returnByValue": true,
-                })),
-            )
-            .await?;
-        Ok(res
-            .get("result")
-            .and_then(|r| r.get("value"))
-            .cloned()
-            .unwrap_or(serde_json::json!([])))
     }
 }
 

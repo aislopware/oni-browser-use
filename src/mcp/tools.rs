@@ -171,7 +171,7 @@ pub fn all_tools() -> Vec<ToolDef> {
                     "sort": {"type":"string","enum":["confidence","top","new","controversial","old","qa"],"description":"Reddit post auto-extract sort; overrides page sort."},
                     "template": {"type": "object", "description": "For extract=json: {\"items\":{\"container\":\"css\",\"fields\":{\"name\":\"css or css@attr\"}}}. @attr reads the container attribute. Text reads are RENDERED - a hidden element is omitted (the item lists it in _omitted); read one explicitly with {\"sel\":\"css\",\"raw\":true}. Lookups span light DOM, open shadow roots and same-origin frames; skipped frames are reported."},
                     "limit": {"type": "integer", "description": "Max items for extract. Default 50 (Reddit post comments: all available, capped at 1000, unless set). Artifact: chars (default 20000), or rows with items=true (default 50)."},
-                    "logs": {"type":"string","enum":["console","network"],"description":"Console: current document. Network: current navigation."},
+                    "logs": {"type":"string","enum":["console","network"],"description":"Console: current document - logs, uncaught errors with stack, failed loads. Network: current navigation."},
                     "clear": {"type":"boolean","description":"Read then clear selected log."},
                     "preview": {"type":"boolean","description":"extract=auto: sampled container and fields, without rows."},
                     "changes": {"type":"boolean","description":"Model delta since last capture; format=json for structured output."},

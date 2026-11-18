@@ -272,6 +272,27 @@ def main():
               all((a[1], a[2]) != (b[1], b[2]) for a, b in zip(moves, moves[1:])),
               repr(moves[:4]))
 
+        # The console is read from Chrome's own record, on demand: the page
+        # keeps its native console, and nothing a page can measure stays on
+        # after the read (Runtime.enable makes DevTools format a logged error,
+        # which calls Error.prepareStackTrace).
+        ev("console.log('qol-console',{depth:{n:1},list:[1,2]});"
+           "setTimeout(()=>{throw new Error('qol-uncaught')},0);''")
+        out = cli("see", "--logs", "console")
+        check("console shows what a logged object holds",
+              'qol-console {"depth":' in out and '"list":' in out, first_line(out))
+        check("console shows an uncaught error with its place",
+              re.search(r"exception: Uncaught Error: qol-uncaught \| at .*editor\.html:\d+:\d+", out) is not None,
+              out[:300])
+        leak = ev("(()=>{let p=0;const o=Error.prepareStackTrace;"
+                  "Error.prepareStackTrace=()=>{p++;return ''};console.debug(new Error('x'));"
+                  "Error.prepareStackTrace=o;return p+'|'+console.log.toString()})()")
+        check("the page's console is native and unwatched after a read",
+              leak == "0|function log() { [native code] }", repr(leak))
+        cli("see", "--logs", "console", "--clear")
+        out = cli("see", "--logs", "console")
+        check("a cleared console starts over", "qol-console" not in out, first_line(out))
+
         # S9: fill as a BATCH step (the schema used to reject it outright).
         out = cli("act", "batch", '[{"action":"fill","fields":[{"label":"Plain text input","text":"batch-fill"}]}]')
         check("batch accepts a fill step", "step1[fill]:" in out and "HALT" not in out, first_line(out))
