@@ -327,6 +327,7 @@ pub async fn capture_vision(
         Layout {
             zoom,
             content: None,
+            drawn: None,
         }
     };
     // A clip is sized in device-independent pixels. The page's ratio counts
@@ -339,9 +340,8 @@ pub async fn capture_vision(
     let scale = size.map_or(1.0, |size| clip_scale(size.scale, per_dip));
     if full {
         match measured.content {
-            Some((css_width, css_height)) => {
-                let width = dips(css_width, measured.zoom);
-                let height = dips(css_height, measured.zoom);
+            Some(css) => {
+                let (width, height) = content_dips(css, measured.drawn, ratio, measured.zoom);
                 // Output pixels per clip pixel as the browser will draw them,
                 // or the scale asked for when the ratio is unreadable.
                 let per_clip = if per_dip > 0.0 {
@@ -551,11 +551,14 @@ fn size_mismatch(size: ShotSize, data: &str) -> String {
     )
 }
 
-/// The page's zoom and its whole size in CSS pixels.
+/// The page's zoom and its whole size.
 struct Layout {
     /// Device-independent pixels per CSS pixel: 1.25 at 125%.
     zoom: f64,
+    /// In CSS pixels, which the browser rounds down.
     content: Option<(f64, f64)>,
+    /// In the pixels the page is drawn at.
+    drawn: Option<(f64, f64)>,
 }
 
 async fn layout(page: &Page) -> Layout {
@@ -568,12 +571,32 @@ async fn layout(page: &Page) -> Layout {
         .as_f64()
         .filter(|zoom| zoom.is_finite() && *zoom > 0.0)
         .unwrap_or(1.0);
-    let side = |name: &str| metrics["cssContentSize"][name].as_f64();
-    let content = match (side("width"), side("height")) {
+    let size = |of: &str| match (
+        metrics[of]["width"].as_f64(),
+        metrics[of]["height"].as_f64(),
+    ) {
         (Some(width), Some(height)) if width >= 1.0 && height >= 1.0 => Some((width, height)),
         _ => None,
     };
-    Layout { zoom, content }
+    Layout {
+        zoom,
+        content: size("cssContentSize"),
+        drawn: size("contentSize"),
+    }
+}
+
+/// The page's whole size in the device-independent pixels a clip is sized in.
+/// Its CSS size comes rounded down, which at a `ratio` other than 1 leaves
+/// the last part pixel out. The size it is `drawn` at has it, and is used
+/// where the ratio accounts for it: under an emulated ratio it does not.
+fn content_dips(css: (f64, f64), drawn: Option<(f64, f64)>, ratio: f64, zoom: f64) -> (f64, f64) {
+    let whole = |drawn: f64| (drawn / ratio + 1e-6).floor();
+    match drawn {
+        Some((width, height)) if ratio > 0.0 && whole(width) == css.0 && whole(height) == css.1 => {
+            (width / ratio * zoom, height / ratio * zoom)
+        }
+        _ => (dips(css.0, zoom), dips(css.1, zoom)),
+    }
 }
 
 /// CSS pixels as the device-independent pixels a clip is sized in, rounded
@@ -792,6 +815,27 @@ mod tests {
         assert!(!reached("", size, 1.0));
         // Under an override the page's ratio is the scale times its zoom.
         assert_eq!(clip_scale(2.0, 2.5 / 1.25), 1.0);
+    }
+
+    /// Measured on Chromium 157: a 1000.5px page at a ratio of 2 reports
+    /// 1000 CSS pixels and 2001 drawn, and a clip of 1000.5 captures 2001.
+    #[test]
+    fn a_full_page_keeps_the_part_pixel_its_css_size_rounds_away() {
+        let css = (800.0, 1000.0);
+        assert_eq!(
+            content_dips(css, Some((1600.0, 2001.0)), 2.0, 1.0),
+            (800.0, 1000.5)
+        );
+        // At 125% zoom the clip is in the zoomed pixels.
+        let (width, height) = content_dips(css, Some((1000.0, 1251.0)), 1.25, 1.25);
+        assert!((width - 1000.0).abs() < 1e-6 && (height - 1251.0).abs() < 1e-6);
+        // An emulated ratio does not scale the drawn size, so the CSS size stands.
+        assert_eq!(
+            content_dips(css, Some((800.0, 1000.0)), 2.0, 1.0),
+            (800.0, 1000.0)
+        );
+        assert_eq!(content_dips(css, None, 2.0, 1.25), (1000.0, 1250.0));
+        assert_eq!(content_dips(css, Some((1600.0, 2001.0)), 0.0, 1.0), css);
     }
 
     /// A named file gets the PNG, its folder is made, and the result
