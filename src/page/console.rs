@@ -199,6 +199,44 @@ fn object_text(arg: &Value, props: &Value) -> String {
     }
 }
 
+/// A logged object from the preview Chrome attaches to a live console event,
+/// for when its handle is gone (a host that shares the page's debugger
+/// releases console objects as they arrive). Chrome previews a few properties
+/// and says when it left some out.
+fn preview_text(preview: &Value) -> String {
+    let array = preview.get("subtype").and_then(Value::as_str) == Some("array");
+    let mut parts = Vec::new();
+    for p in preview
+        .get("properties")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(MAX_PROPERTIES)
+    {
+        let value = p.get("value").and_then(Value::as_str).unwrap_or_default();
+        let text = match p.get("type").and_then(Value::as_str).unwrap_or_default() {
+            "undefined" | "function" | "symbol" => continue,
+            "string" => Value::String(value.to_string()).to_string(),
+            "accessor" => "\"(...)\"".to_string(),
+            _ => value.to_string(),
+        };
+        let name = p.get("name").and_then(Value::as_str).unwrap_or_default();
+        parts.push(if array {
+            text
+        } else {
+            format!("{}:{text}", Value::String(name.to_string()))
+        });
+    }
+    if preview.get("overflow").and_then(Value::as_bool) == Some(true) {
+        parts.push("…".into());
+    }
+    if array {
+        format!("[{}]", parts.join(","))
+    } else {
+        format!("{{{}}}", parts.join(","))
+    }
+}
+
 fn argument_text(arg: &Value, objects: &HashMap<String, Value>) -> String {
     if arg.get("type").and_then(Value::as_str) == Some("string") {
         return arg
@@ -220,6 +258,9 @@ fn argument_text(arg: &Value, objects: &HashMap<String, Value>) -> String {
             .and_then(|id| objects.get(id));
         if let Some(props) = props {
             return object_text(arg, props);
+        }
+        if let Some(preview) = arg.get("preview") {
+            return preview_text(preview);
         }
     }
     let description = arg
@@ -440,6 +481,32 @@ mod tests {
                 "error: Failed to load resource: the server responded with a status of 404 (File not found) http://h/missing.json",
                 "exception: Uncaught ReferenceError: f is not defined | at http://h/:9:20 | at a (http://h/a.js:1:1) | at b (http://h/a.js:2:1)",
             ]
+        );
+    }
+
+    // The argument shapes are what Chrome 158 sent with a live console event.
+    #[test]
+    fn an_object_whose_handle_is_gone_is_read_from_its_preview() {
+        let events = [event(
+            "Runtime.consoleAPICalled",
+            json!({"type": "log", "timestamp": 1.0, "args": [
+                {"type": "object", "description": "Object", "objectId": "1.1",
+                 "preview": {"type": "object", "description": "Object", "overflow": true, "properties": [
+                    {"name": "a", "type": "number", "value": "1"},
+                    {"name": "s", "type": "string", "value": "x"},
+                    {"name": "n", "type": "object", "value": "null", "subtype": "null"},
+                    {"name": "o", "type": "object", "value": "Object"},
+                    {"name": "f", "type": "function", "value": ""}]}},
+                {"type": "object", "subtype": "array", "description": "Array(3)", "objectId": "1.2",
+                 "preview": {"type": "object", "subtype": "array", "description": "Array(3)", "overflow": false, "properties": [
+                    {"name": "0", "type": "number", "value": "1"},
+                    {"name": "1", "type": "string", "value": "two"},
+                    {"name": "2", "type": "object", "value": "Object"}]}},
+            ]}),
+        )];
+        assert_eq!(
+            messages(&events, &HashMap::new()),
+            [r#"log: {"a":1,"s":"x","n":null,"o":Object,…} [1,"two",Object]"#]
         );
     }
 

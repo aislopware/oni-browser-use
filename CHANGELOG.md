@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `see logs=console` shows what a logged object holds when its handle is already gone, from the preview Chrome sends with a live console event. A host that shares one debugger between sessions, such as Onicode's browser panel, releases console objects as they arrive, and such an object read as `Object`.
+
 ## [4.8.0] - 2026-11-18
 
 ### Changed
