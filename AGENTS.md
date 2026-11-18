@@ -116,16 +116,21 @@ This fork is [dondai44423/bladebro](https://github.com/dondai44423/bladebro) und
 The rename is done by `scripts/fork-rename.py` and by nothing else: `bladebro` → `obu`, `BLADE_*` → `OBU_*`, the data dir `blade` → `obu`, the npm packages, the repository URL. <!-- fork-rename:keep -->
 Never rename by hand, and never bring the upstream name back in new code — CI runs `python3 scripts/fork-rename.py --check`.
 
-To take upstream changes, rename upstream's tree with the same script first, then merge. Both sides then changed every renamed line identically, so only real changes can conflict:
+To take upstream changes, rename upstream's tree with the same script, then merge. Build the renamed commit on the previous one, with upstream as a second parent: the merge base is then the last renamed upstream, so only real changes conflict, and `git log main..upstream/main` still lists what is new. Branching it from `upstream/main` instead puts the unrenamed tree in the base, and every fork edit next to a renamed line conflicts.
 
 ```bash
 git fetch upstream
 git show main:scripts/fork-rename.py > /tmp/fork-rename.py
-git checkout -B upstream-renamed upstream/main
-python3 /tmp/fork-rename.py && cargo fmt
-git add -A && git commit -m "chore: upstream, renamed by scripts/fork-rename.py"
-git checkout main && git merge upstream-renamed
+prev=$(git log main -1 --format=%H --grep='^chore: upstream, renamed')
+git switch -C upstream-renamed "$prev"
+git rm -rqf . && git checkout upstream/main -- .
+python3 /tmp/fork-rename.py && cargo fmt && git add -A
+git reset --soft "$(git commit-tree "$(git write-tree)" -p "$prev" -p upstream/main \
+  -m 'chore: upstream, renamed by scripts/fork-rename.py')"
+git switch main && git merge upstream-renamed
 ```
+
+When the script stops with "fixup no longer applies", upstream moved that text: fix the entry in `FIXUPS` on main first.
 
 A fix that only exists because the name got shorter (a test that sized its input by the name) goes into the script's `FIXUPS` table, not into the tree — otherwise the next merge conflicts on it.
 
