@@ -1,6 +1,6 @@
 {
   "name": "obu-linux-x64",
-  "version": "4.8.0",
+  "version": "4.8.1",
   "description": "Obu binary for Linux x86_64",
   "license": "Apache-2.0",
   "os": [

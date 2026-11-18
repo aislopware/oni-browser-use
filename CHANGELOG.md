@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.1] - 2026-11-18
+
 ### Fixed
 - `see logs=console` shows what a logged object holds when its handle is already gone, from the preview Chrome sends with a live console event. A host that shares one debugger between sessions, such as Onicode's browser panel, releases console objects as they arrive, and such an object read as `Object`.
 
@@ -2226,7 +2228,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.8.0...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.8.1...HEAD
+[4.8.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.1
 [4.8.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.0
 [4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0
 [4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9
