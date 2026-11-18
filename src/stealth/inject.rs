@@ -4,7 +4,8 @@
 //! `document_start` phase, before any page JavaScript executes.
 //!
 //! 6-layer stealth architecture:
-//! 1. Protocol: No Runtime.enable (defuses DataDome console trap) — in CdpSession.
+//! 1. Protocol: no standing Runtime.enable (defuses DataDome console trap) — in
+//!    CdpSession. It is on only while the console is read (`page/console.rs`).
 //! 2. Launch: navigator.webdriver is false by Chrome's own default without
 //!    --enable-automation; the old blink-flag workaround was removed in
 //!    v3.9.12 (it triggered the unsupported-flag infobar — a visible tell).
@@ -471,9 +472,14 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
     // page-side gate passes real devices through untouched, so installing it
     // when the count is unreadable is behavior-neutral on machines that have
     // devices.
+    // Except that the patch itself is readable: the masked enumerateDevices
+    // stringifies without its name. A Mac always has an audio device (its
+    // own speaker), so an unreadable count there means "has devices" and the
+    // patch stays out.
     let patch_media = match std::env::var("OBU_MEDIA").as_deref() {
         Ok("patch") => true,
         Ok("real") => false,
+        _ if cfg!(target_os = "macos") => env.media_devices == 0,
         _ => env.media_devices <= 0,
     };
     if patch_media {
