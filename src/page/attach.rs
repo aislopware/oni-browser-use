@@ -40,23 +40,20 @@ impl Page {
         #[allow(unused_assignments)]
         let mut worker_task: Option<tokio::task::JoinHandle<()>> = None;
         cdp.enable("Page").await?;
-        // An attached browser is never raised, so the agent's window sits
-        // behind whatever the user is looking at and Chrome marks its page
-        // hidden: no frames (a `mouseMoved` is never acked), timers at 1 Hz,
-        // and `visibilityState === "hidden"` under trusted clicks — a state
-        // no person produces (measured, Brave 157 without the
-        // anti-backgrounding launch flags: hidden from the moment the window
-        // is created). Focus emulation gives this one page the state of a tab
+        // The agent's page is rarely the one being looked at: an attached
+        // browser is never raised, and obu's own Chrome sits behind whatever
+        // the person works in. Chrome then reports `hasFocus() === false`,
+        // and a covered or background page goes hidden: no frames (a
+        // `mouseMoved` is never acked), timers at 1 Hz, trusted clicks on a
+        // hidden page — a state no person produces (measured, Brave 157 and
+        // Chrome 158). Focus emulation gives this one page the state of a tab
         // that is being looked at — visible, focused, rendering — without
         // touching the window, the OS focus or any other tab.
-        let shown = if crate::browser::attached_browser() {
-            let on = serde_json::json!({"enabled": true});
-            cdp.send("Emulation.setFocusEmulationEnabled", Some(on))
-                .await
-                .is_ok()
-        } else {
-            false
-        };
+        let on = serde_json::json!({"enabled": true});
+        let shown = cdp
+            .send("Emulation.setFocusEmulationEnabled", Some(on))
+            .await
+            .is_ok();
         // DO NOT enable Runtime — DataDome's detection leverages the fact that
         // `Runtime.enable` changes console buffering behavior, making
         // `console.log(new Error())` trigger serialization (and thus getter

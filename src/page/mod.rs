@@ -256,7 +256,7 @@ pub struct Page {
     ref_target: Option<String>,
     /// Digest of the ref table last written or read for `ref_target`.
     refs_saved: u64,
-    /// Focus emulation is on for this page (attached browsers): it renders
+    /// Focus emulation is on for this page: it renders
     /// and takes input as a tab that is being looked at, whatever its window
     /// is doing.
     shown: bool,
@@ -557,9 +557,8 @@ impl Page {
             None
         };
         // Chrome can foreground a popup while our model still belongs to the
-        // opener. Activate before input; never replay an input after timeout.
-        // Only when the target is not already its window's active tab: on
-        // macOS Page.bringToFront raises the window over every other app (#89).
+        // opener. Activate before input when the page needs it (see
+        // `activate_if_needed`); never replay an input after timeout.
         if action.injects_input() {
             self.activate_if_needed().await?;
             self.refuse_minimized_window().await?;

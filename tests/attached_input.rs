@@ -170,15 +170,16 @@ async fn blank_page() -> (CdpSession, Arc<Mutex<Vec<(String, Value)>>>) {
     (CdpSession::root(client), log)
 }
 
-/// The agent's window in the user's browser is never raised, so it is covered
-/// by what the user is looking at and its page is `hidden`: no frames, timers
-/// at 1 Hz, trusted clicks in a hidden document (measured on a Brave started
-/// without the anti-backgrounding flags — every earlier check here ran on one
-/// that had them, and saw "visible"). The page must be given focus emulation
-/// before anything is read from it or sent to it — and only there: a browser
-/// obu owns is raised instead.
+/// The agent's page is rarely the one being looked at. In the user's browser
+/// its window is never raised, so it is covered and its page is `hidden`: no
+/// frames, timers at 1 Hz, trusted clicks in a hidden document (measured on a
+/// Brave started without the anti-backgrounding flags — every earlier check
+/// here ran on one that had them, and saw "visible"). In obu's own Chrome the
+/// window is behind whatever the person works in, and the page takes clicks
+/// with `hasFocus() === false` (measured, Chrome 158). Either page must be
+/// given focus emulation before anything is read from it or sent to it.
 #[tokio::test]
-async fn an_attached_page_is_shown_to_itself_before_anything_else_happens() {
+async fn a_page_is_shown_to_itself_before_anything_else_happens() {
     let _turn = FLAG.lock().await;
     let emulation = |log: &Arc<Mutex<Vec<(String, Value)>>>| {
         let log = log.lock().unwrap();
@@ -191,26 +192,20 @@ async fn an_attached_page_is_shown_to_itself_before_anything_else_happens() {
         (at.map(|i| log[i].1.clone()), at, first_script)
     };
 
-    obu::browser::set_attached_browser(true);
-    let (cdp, log) = blank_page().await;
-    let _page = obu::page::Page::attach(cdp, "127.0.0.1:1", None).await;
-    let (params, at, first_script) = emulation(&log);
-    assert_eq!(
-        params,
-        Some(json!({"enabled": true})),
-        "an attached page must get focus emulation"
-    );
-    assert!(
-        at < first_script,
-        "before the first script or input: {at:?} vs {first_script:?}"
-    );
-
+    for attached in [true, false] {
+        obu::browser::set_attached_browser(attached);
+        let (cdp, log) = blank_page().await;
+        let _page = obu::page::Page::attach(cdp, "127.0.0.1:1", None).await;
+        let (params, at, first_script) = emulation(&log);
+        assert_eq!(
+            params,
+            Some(json!({"enabled": true})),
+            "a page must get focus emulation (attached: {attached})"
+        );
+        assert!(
+            at < first_script,
+            "before the first script or input: {at:?} vs {first_script:?}"
+        );
+    }
     obu::browser::set_attached_browser(false);
-    let (cdp, log) = blank_page().await;
-    let _page = obu::page::Page::attach(cdp, "127.0.0.1:1", None).await;
-    assert_eq!(
-        emulation(&log).1,
-        None,
-        "an owned browser is raised, not emulated"
-    );
 }

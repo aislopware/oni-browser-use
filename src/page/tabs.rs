@@ -41,16 +41,19 @@ impl Page {
         )
     }
 
-    /// Activate only when this target is not already its window's active tab.
-    /// `Page.bringToFront` activates the browser window at the OS level on
-    /// macOS — every click and navigation used to raise it above whatever the
-    /// person was working in (issue #89). It is only needed when input would
-    /// otherwise go to a background tab (a popup took the foreground, #49).
+    /// Activate only when input could miss this target. `Page.bringToFront`
+    /// activates the browser window at the OS level on macOS — every click
+    /// and navigation used to raise it above whatever the person was working
+    /// in (issue #89). A page with focus emulation takes input in a
+    /// background tab (measured, Chrome 158), and reads "visible" whatever
+    /// its tab is doing, so it is left alone; a popup an action opens still
+    /// hands the foreground back to its opener (`Page::act`). Without
+    /// emulation a background tab loses input (#49) and is activated.
     /// `OBU_NO_ACTIVATE=1` never raises the window, accepting that trade.
-    /// An attached browser is never raised at all (see [`Page::activate`]),
-    /// so the visibility probe is skipped there too.
+    /// An attached browser is never raised at all (see [`Page::activate`]).
     pub async fn activate_if_needed(&self) -> Result<()> {
-        if crate::browser::attached_browser()
+        if self.shown
+            || crate::browser::attached_browser()
             || std::env::var("OBU_NO_ACTIVATE")
                 .map(|v| v == "1")
                 .unwrap_or(false)
