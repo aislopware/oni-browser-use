@@ -47,8 +47,9 @@ pub(crate) fn parse_run_args(args: &[String]) -> Result<Value> {
         )
     })?;
     let raw = resolve_payload(&raw)?;
-    let steps: Value = serde_json::from_str(&raw)
+    let mut steps: Value = serde_json::from_str(&raw)
         .map_err(|e| ObuError::Usage(format!("invalid steps JSON: {e}")))?;
+    super::vision::steps_from_here(&mut steps);
     let arr = steps
         .as_array()
         .ok_or_else(|| ObuError::Usage("steps must be a JSON array".into()))?;

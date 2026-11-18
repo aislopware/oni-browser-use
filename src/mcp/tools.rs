@@ -60,7 +60,7 @@ fn batch_step_actions() -> Vec<&'static str> {
 fn run_step_actions() -> Vec<&'static str> {
     batch_step_actions()
         .into_iter()
-        .chain(["batch", "if", "while", "js"])
+        .chain(["batch", "if", "while", "js", "vision"])
         .collect()
 }
 
@@ -241,11 +241,15 @@ pub fn all_tools() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "vision",
-            description: "PNG screenshot for canvas/image UIs, visual checks, or when refs/content cannot answer. marks=true overlays ref badges for visible main-frame elements; frames may be unmarked. Large PNGs offload to a local artifact; otherwise inline. Prefer act/see for structural interactions.",
+            description: "PNG screenshot for canvas/image UIs, visual checks, or when refs/content cannot answer. marks=true overlays ref badges for visible main-frame elements; frames may be unmarked. Inline unless path= names a file; large PNGs offload to a local artifact. Also a run step. Prefer act/see for structural interactions.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "marks": {"type": "boolean", "description": "Overlay numbered ref badges on visible elements."}
+                    "marks": {"type": "boolean", "description": "Overlay numbered ref badges on visible elements."},
+                    "url": {"type": "string", "description": "Navigate first."},
+                    "path": {"type": "string", "description": "Write the .png here; no inline image."},
+                    "full": {"type": "boolean", "description": "Whole page."},
+                    "size": {"type": "string", "description": "Viewport for this capture, WxH[@scale]: 1440x900@2."}
                 }
             }),
         },
@@ -300,9 +304,15 @@ mod tests {
         for action in ACT_ACTIONS {
             assert!(run.iter().any(|a| a == action));
         }
-        // The 4.6.6 tool list was 15,463 serialized UTF-8 characters. Keep
-        // missing-input fixes within that budget instead of duplicating schemas.
-        assert!(serde_json::to_string(&tools).unwrap().chars().count() <= 15463);
+        // The 4.6.6 tool list was 15,463 serialized UTF-8 characters; vision's
+        // capture fields (4.9.0) took it to 15,673. Keep missing-input fixes
+        // within that budget instead of duplicating schemas.
+        assert!(serde_json::to_string(&tools).unwrap().chars().count() <= 15673);
+        let vision = &tools[4]["inputSchema"]["properties"];
+        for key in ["marks", "url", "path", "full", "size"] {
+            assert!(vision.get(key).is_some(), "missing {key}");
+        }
+        assert!(run.iter().any(|a| a == "vision"));
     }
 
     fn enum_of(schema: &Value, path: &[&str]) -> Vec<String> {

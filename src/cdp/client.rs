@@ -56,7 +56,11 @@ const MAX_EVENT_BYTES: usize = 16 * 1024;
 /// bigger reply or event (a large eval result, a full-page screenshot) into
 /// a read error that closed the connection and forced a browser relaunch,
 /// while the pipe lane accepted it.
-const MAX_CDP_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
+///
+/// Sized for the largest capture `vision` takes: a 40-megapixel PNG with an
+/// alpha channel is at most 160 MB, which is 214 MB in the base64 a reply
+/// carries it in.
+const MAX_CDP_MESSAGE_BYTES: usize = 224 * 1024 * 1024;
 
 /// The result delivered to a pending command caller.
 type CdpOutcome = std::result::Result<Value, ObuError>;
@@ -777,7 +781,7 @@ mod reliability_tests {
         // Regression: tungstenite's default 16 MiB frame cap. Chrome sends
         // each DevTools message as ONE frame, so a bigger reply (a large
         // eval result, a full-page screenshot) was a read error that closed
-        // the connection. The pipe lane always allowed 64 MiB.
+        // the connection. The pipe lane always allowed more.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {

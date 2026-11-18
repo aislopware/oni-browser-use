@@ -451,6 +451,33 @@ async fn execute_step(
                 }
             }
         }
+        "vision" => {
+            // A step's result is text, so its image goes to a file: the one
+            // the step names, or an artifact.
+            match super::vision::capture_vision(step, page).await {
+                Ok(shot) if shot.is_error => {
+                    return Err(ObuError::Other(format!(
+                        "step {path} vision failed: {}",
+                        shot.text
+                    )));
+                }
+                Ok(shot) => {
+                    let saved = match shot.image {
+                        Some(data) => {
+                            let bytes = crate::cli::base64_decode(&data).unwrap_or_default();
+                            let file = crate::artifacts::write_artifact_bytes(&bytes, "png")?;
+                            format!("{} saved to {file}", shot.text)
+                        }
+                        None => shot.text,
+                    };
+                    observations.push(format!("step {path}: {saved}"));
+                }
+                Err(ObuError::Closed) => return Err(ObuError::Closed),
+                Err(e) => {
+                    return Err(ObuError::Other(format!("step {path} vision failed: {e}")));
+                }
+            }
+        }
         "see" | "extract" => {
             // v3.10: read steps — `run` can navigate, interact, and extract in
             // ONE call; with while-loops this turns multi-page scraping into a

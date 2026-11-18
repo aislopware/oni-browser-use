@@ -719,11 +719,48 @@ mod tests {
     }
 
     #[test]
-    fn vision_only_takes_marks() {
+    fn vision_takes_a_url_and_capture_flags() {
         assert_eq!(parse_vision_args(&a(&["--marks"])).unwrap()["marks"], true);
         assert_eq!(parse_vision_args(&a(&[])).unwrap()["marks"], false);
         assert!(parse_vision_args(&a(&["--bogus"])).is_err());
-        assert!(parse_vision_args(&a(&["wat"])).is_err());
+        assert!(parse_vision_args(&a(&["a.html", "b.html"])).is_err());
+        assert!(parse_vision_args(&a(&["--size"])).is_err());
+        assert_eq!(
+            parse_vision_args(&a(&[
+                "deck.html",
+                "--full",
+                "--size",
+                "1920x1080@2",
+                "--out",
+                "s.png"
+            ]))
+            .unwrap(),
+            serde_json::json!({
+                "marks": false, "url": "deck.html", "full": true,
+                "size": "1920x1080@2",
+                "path": std::env::current_dir().unwrap().join("s.png").to_str().unwrap()
+            })
+        );
+        // A daemon started elsewhere writes where this command was run, for
+        // `run` steps at any depth as well.
+        let here = |name: &str| std::env::current_dir().unwrap().join(name);
+        let absolute = here("elsewhere").join("b.png");
+        let plan = serde_json::json!([
+            {"action": "vision", "path": "a.png"},
+            {"action": "if", "exists": "x", "then": [
+                {"action": "vision", "path": absolute.to_str().unwrap()},
+                {"action": "vision", "path": "c.png"}
+            ]},
+            {"action": "type", "path": "d.png"},
+            {"action": "see", "extract": {"action": "vision", "path": "e.png"}}
+        ])
+        .to_string();
+        let steps = &parse_run_args(&a(&[&plan])).unwrap()["steps"];
+        assert_eq!(steps[0]["path"], here("a.png").to_str().unwrap());
+        assert_eq!(steps[1]["then"][0]["path"], absolute.to_str().unwrap());
+        assert_eq!(steps[1]["then"][1]["path"], here("c.png").to_str().unwrap());
+        assert_eq!(steps[2]["path"], "d.png");
+        assert_eq!(steps[3]["extract"]["path"], "e.png");
     }
 
     // ── payloads / help ────────────────────────────────────────────────
