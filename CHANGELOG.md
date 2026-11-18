@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.0] - 2026-11-18
+
 ### Changed
 - `see logs=console` reads Chrome's own console record over CDP instead of a hook injected into the page. It works in every lane (an attached browser and a host's browser panel answered `(empty)` before) and shows what the hook could not: uncaught errors and rejected promises with their stack and `url:line:column`, failed loads such as a 404, and what a logged object holds. `Runtime` and `Log` are enabled for the read only (a few milliseconds, measured on Chrome 158) and disabled again, so nothing a page can measure stays on. The page keeps its native `console`: the five proxied methods, the hidden slot on `window` and the two error listeners are gone.
 - Every page gets focus emulation, not only one in an attached browser. Obu's own Chrome usually sits behind what the person works in, and its page took trusted clicks with `document.hasFocus() === false`. A page with emulation takes input in a background tab, so it is no longer raised before each action; opening or switching a tab, and an action that opens a popup, still bring the agent's tab forward.
@@ -2221,7 +2223,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.7.0...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.8.0...HEAD
+[4.8.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.0
 [4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0
 [4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9
 [4.6.8]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.8
