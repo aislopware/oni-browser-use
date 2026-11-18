@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `vision` can stand in for a headless screenshot script. `path` writes the PNG to a file and returns the path with its pixel size, with no image block. `full` captures the whole page. `size` (`1440x900`, or `1440x900@2` for twice the output pixels) sets the viewport for that capture only and hands it back after; the image is exactly that size on any display, up to 16,384 pixels on a side and 40 megapixels. The largest CDP message accepted goes from 64 to 224 MiB, so a reply carrying a capture that size never closes the browser connection. `url` opens the page first, at that size when `size` is given. On the CLI: `obu vision [url] [--full] [--size WxH[@scale]] [--out file.png]`.
+- `run` takes `vision` steps, which always save to a file, so a set of captures such as every slide of a deck is one call.
+
+### Fixed
+- A host's note (`OBU_HOST_NOTE`) now stands in place of the attached-browser note in the MCP instructions. A host that set the real lane for a browser of its own got both when the saved real-browser mode was attach, and the two contradicted each other.
+
 ## [4.8.1] - 2026-11-18
 
 ### Fixed
