@@ -509,8 +509,23 @@ pub(super) fn state(args: &Value) -> Result<()> {
 
 pub(super) fn vision(args: &Value) -> Result<()> {
     fields(args, "vision")?;
-    if args.get("marks").is_some_and(|v| !v.is_boolean()) {
-        return Err(ObuError::Usage("vision marks must be a boolean".into()));
+    for key in ["marks", "full"] {
+        if args.get(key).is_some_and(|v| !v.is_boolean()) {
+            return Err(ObuError::Usage(format!("vision {key} must be a boolean")));
+        }
+    }
+    // Checked here so a bad size or path fails before `url` navigates.
+    match args.get("size") {
+        Some(Value::String(size)) if !size.is_empty() => {
+            super::vision::parse_size(size)?;
+        }
+        Some(Value::String(_)) | None => {}
+        Some(_) => return Err(ObuError::Usage("vision size must be a string".into())),
+    }
+    if let Some(path) = args.get("path").and_then(Value::as_str) {
+        if !path.is_empty() {
+            super::vision::output_path(path)?;
+        }
     }
     Ok(())
 }
@@ -569,6 +584,7 @@ fn sequence(args: &Value, key: &str, batch: bool, depth: usize, count: &mut usiz
                     Ok(())
                 }
                 "see" => see(step),
+                "vision" if !batch => vision(step),
                 "js" if !batch => {
                     let mut eval = step.clone();
                     eval["action"] = serde_json::json!("eval");
@@ -683,6 +699,26 @@ mod tests {
         );
         assert!(state(&json!({"op":"set-cookie","name":"session","value":false})).is_err());
         assert!(vision(&json!({"marks":"false"})).is_err());
+        for bad in [
+            json!({"full":"yes"}),
+            json!({"size":1440}),
+            json!({"size":"1440"}),
+            json!({"size":"1440x900@9"}),
+            json!({"size":"8x900"}),
+            json!({"path":"/tmp/shot.jpg"}),
+            json!({"path":7}),
+        ] {
+            assert!(vision(&bad).is_err(), "{bad}");
+        }
+        assert!(vision(&json!({
+            "url":"file:///tmp/deck.html","path":"shots/a.PNG","size":"1920x1080@2","full":true
+        }))
+        .is_ok());
+        // A run step saves a capture; a batch step cannot.
+        let shot = json!({"action":"vision","path":"/tmp/a.png"});
+        assert!(run(&json!({"steps":[shot]})).is_ok());
+        assert!(run(&json!({"steps":[{"action":"vision","size":"x"}]})).is_err());
+        assert!(act(&json!({"action":"batch","steps":[shot]})).is_err());
         assert!(tool_call(&json!({"name":"unknown"})).is_err());
         assert!(tool_call(&json!({"name":"see","arguments":null})).is_err());
     }

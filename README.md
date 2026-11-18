@@ -58,7 +58,7 @@ obu stop
 | `see` | Read the page: interactive elements, Markdown, outline, extracted records |
 | `state` | Tabs, cookies, storage, saved sessions, resource blocking |
 | `run` | A plan of reads and actions with branches and loops, in one call |
-| `vision` | Screenshot, optionally marked with element refs |
+| `vision` | Screenshot, inline or to a file, of the viewport, a sized viewport or the whole page; optionally marked with element refs |
 
 ## Your own browser
 

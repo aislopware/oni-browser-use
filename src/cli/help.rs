@@ -50,7 +50,7 @@ COMMANDS
                                   rm-ls, rm-ss, clear-ls, clear-ss, tabs, open-tab,
                                   close-tab, switch-tab, save, load, compress, block
   run '<json-steps>'              batch with if/while branching + inline see reads
-  vision [--marks]                screenshot (saved to a file; path printed)
+  vision [url] [--full] [--size WxH] [--out f.png]  screenshot (saved to a file; path printed)
   daemon | stop                   manage the persistent Chrome session
   mcp                             MCP server on stdio — add to your agent's client config
   rb on|off [sub]                 real-browser lane: drive YOUR browser (see 'help rb')
@@ -318,10 +318,10 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             "notes": ["stops on first error with the step number + page state", "while+see reads across pages in ONE call", "--format json: status, results per top-level step, stopped_at/error/page/note on failure; nested observations remain output text; step formats are explicit; large results offload"]
         }),
         "vision" => json!({
-            "usage": "obu vision [--marks]",
+            "usage": "obu vision [url] [--marks] [--full] [--size WxH[@scale]] [--out file.png]",
             "tool": "vision",
             "flags": { "--marks": "numbered ref badges (Set-of-Marks)" },
-            "examples": ["obu vision", "obu vision --marks --json | jq -r .image_path"],
+            "examples": ["obu vision", "obu vision --marks --json | jq -r .image_path", "obu vision file:///tmp/deck.html --size 1920x1080@2 --out slide.png", "obu vision example.com --full --out page.png"],
             "notes": ["screenshot is saved to a file; path printed (json: image_path)", "last resort — see/act are cheaper and return actionable refs"]
         }),
         "daemon" => json!({
@@ -715,16 +715,21 @@ EXAMPLES
             r#"obu vision — screenshot
 
 USAGE
-  obu vision [--marks]
+  obu vision [url] [--marks] [--full] [--size WxH[@scale]] [--out file.png]
 
 Always saves a PNG to a file and prints the path (--json: "image_path").
---marks overlays numbered ref badges (Set-of-Marks) so you can click by ref
-after looking at the image. Vision is the LAST RESORT: the structural model
-(see/act with refs) is cheaper and gives actionable refs.
+A url is opened first. --out names the file; without it the PNG is an
+artifact. --full captures the whole page, not just the viewport. --size sets
+the viewport for this capture only, in CSS pixels; @2 doubles the output
+pixels. --marks overlays numbered ref badges (Set-of-Marks) so you can click
+by ref after looking at the image. To read or act on a page, the structural
+model (see/act with refs) is cheaper and gives actionable refs.
 
 EXAMPLES
   obu vision
   obu vision --marks --json | jq -r .image_path
+  obu vision file:///tmp/deck.html --size 1920x1080@2 --out slide.png
+  obu vision example.com --full --out page.png
 "#
         }
         "daemon" => {

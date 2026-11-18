@@ -77,7 +77,7 @@ const SUPPORTED_VERSIONS: &[&str] = &[
 /// flailing at a surface they had to reverse-engineer from five schemas
 /// (the pi package now also bundles the same guidance as a skill). It is
 /// deliberately compact: it is paid for once per session, in every client.
-const INSTRUCTIONS: &str = "Stealth browser driver. act interacts (navigate/click/type/fill/batch/eval), see reads (extract=\"auto\" first on list/search/product pages; mode=\"content\" for articles; format=\"json\" for pure JSON), state manages cookies/tabs/sessions, run executes step batches with branching and inline reads, vision screenshots. WORK LOOP: navigate -> act by text (no see needed) or by ref (refs are page-scoped: refresh them after a navigation or tab switch; within a page they self-heal) -> every action returns an observation, so a see after acting is usually unnecessary. act eval answers one line, `result: <compact JSON>` (a returned string containing JSON is flagged in a note). Results disclose what the driver cannot verify: page_total/partial (lazy or paginated results), sponsored items, unwrapped redirect links, duplicates removed, and a URL range filter whose page prices fall outside it. Oversized payloads go to an artifact file, read back with see artifact=\"...\" - nothing is truncated silently. Errors carry the current page state; never blind-retry a submit.";
+const INSTRUCTIONS: &str = "Stealth browser driver. act interacts (navigate/click/type/fill/batch/eval), see reads (extract=\"auto\" first on list/search/product pages; mode=\"content\" for articles; format=\"json\" for pure JSON), state manages cookies/tabs/sessions, run executes step batches with branching and inline reads, vision screenshots (path= saves the PNG, size= sets the viewport, full= takes the whole page). WORK LOOP: navigate -> act by text (no see needed) or by ref (refs are page-scoped: refresh them after a navigation or tab switch; within a page they self-heal) -> every action returns an observation, so a see after acting is usually unnecessary. act eval answers one line, `result: <compact JSON>` (a returned string containing JSON is flagged in a note). Results disclose what the driver cannot verify: page_total/partial (lazy or paginated results), sponsored items, unwrapped redirect links, duplicates removed, and a URL range filter whose page prices fall outside it. Oversized payloads go to an artifact file, read back with see artifact=\"...\" - nothing is truncated silently. Errors carry the current page state; never blind-retry a submit.";
 
 /// Added for a session attached to the user's own running browser. The tab
 /// list it reads holds their tabs next to its own, and nothing else on the
@@ -96,14 +96,17 @@ fn instructions() -> String {
     )
 }
 
+/// A host's note stands in place of the attached note: a host that attaches
+/// obu to a browser of its own would otherwise be contradicted by it.
 fn instructions_for(attached: bool, host_note: Option<&str>) -> String {
     let mut text = INSTRUCTIONS.to_string();
-    if attached {
-        text.push_str(ATTACHED_NOTE);
-    }
-    if let Some(note) = host_note {
-        text.push_str(" HOST: ");
-        text.push_str(note);
+    match host_note {
+        Some(note) => {
+            text.push_str(" HOST: ");
+            text.push_str(note);
+        }
+        None if attached => text.push_str(ATTACHED_NOTE),
+        None => {}
     }
     text
 }
@@ -210,6 +213,7 @@ mod retry_tests {
         let told = instructions_for(false, Some(note));
         assert!(told.starts_with(INSTRUCTIONS));
         assert!(told.ends_with(" HOST: These tools drive the editor's browser panel."));
+        assert_eq!(instructions_for(true, Some(note)), told);
         assert_eq!(
             first_reach_note(true, Some(note)).as_deref(),
             Some("note: These tools drive the editor's browser panel.")

@@ -95,9 +95,27 @@ For machine output, MCP `format: "json"` on `run` reports overall `completed` or
 
 ```sh
 obu vision --marks --json
+obu vision file:///tmp/deck.html --size 1920x1080@2 --out slide.png
+obu vision example.com --full --out page.png
 ```
 
 MCP returns a PNG image block. The CLI saves the image and reports `image_path`. Marks identify interactive elements for visual tasks. Use `see` when text and element refs suffice.
+
+| Field | CLI | Effect |
+| --- | --- | --- |
+| `url` | first argument | Opens the page before the capture. With `size` the page loads at that size, so a page already open at this address is reloaded; leave `url` out to capture the page as it stands. |
+| `path` | `--out` | Writes the PNG to this `.png` file and returns the path with the pixel size. MCP sends no image block then. Missing folders are created; an existing file is replaced, and a symlink there is replaced rather than followed. A relative CLI path is read from the directory the command runs in. |
+| `full` | `--full` | Captures the whole page. A page larger than Chrome can draw in one image (16,384 output pixels on a side, 40 megapixels in all) is cut there, and the result says so. |
+| `size` | `--size` | `WxH` in CSS pixels, 16 to 8192 each (on a zoomed page, the pixels its window is measured in: the image is still `WxH`). The viewport is set for this capture and handed back after it, so the page sees a resize. `@scale` (0.25 to 4) multiplies the output pixels, up to 16,384 on a side and 40 megapixels in all: `1440x900@2` gives a 2880x1800 image on any display. The page sees 2 as its `devicePixelRatio` where the browser takes the scale; a host that keeps its own ratio, such as a page Onicode's Browser panel runs without a window, scales the image instead. Without `@scale` the image is `WxH` pixels. If the browser returns another size, the result says which. |
+
+A `run` step `{"action":"vision", ...}` takes the same fields and always saves to a file, which makes a set of captures one call:
+
+```json
+[
+  {"action": "vision", "url": "file:///tmp/deck.html#1", "size": "1920x1080", "path": "/tmp/shots/1.png"},
+  {"action": "vision", "url": "file:///tmp/deck.html#2", "size": "1920x1080", "path": "/tmp/shots/2.png"}
+]
+```
 
 ## CLI results and lifetime
 

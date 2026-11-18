@@ -19,6 +19,12 @@ impl Page {
         self.navigate_inner(url).await
     }
 
+    /// Whether `navigate(url)` would skip the load because the page is
+    /// already there.
+    pub(crate) fn is_at(&self, url: &str) -> bool {
+        already_here(&self.lpm, url)
+    }
+
     async fn navigate_inner(&mut self, url: &str) -> Result<PageDelta> {
         // R1: reject schemes that cannot load a page BEFORE any CDP work.
         // ftp://, javascript:, chrome:// etc. used to sail into
