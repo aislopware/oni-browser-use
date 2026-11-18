@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `see logs=console` reads Chrome's own console record over CDP instead of a hook injected into the page. It works in every lane (an attached browser and a host's browser panel answered `(empty)` before) and shows what the hook could not: uncaught errors and rejected promises with their stack and `url:line:column`, failed loads such as a 404, and what a logged object holds. `Runtime` and `Log` are enabled for the read only (a few milliseconds, measured on Chrome 158) and disabled again, so nothing a page can measure stays on. The page keeps its native `console`: the five proxied methods, the hidden slot on `window` and the two error listeners are gone.
+- Every page gets focus emulation, not only one in an attached browser. Obu's own Chrome usually sits behind what the person works in, and its page took trusted clicks with `document.hasFocus() === false`. A page with emulation takes input in a background tab, so it is no longer raised before each action; opening or switching a tab, and an action that opens a popup, still bring the agent's tab forward.
+- The popup blocker stays on: `--disable-popup-blocking` is gone from the launch flags, since a page detects it with one `window.open` outside a click. Clicks carry a user gesture, so OAuth and payment popups still open, and an `act eval` that opens a window runs with one too.
+
+### Fixed
+- Pointer events read as a mouse sends them. A press reports `pressure` 0.5 and `buttons` 1 (CDP's defaults gave 0, which no mouse reports), positions are whole pixels, `movementX/Y` match the positions and no move repeats the pixel before it. The idle hum continues from where the pointer is instead of jumping to a fixed point, the path to a target starts slow, peaks and settles, and wheel deltas are whole pixels.
+- macOS: `outerWidth` and `navigator.mediaDevices.enumerateDevices` stay native on a Mac that has no reason to mask them. A window's outer width equals its inner width there, and the mask replaced a true answer with a proxy a page can tell from a native function.
+
 ## [4.7.0] - 2026-11-17
 
 ### Added
