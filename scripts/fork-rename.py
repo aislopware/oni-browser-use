@@ -51,7 +51,7 @@ FIXUPS = [
     ("src/updater/download.rs", '"obu".repeat(9000)', '"obu".repeat(24000)'),
     # The clone lands in a directory named after the repository, not the binary.
     ("src/updater/download.rs", f"{FORK}.git && cd obu", f"{FORK}.git && cd oni-browser-use"),
-    ("README.md", f"{FORK}.git\ncd obu\n", f"{FORK}.git\ncd oni-browser-use\n"),
+    ("docs/setup.md", f"{FORK}.git\ncd obu\n", f"{FORK}.git\ncd oni-browser-use\n"),
     # The update check fell back to the npm registry. Upstream owns its name
     # there; nobody owns this one, so whoever publishes it would be believed.
     (
