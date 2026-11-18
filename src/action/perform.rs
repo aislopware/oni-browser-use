@@ -10,7 +10,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::perception::JS_PREAMBLE;
 use crate::page::{capture, wait_for_settle_with_network, LivePageModel, PageDelta, RouteSettle};
 
@@ -56,7 +56,7 @@ pub async fn perform(
 ///
 /// v3.9: state lives under Symbol-keyed window slots (invisible to
 /// Object.keys / for-in / `'name' in window` probes). The old
-/// `window.__blade_muts` / `__blade_mo` string properties named the tool
+/// `window.__obu_muts` / `__obu_mo` string properties named the tool
 /// outright on every page after the first action — a one-line detection.
 pub const MUT_WATCH: &str = "(function(){var K=Symbol.for('m'),O=Symbol.for('n');var c=window[K];if(!c){c={n:0};try{window[K]=c;}catch(e){return;}if(!window[O]){try{var left=2000;var seen=new WeakSet();var mo=null;var obs=function(r){try{if(!r||seen.has(r)||left<=0)return;seen.add(r);mo.observe(r,{childList:true,subtree:true,characterData:true});left--;}catch(e){}};var scan=function(node){try{if(!node)return;if(node.shadowRoot)obs(node.shadowRoot);if(node.tagName==='IFRAME'){var fd0=null;try{fd0=node.contentDocument;}catch(e){}if(fd0&&fd0.documentElement)scanDoc(fd0);}var all=null;try{all=node.querySelectorAll('*');}catch(e){return;}for(var i=0;i<all.length;i++){if(left<=0)return;var el=all[i];var sr=el.shadowRoot;if(sr&&!seen.has(sr)){obs(sr);scan(sr);}if(el.tagName==='IFRAME'){var fd=null;try{fd=el.contentDocument;}catch(e){}if(fd&&fd.documentElement)scanDoc(fd);}}}catch(e){}};var scanDoc=function(doc){try{if(!doc)return;var dr=doc.documentElement||doc;obs(dr);scan(dr);}catch(e){}};mo=new MutationObserver(function(l){c.n+=l.length;if(left<=0)return;for(var i=0;i<l.length;i++){var r=l[i];if(r.type==='childList'&&r.addedNodes){for(var j=0;j<r.addedNodes.length;j++){var nd=r.addedNodes[j];if(nd&&nd.nodeType===1){scan(nd);}}}}});window[O]=mo;scanDoc(document);}catch(e){}}}c.n=0;})();";
 
@@ -162,10 +162,10 @@ pub async fn perform_with_network(
             let (sig, frame) = sig_frame.as_ref().unwrap();
             let found = find_by_sig(cdp, sig, frame, "box", None).await?;
             if !found.ok {
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
             if found.disabled == Some(true) {
-                return Err(BladeError::NotInteractable(format!("{ref_id} is disabled")));
+                return Err(ObuError::NotInteractable(format!("{ref_id} is disabled")));
             }
 
             // Choose an activation lane before dispatch. A quiet DOM does not
@@ -369,9 +369,9 @@ pub async fn perform_with_network(
             // into non-text elements (links, buttons, etc.).
             let el = lpm
                 .element(ref_id)
-                .ok_or_else(|| BladeError::StaleRef(ref_id.clone()))?;
+                .ok_or_else(|| ObuError::StaleRef(ref_id.clone()))?;
             if el.raw.role != "textbox" && el.raw.role != "combobox" {
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} is a {}, not a text input (expected textbox or combobox)",
                     el.raw.role
                 )));
@@ -381,7 +381,7 @@ pub async fn perform_with_network(
             // through CDP for no agent benefit.
             const MAX_TYPE_CHARS: usize = 100_000;
             if text.chars().count() > MAX_TYPE_CHARS {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "text too long ({} chars, max {MAX_TYPE_CHARS}) — split the input or use a file upload",
                     text.chars().count()
                 )));
@@ -451,18 +451,18 @@ pub async fn perform_with_network(
                 // its own). Never fall back to whatever holds focus - that
                 // typed a password into the focused email field (L2). Heal
                 // re-resolves the ref.
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
             // Keys go wherever focus is. A target that could not take it
             // (disabled, inert, covered) leaves focus on another field, and
             // typing would fill THAT field - refuse before any key.
             if focus.disabled == Some(true) {
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} is disabled; no keys typed"
                 )));
             }
             if let Some(other) = focus.away.as_deref() {
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} did not take focus ({other} holds it); no keys typed - the field may be inert or covered"
                 )));
             }
@@ -478,7 +478,7 @@ pub async fn perform_with_network(
             if !pre_read.is_empty() {
                 let cl = clear_editable(cdp, sig, frame).await?;
                 if let Some(why) = cl.blocked {
-                    return Err(BladeError::NotInteractable(format!(
+                    return Err(ObuError::NotInteractable(format!(
                         "{ref_id} {why}; no keys typed"
                     )));
                 }
@@ -563,7 +563,7 @@ pub async fn perform_with_network(
             // fallback (an unlabelled editor renamed by our own edit) must
             // never let a clear empty some other field that holds focus.
             if !find_by_sig(cdp, sig, frame, "state", None).await?.ok {
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
             // Verified clear: the ladder (setter -> trusted keys -> JS path)
             // reads back at every rung; the report carries the truth into
@@ -571,7 +571,7 @@ pub async fn perform_with_network(
             // reads "cleared".
             let cl = clear_editable(cdp, sig, frame).await?;
             if cl.missing {
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
             // Same rule as type: the ladder's keys go wherever focus is, so
             // a target that cannot take it is refused before any write.
@@ -581,7 +581,7 @@ pub async fn perform_with_network(
                 } else {
                     ""
                 };
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} {why}; nothing cleared{hint}"
                 )));
             }
@@ -608,9 +608,9 @@ pub async fn perform_with_network(
             // value on non-select elements (textareas, inputs).
             let el = lpm
                 .element(ref_id)
-                .ok_or_else(|| BladeError::StaleRef(ref_id.clone()))?;
+                .ok_or_else(|| ObuError::StaleRef(ref_id.clone()))?;
             if el.raw.role != "combobox" {
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} is a {}, not a dropdown (expected combobox)",
                     el.raw.role
                 )));
@@ -622,23 +622,23 @@ pub async fn perform_with_network(
                 // a heal would only repeat them.
                 match reason {
                     "select disabled" => {
-                        return Err(BladeError::NotInteractable(format!(
+                        return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is disabled; selection unchanged"
                         )))
                     }
                     "selection rejected" => {
-                        return Err(BladeError::Other(format!(
+                        return Err(ObuError::Other(format!(
                             "{ref_id}: the page rejected \"{option}\" - the select still shows \"{}\"",
                             clip(found.text.as_deref().unwrap_or(""), 40)
                         )))
                     }
                     "text combobox" => {
-                        return Err(BladeError::NotInteractable(format!(
+                        return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is a text combobox, not a <select>: type the text (act type {ref_id} \"{option}\"), then click the matching suggestion"
                         )))
                     }
                     "not a native select" => {
-                        return Err(BladeError::NotInteractable(format!(
+                        return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is a custom combobox, not a <select>; nothing was selected - click it to open the list, then click the option \"{option}\""
                         )))
                     }
@@ -677,11 +677,11 @@ pub async fn perform_with_network(
                             }
                         }
                     }
-                    return Err(BladeError::Other(msg));
+                    return Err(ObuError::Other(msg));
                 }
                 // Element hidden / frame gone / not found — healing may
                 // legitimately help; keep ElementNotFound.
-                return Err(BladeError::ElementNotFound(format!(
+                return Err(ObuError::ElementNotFound(format!(
                     "{ref_id} ({sig}) — select failed: {reason}"
                 )));
             }
@@ -826,13 +826,13 @@ pub async fn perform_with_network(
             {
                 CondOutcome::Met => {}
                 CondOutcome::Timeout => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "wait timeout: condition '{condition}' not met within {}s",
                         timeout.as_secs()
                     )));
                 }
                 CondOutcome::Error(e) => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "wait condition '{condition}' failed: {e}"
                     )));
                 }
@@ -887,11 +887,11 @@ pub async fn perform_with_network(
             // (block:center) and returns its post-scroll box.
             let found = find_by_sig(cdp, sig, frame, "hover", None).await?;
             if !found.ok {
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
-            let box_ = found.box_.ok_or_else(|| {
-                BladeError::Other(format!("element {ref_id} has no bounding box"))
-            })?;
+            let box_ = found
+                .box_
+                .ok_or_else(|| ObuError::Other(format!("element {ref_id} has no bounding box")))?;
             let cx = box_[0] + box_[2] / 2.0;
             let cy = box_[1] + box_[3] / 2.0;
             // Bezier mouse move to element center — no click.
@@ -905,7 +905,7 @@ pub async fn perform_with_network(
                 let b2 = match (retry.ok, retry.box_) {
                     (true, Some(b2)) => b2,
                     _ => {
-                        return Err(BladeError::ElementNotFound(format!(
+                        return Err(ObuError::ElementNotFound(format!(
                             "{ref_id} ({sig}) — hover failed: the mouse move did not dispatch ({first}) and the element could not be re-located"
                         )))
                     }
@@ -924,14 +924,14 @@ pub async fn perform_with_network(
             // their bytes straight into the page. Gate the read like the
             // write side gates writes (pdf path= → validate_write_path).
             crate::platform::validate_upload_path(std::path::Path::new(path.as_str()))
-                .map_err(BladeError::Other)?;
+                .map_err(ObuError::Other)?;
             let (sig, frame) = sig_frame.as_ref().unwrap();
             // Validate the element is a file input.
             let el = lpm
                 .element(ref_id)
-                .ok_or_else(|| BladeError::StaleRef(ref_id.clone()))?;
+                .ok_or_else(|| ObuError::StaleRef(ref_id.clone()))?;
             if el.raw.role != "file" {
-                return Err(BladeError::NotInteractable(format!(
+                return Err(ObuError::NotInteractable(format!(
                     "{ref_id} is a {}, not a file input (expected role 'file')",
                     el.raw.role
                 )));
@@ -952,7 +952,7 @@ pub async fn perform_with_network(
             // the file.
             let found = find_by_sig(cdp, sig, frame, "box", None).await?;
             if !found.ok {
-                return Err(BladeError::ElementNotFound(format!("{ref_id} ({sig})")));
+                return Err(ObuError::ElementNotFound(format!("{ref_id} ({sig})")));
             }
             // Get the objectId of the file input element.
             let sig_js = serde_json::to_string(sig)?;
@@ -983,7 +983,7 @@ pub async fn perform_with_network(
             let object_id = match object_id {
                 Some(id) => id.to_string(),
                 None => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "could not get objectId for file input {ref_id}"
                     )))
                 }
@@ -1009,7 +1009,7 @@ pub async fn perform_with_network(
                 super::upload::UploadCheck::Delivered => {}
                 super::upload::UploadCheck::Unverified(why) => upload_unverified = Some(why),
                 super::upload::UploadCheck::Undelivered(what) => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "upload of {path} not delivered: {what}. A sandboxed browser (Flatpak, Snap) reads only files it was given access to."
                     )))
                 }
@@ -1067,7 +1067,7 @@ pub async fn perform_with_network(
         // Exception: a corrective pass that replaced the value via trusted
         // keys (corrected + verified) - the final value is key-typed then.
         if rep.set_via_js && !(rep.corrected && rep.verified) {
-            return Err(crate::error::BladeError::Other(format!(
+            return Err(crate::error::ObuError::Other(format!(
                 "typed via JS setter on {}: key events did not register (untrusted input; trusted:false, degraded:true). The value \"{}\" was set programmatically - no keystrokes fired for it. Retry the type, or restart the browser for a fresh input path.",
                 action.ref_id().unwrap_or(""),
                 clip(&rep.final_text, 40)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """G10 live evidence: display geometry coherence + proxy egress + WebRTC
-candidate filtering under BLADE_PROXY.
+candidate filtering under OBU_PROXY.
 
-Two arms, each on a fresh BLADE_HOME driving the real MCP server:
+Two arms, each on a fresh OBU_HOME driving the real MCP server:
 
   A (no proxy)   geometry coherence numbers; ICE candidates as a real
                  browser would report them (raw-IP hosts are ACCEPTABLE
@@ -32,8 +32,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BIN = ROOT / "target" / "release" / "bladebro"
-HOME = Path(tempfile.mkdtemp(prefix="blade-gap10-"))
+BIN = ROOT / "target" / "release" / "obu"
+HOME = Path(tempfile.mkdtemp(prefix="obu-gap10-"))
 RESULTS = []
 
 
@@ -181,8 +181,8 @@ def stun_server():
 def mcp_arm(env_extra, tag):
     home = HOME / tag
     home.mkdir(parents=True)
-    env = dict(os.environ, BLADE_HOME=str(home), BLADE_NO_WARMING="1", BLADE_NO_UPDATE_CHECK="1", **env_extra)
-    for k in ("CHROME_PATH", "BLADE_TRANSPORT", "BLADE_LANE", "BLADE_PROFILE_DIR"):
+    env = dict(os.environ, OBU_HOME=str(home), OBU_NO_WARMING="1", OBU_NO_UPDATE_CHECK="1", **env_extra)
+    for k in ("CHROME_PATH", "OBU_TRANSPORT", "OBU_LANE", "OBU_PROFILE_DIR"):
         env.pop(k, None)
     p = subprocess.Popen([str(BIN), "mcp"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=open(home / "stderr.log", "w"), text=True, bufsize=1)
@@ -288,7 +288,7 @@ def main():
         p.wait(timeout=30)
 
     # ── arm B: local proxy ────────────────────────────────────────────────
-    p, call, act, ev, home, replies = mcp_arm({"BLADE_PROXY": f"http://127.0.0.1:{pport}"}, "b")
+    p, call, act, ev, home, replies = mcp_arm({"OBU_PROXY": f"http://127.0.0.1:{pport}"}, "b")
     try:
         call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {},
                             "clientInfo": {"name": "gap10-b", "version": "1"}}, timeout=30)

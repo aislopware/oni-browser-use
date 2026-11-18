@@ -32,10 +32,10 @@ pub(super) async fn fetch_thread(
     budget: &mut Budget,
 ) -> Result<XPayload> {
     let tpl = templates.get("TweetDetail").ok_or_else(|| {
-        BladeError::Other("x: TweetDetail not captured (page API traffic not seen yet)".into())
+        ObuError::Other("x: TweetDetail not captured (page API traffic not seen yet)".into())
     })?;
     let focal_id = focal_id_from_url(page.model().url())
-        .ok_or_else(|| BladeError::Other("x: URL has no /status/<id>".into()))?;
+        .ok_or_else(|| ObuError::Other("x: URL has no /status/<id>".into()))?;
     thread_walk(page.cdp_ref(), tpl, &focal_id, cap, budget).await
 }
 
@@ -51,7 +51,7 @@ pub(super) async fn thread_walk(
     {
         let obj = base
             .as_object_mut()
-            .ok_or_else(|| BladeError::Other("x: template variables not an object".into()))?;
+            .ok_or_else(|| ObuError::Other("x: template variables not an object".into()))?;
         obj.insert("focalTweetId".into(), json!(focal_id));
         obj.insert("count".into(), json!(PAGE_COUNT));
         obj.remove("cursor");
@@ -60,7 +60,7 @@ pub(super) async fn thread_walk(
     let w = walk(cdp, tpl, &base, Some(focal_id), cap, budget).await?;
     let (complete, note) = w.verdict(cap, "thread");
     let focal = w.focal.ok_or_else(|| {
-        BladeError::Other("x: focal tweet missing from the TweetDetail response".into())
+        ObuError::Other("x: focal tweet missing from the TweetDetail response".into())
     })?;
     let total = focal.replies;
     let op_author = focal.author.clone();
@@ -135,7 +135,7 @@ pub(super) async fn fetch_timeline(
         _ => unreachable!("kind checked by caller"),
     };
     let tpl = ops.iter().find_map(|o| templates.get(*o)).ok_or_else(|| {
-        BladeError::Other(format!(
+        ObuError::Other(format!(
             "x: {} not captured (page API traffic not seen yet)",
             ops.join("/")
         ))
@@ -155,7 +155,7 @@ pub(super) async fn timeline_walk(
     {
         let obj = base
             .as_object_mut()
-            .ok_or_else(|| BladeError::Other("x: template variables not an object".into()))?;
+            .ok_or_else(|| ObuError::Other("x: template variables not an object".into()))?;
         // Page size stays as the app chose it — op schemas validate their
         // variables strictly, and the cursor does the walking anyway.
         obj.remove("cursor");
@@ -308,7 +308,7 @@ async fn walk(
             if pages == 0 {
                 // First page rejected: this op's replays are not viable on
                 // this page state — let the caller pick a fallback.
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "x: replay rejected (HTTP {status})"
                 )));
             }
@@ -325,7 +325,7 @@ async fn walk(
                 ));
                 break;
             }
-            Err(e) => return Err(BladeError::Other(format!("x: non-JSON response ({e})"))),
+            Err(e) => return Err(ObuError::Other(format!("x: non-JSON response ({e})"))),
         };
         let parsed = match focal_id {
             Some(f) => parse_thread_page(&j, f),
@@ -339,7 +339,7 @@ async fn walk(
             if pages == 0 {
                 // Nothing harvested yet: an error lets the caller fall back,
                 // where an empty payload would claim an empty timeline.
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "x: response carried no timeline ({why})"
                 )));
             }

@@ -146,13 +146,13 @@ impl CdpSession {
                         Ok(_) => continue,
                         Err(broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(broadcast::error::RecvError::Closed) => {
-                            return Err(crate::error::BladeError::Closed)
+                            return Err(crate::error::ObuError::Closed)
                         }
                     }
                 }
             })
             .await
-            .map_err(|_| crate::error::BladeError::Timeout(deadline))?
+            .map_err(|_| crate::error::ObuError::Timeout(deadline))?
         }
     }
 }

@@ -25,7 +25,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 fn tmp_home(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bladebro-mcp-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("obu-mcp-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -49,13 +49,13 @@ fn silent_endpoint() -> (u16, mpsc::Receiver<()>) {
 }
 
 fn spawn_mcp(home: &Path, port: u16) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_bladebro"))
+    Command::new(env!("CARGO_BIN_EXE_obu"))
         .args(["mcp", "--port", &port.to_string()])
-        .env("BLADE_HOME", home)
-        .env("BLADE_LANE", "agent")
-        .env("BLADE_NO_WARMING", "1")
-        .env("BLADE_NO_UPDATE_CHECK", "1")
-        .env_remove("BLADE_TRANSPORT")
+        .env("OBU_HOME", home)
+        .env("OBU_LANE", "agent")
+        .env("OBU_NO_WARMING", "1")
+        .env("OBU_NO_UPDATE_CHECK", "1")
+        .env_remove("OBU_TRANSPORT")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

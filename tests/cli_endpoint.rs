@@ -6,7 +6,7 @@
 //! that the discovery layer used by `state`/`see`/`act` (via `run_connected`)
 //! targets the exact `host:port` that `--port` selects.
 
-use bladebro::cdp;
+use obu::cdp;
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;

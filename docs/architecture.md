@@ -1,8 +1,8 @@
 # Architecture
 
-[Bladebro README](../README.md) · [Tool guide](tools.md) · [Browser modes](browser-modes.md)
+[Obu README](../README.md) · [Tool guide](tools.md) · [Browser modes](browser-modes.md)
 
-Bladebro is a Rust program that controls an installed Chromium-family browser over the Chrome DevTools Protocol (CDP). MCP speaks stdio JSON-RPC. The CLI can reuse a daemon or work in one-shot mode. Both reach the same tool handlers.
+Obu is a Rust program that controls an installed Chromium-family browser over the Chrome DevTools Protocol (CDP). MCP speaks stdio JSON-RPC. The CLI can reuse a daemon or work in one-shot mode. Both reach the same tool handlers.
 
 ```text
 MCP client               Terminal
@@ -33,7 +33,7 @@ Refs represent controls within the current page. A semantic signature includes f
 
 The default lane owns a separate profile. Real-browser mode uses a selected install and can clone or attach to an existing profile. WebSocket is the default CDP transport. The MCP pipe transport is an opt-in alternative. [Browser modes](browser-modes.md).
 
-Bladebro can reuse domain-level consent and settle choices after successful encounters. The policy for the current visit still applies. Extraction adapters fit inside `see extract=auto`; they share the same tool schema and disclose partial results.
+Obu can reuse domain-level consent and settle choices after successful encounters. The policy for the current visit still applies. Extraction adapters fit inside `see extract=auto`; they share the same tool schema and disclose partial results.
 
 | Area | Source |
 |---|---|

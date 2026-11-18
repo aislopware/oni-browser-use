@@ -7,18 +7,18 @@ use super::*;
 pub(super) fn parse_discussion(raw: &Value) -> Result<(PostMeta, Tree)> {
     let arr = raw
         .as_array()
-        .ok_or_else(|| BladeError::Other("reddit: discussion payload is not a listing".into()))?;
+        .ok_or_else(|| ObuError::Other("reddit: discussion payload is not a listing".into()))?;
     let post_data = arr
         .first()
         .and_then(|l| l.get("data"))
         .and_then(|d| d.get("children"))
         .and_then(|c| c.get(0))
         .and_then(|c| c.get("data"))
-        .ok_or_else(|| BladeError::Other("reddit: post object missing from payload".into()))?;
+        .ok_or_else(|| ObuError::Other("reddit: post object missing from payload".into()))?;
 
     let post_id = post_data["id"].as_str().unwrap_or_default().to_string();
     if post_id.is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: post id missing from payload".into(),
         ));
     }
@@ -125,22 +125,22 @@ fn walk(tree: &mut Tree, parent: &str, children: &[Value]) {
 pub(super) fn parse_subtree(raw: &Value) -> Result<(String, Tree)> {
     let arr = raw
         .as_array()
-        .ok_or_else(|| BladeError::Other("reddit: subtree payload is not a listing".into()))?;
+        .ok_or_else(|| ObuError::Other("reddit: subtree payload is not a listing".into()))?;
     let first = arr
         .get(1)
         .and_then(|l| l.get("data"))
         .and_then(|d| d.get("children"))
         .and_then(|c| c.as_array())
         .and_then(|c| c.first())
-        .ok_or_else(|| BladeError::Other("reddit: comment subtree is empty".into()))?;
+        .ok_or_else(|| ObuError::Other("reddit: comment subtree is empty".into()))?;
     if first["kind"].as_str() != Some("t1") {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: comment subtree unavailable (deleted or removed)".into(),
         ));
     }
     let root = first["data"]["id"].as_str().unwrap_or_default().to_string();
     if root.is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "reddit: comment subtree has no root id".into(),
         ));
     }

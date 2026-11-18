@@ -12,7 +12,7 @@
 //!
 //! When the client is dropped the writer's mpsc closes, the writer sends a
 //! `Close` frame and exits, the socket closes, the reader observes end-of-stream
-//! and drains every still-pending caller with [`BladeError::Closed`]. No caller
+//! and drains every still-pending caller with [`ObuError::Closed`]. No caller
 //! ever hangs forever.
 
 use std::collections::HashMap;
@@ -28,7 +28,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::cdp::protocol::{CdpEvent, CdpIncoming, CdpMessage, CdpRequest};
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// Default per-command timeout. CDP commands are usually sub-millisecond; this
 /// is a safety bound, not a latency target.
@@ -59,7 +59,7 @@ const MAX_EVENT_BYTES: usize = 16 * 1024;
 const MAX_CDP_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 
 /// The result delivered to a pending command caller.
-type CdpOutcome = std::result::Result<Value, BladeError>;
+type CdpOutcome = std::result::Result<Value, ObuError>;
 
 /// Map of pending command ids → their response oneshot sender.
 type PendingMap = Arc<Mutex<HashMap<u64, oneshot::Sender<CdpOutcome>>>>;
@@ -98,8 +98,8 @@ impl CdpClient {
         let connecting = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false);
         let (ws, _resp) = timeout(deadline, connecting)
             .await
-            .map_err(|_| BladeError::Timeout(deadline))?
-            .map_err(|e| BladeError::Transport(e.to_string()))?;
+            .map_err(|_| ObuError::Timeout(deadline))?
+            .map_err(|e| ObuError::Transport(e.to_string()))?;
         Self::from_socket(ws)
     }
 
@@ -302,7 +302,7 @@ impl CdpClient {
         // slots once at exit, so anything sent now would wait the full
         // timeout for a reply that can never arrive.
         if self.closed.load(Ordering::Relaxed) {
-            return Err(BladeError::Closed);
+            return Err(ObuError::Closed);
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = oneshot::channel::<CdpOutcome>();
@@ -314,7 +314,7 @@ impl CdpClient {
             let mut p = self
                 .pending
                 .lock()
-                .map_err(|e| BladeError::Other(e.to_string()))?;
+                .map_err(|e| ObuError::Other(e.to_string()))?;
             p.insert(id, tx);
         }
         let _guard = PendingGuard {
@@ -324,7 +324,7 @@ impl CdpClient {
         // Recheck AFTER insert: if the reader died between our first check
         // and the insert, its drain missed us — fail now instead of hanging.
         if self.closed.load(Ordering::Relaxed) {
-            return Err(BladeError::Closed);
+            return Err(ObuError::Closed);
         }
 
         let mut req = CdpRequest::new(id, method, params);
@@ -336,13 +336,13 @@ impl CdpClient {
             self.writer_tx
                 .send(Message::Text(json.into()))
                 .await
-                .map_err(|_| BladeError::Closed)?;
-            rx.await.map_err(|_| BladeError::Closed)?
+                .map_err(|_| ObuError::Closed)?;
+            rx.await.map_err(|_| ObuError::Closed)?
         })
         .await
         {
             Ok(outcome) => outcome,
-            Err(_) => Err(BladeError::Timeout(deadline)),
+            Err(_) => Err(ObuError::Timeout(deadline)),
         }
         // guard drops here, removing the slot if the reply already arrived
         // (no-op) or if we timed out (cleans the leak).
@@ -367,7 +367,7 @@ impl CdpClient {
     /// Wait for the next event whose method equals `method`, up to `deadline`.
     ///
     /// Other events are skipped. A lagged bus is recovered transparently; a
-    /// closed transport ends the wait with [`BladeError::Closed`] at once.
+    /// closed transport ends the wait with [`ObuError::Closed`] at once.
     pub fn wait_for(
         &self,
         method: &str,
@@ -385,14 +385,14 @@ impl CdpClient {
                         Ok(ev) if ev.method == method => return Ok(ev),
                         Ok(_) => continue,
                         Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                        Err(broadcast::error::RecvError::Closed) => return Err(BladeError::Closed),
+                        Err(broadcast::error::RecvError::Closed) => return Err(ObuError::Closed),
                     }
                 }
             })
             .await
             {
                 Ok(inner) => inner,
-                Err(_) => Err(BladeError::Timeout(deadline)),
+                Err(_) => Err(ObuError::Timeout(deadline)),
             }
         }
     }
@@ -491,7 +491,7 @@ fn route_cdp_text(
         Ok(msg) => match msg.classify() {
             Some(CdpIncoming::Response { id, result, error }) => {
                 let outcome = match error {
-                    Some(e) => Err(BladeError::Cdp {
+                    Some(e) => Err(ObuError::Cdp {
                         code: e.code,
                         message: e.message,
                     }),
@@ -523,17 +523,17 @@ fn route_cdp_text(
                 let _ = events_tx.send(ev);
             }
             None => {
-                tracing::trace!(target: "bladebro.cdp", "unparseable CDP frame");
+                tracing::trace!(target: "obu.cdp", "unparseable CDP frame");
             }
         },
         Err(e) => {
-            tracing::warn!(target: "bladebro.cdp", error=%e, "non-JSON CDP frame");
+            tracing::warn!(target: "obu.cdp", error=%e, "non-JSON CDP frame");
         }
     }
     true
 }
 
-/// Fail every still-pending caller with [`BladeError::Closed`] (reader ended).
+/// Fail every still-pending caller with [`ObuError::Closed`] (reader ended).
 fn drain_pending(pending: &PendingMap) {
     let drained: Vec<oneshot::Sender<CdpOutcome>> = {
         let mut p = match pending.lock() {
@@ -543,7 +543,7 @@ fn drain_pending(pending: &PendingMap) {
         p.drain().map(|(_, v)| v).collect()
     };
     for tx in drained {
-        let _ = tx.send(Err(BladeError::Closed));
+        let _ = tx.send(Err(ObuError::Closed));
     }
 }
 
@@ -637,7 +637,7 @@ mod reliability_tests {
         )
         .await
         .expect("a saturated writer must not bypass the command deadline");
-        assert!(matches!(outcome, Err(BladeError::Timeout(_))));
+        assert!(matches!(outcome, Err(ObuError::Timeout(_))));
         assert!(
             client.pending.lock().unwrap().is_empty(),
             "timed-out queue admission must not leak pending calls"
@@ -659,7 +659,7 @@ mod reliability_tests {
         .await;
         server.abort();
         assert!(
-            matches!(result, Ok(Err(BladeError::Timeout(_)))),
+            matches!(result, Ok(Err(ObuError::Timeout(_)))),
             "a peer that never upgrades must time out: {result:?}"
         );
     }
@@ -830,12 +830,9 @@ mod reliability_tests {
         let started = std::time::Instant::now();
         drop(browser); // the browser dies: the socket hits EOF
         let (a, b) = tokio::join!(client_wait, session_wait);
+        assert!(matches!(a, Err(ObuError::Closed)), "client wait_for: {a:?}");
         assert!(
-            matches!(a, Err(BladeError::Closed)),
-            "client wait_for: {a:?}"
-        );
-        assert!(
-            matches!(b, Err(BladeError::Closed)),
+            matches!(b, Err(ObuError::Closed)),
             "session wait_for: {b:?}"
         );
         assert!(started.elapsed() < Duration::from_secs(2));
@@ -851,7 +848,7 @@ mod reliability_tests {
         )
         .await;
         assert!(
-            matches!(late, Ok(Err(BladeError::Closed))),
+            matches!(late, Ok(Err(ObuError::Closed))),
             "late wait_for: {late:?}"
         );
         assert!(client.is_closed());
@@ -868,7 +865,7 @@ mod reliability_tests {
         drop(browser_out); // Chrome exited: its CDP output pipe hits EOF
         let res = wait.await;
         assert!(
-            matches!(res, Err(BladeError::Closed)),
+            matches!(res, Err(ObuError::Closed)),
             "pipe wait_for: {res:?}"
         );
         assert!(started.elapsed() < Duration::from_secs(2));

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Root selector waits and explicit toggle fill values; owned MCP/live fixtures.
 
-BLADEBRO selects a binary, POLISH_OUT retains JSON-RPC + live readbacks.
+OBU selects a binary, POLISH_OUT retains JSON-RPC + live readbacks.
 --baseline records failures without aborting. Run under capped.
 """
 import http.server
@@ -15,7 +15,7 @@ import tempfile
 import threading
 import time
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 OUT = Path(os.environ.get('POLISH_OUT', 'work/release465/qol.json'))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 checks, receipts = [], []
@@ -51,9 +51,9 @@ server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 origin = 'http://127.0.0.1:' + str(server.server_port)
 try:
-    with tempfile.TemporaryDirectory(prefix='blade-qol465-') as home:
-        env = dict(os.environ, BLADE_HOME=home, BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1', BLADE_LANE='agent')
-        for key in ('BLADE_PROFILE_DIR', 'BLADE_TRANSPORT', 'BLADE_PROXY', 'BLADE_FRESH'):
+    with tempfile.TemporaryDirectory(prefix='obu-qol465-') as home:
+        env = dict(os.environ, OBU_HOME=home, OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1', OBU_LANE='agent')
+        for key in ('OBU_PROFILE_DIR', 'OBU_TRANSPORT', 'OBU_PROXY', 'OBU_FRESH'):
             env.pop(key, None)
         with OUT.with_suffix('.stderr.log').open('w') as stderr:
             proc = subprocess.Popen([BINARY, 'mcp'], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, text=True, encoding='utf-8')

@@ -1,5 +1,5 @@
 //! Consent / cookie-wall handling: reject-first click ladders, the
-//! `BLADE_CONSENT` accept/off policy, and the stored-selector fast path.
+//! `OBU_CONSENT` accept/off policy, and the stored-selector fast path.
 //! Split from the `perception` core.
 
 use serde_json::json;
@@ -23,7 +23,7 @@ const REJECT_SELECTORS: &[&str] = &[
     "#sp-cc-rejectall-link",
 ];
 
-/// The ladder's known-framework buttons for `BLADE_CONSENT=accept`.
+/// The ladder's known-framework buttons for `OBU_CONSENT=accept`.
 const ACCEPT_SELECTORS: &[&str] = &[
     "#onetrust-accept-btn-handler",
     "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
@@ -39,7 +39,7 @@ fn js_list(list: &[&str]) -> String {
 }
 
 /// M4: Detect and dismiss consent/cookie banners. Policy: reject (default),
-/// accept, or off (via BLADE_CONSENT env). Returns the framework name if dismissed.
+/// accept, or off (via OBU_CONSENT env). Returns the framework name if dismissed.
 ///
 /// v3.9 false-positive hardening: the old generic pass queried
 /// `[role=dialog],[role=banner],[class*=cookie],...` — `[role=banner]` is
@@ -53,7 +53,7 @@ fn js_list(list: &[&str]) -> String {
 ///   - text must match cookie/consent/GDPR vocabulary ("privacy" alone is
 ///     too weak — it's a footer/header staple)
 pub async fn dismiss_consent(cdp: &CdpSession) -> Result<Option<String>> {
-    let policy = std::env::var("BLADE_CONSENT").unwrap_or_else(|_| "reject".to_string());
+    let policy = std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".to_string());
     if policy == "off" {
         return Ok(None);
     }
@@ -116,13 +116,13 @@ pub async fn dismiss_consent_with_stored(
     cdp: &CdpSession,
     stored: Option<&str>,
 ) -> Result<Option<String>> {
-    let policy = std::env::var("BLADE_CONSENT").unwrap_or_else(|_| "reject".to_string());
+    let policy = std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".to_string());
     if policy == "off" {
         return Ok(None);
     }
     // The store keeps ONE selector per domain, whatever policy learned it.
     // Replay only a button from the current policy's own ladder list: an
-    // Accept selector learned under BLADE_CONSENT=accept pressed under the
+    // Accept selector learned under OBU_CONSENT=accept pressed under the
     // default reject policy would accept tracking and still be reported as
     // "consent: rejected". The other policy's button, an unlisted entry or
     // a tampered one goes to the full ladder, which picks by policy.

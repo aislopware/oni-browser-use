@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 
 /// A cookie we persist across sessions. A subset of `Network.Cookie` that
@@ -85,7 +85,7 @@ fn cookie_target(c: &SavedCookie) -> Value {
 }
 
 fn logins_path() -> PathBuf {
-    platform::blade_dir().join("logins.json")
+    platform::obu_dir().join("logins.json")
 }
 
 /// Snapshot the live cookie store to the sidecar (atomically, 0600).
@@ -101,12 +101,12 @@ pub async fn snapshot(cdp: &CdpSession) -> Result<()> {
     let arr = res
         .get("cookies")
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Other("cookie snapshot missing cookie store".into()))?;
+        .ok_or_else(|| ObuError::Other("cookie snapshot missing cookie store".into()))?;
     let out = snapshot_cookies(arr);
     let bytes = serde_json::to_vec(&out)?;
     // The browser-wide store is authoritative, including logout/deletion.
     let path = logins_path();
-    platform::secure_create_dir_all(&platform::blade_dir())?;
+    platform::secure_create_dir_all(&platform::obu_dir())?;
     platform::secure_write_file(&path, &bytes)?;
     Ok(())
 }
@@ -174,7 +174,7 @@ pub async fn restore(cdp: &CdpSession) -> Result<()> {
         // SECURITY: a symlinked sidecar is attack state, not a login store —
         // refusing it prevents re-injecting attacker-authored cookies into
         // every future browser context.
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "logins sidecar is a symlink — refusing to restore it".into(),
         ));
     }
@@ -194,7 +194,7 @@ pub async fn restore(cdp: &CdpSession) -> Result<()> {
         // cookies (the next snapshot records the store as it really is) and
         // say how many were lost.
         eprintln!(
-            "[bladebro] login restore: {missing}/{} saved cookies were not restored (rejected or did not read back); continuing without them",
+            "[obu] login restore: {missing}/{} saved cookies were not restored (rejected or did not read back); continuing without them",
             list.len()
         );
     }
@@ -230,10 +230,10 @@ async fn restore_cookies(cdp: &CdpSession, list: &[SavedCookie]) -> Result<usize
             // cookie fields"). Now that a restore goes on without missing
             // cookies, the next snapshot would then drop every login in
             // the chunk, so set them one by one and lose only that cookie.
-            Err(BladeError::Cdp { .. }) => {
+            Err(ObuError::Cdp { .. }) => {
                 for cookie in cookies {
                     match cdp.send("Network.setCookie", Some(cookie)).await {
-                        Ok(_) | Err(BladeError::Cdp { .. }) => {}
+                        Ok(_) | Err(ObuError::Cdp { .. }) => {}
                         // A dead or wedged transport: stop rather than wait
                         // out a timeout per cookie; the readback decides.
                         Err(_) => break,
@@ -241,7 +241,7 @@ async fn restore_cookies(cdp: &CdpSession, list: &[SavedCookie]) -> Result<usize
                 }
             }
             Err(e) => eprintln!(
-                "[bladebro] logins restore call failed ({} cookies): {e}",
+                "[obu] logins restore call failed ({} cookies): {e}",
                 cookies.len()
             ),
         }
@@ -250,10 +250,10 @@ async fn restore_cookies(cdp: &CdpSession, list: &[SavedCookie]) -> Result<usize
     let restored = store
         .get("cookies")
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Other("missing cookie store after login restore".into()))?;
+        .ok_or_else(|| ObuError::Other("missing cookie store after login restore".into()))?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(BladeError::other)?
+        .map_err(ObuError::other)?
         .as_secs_f64();
     let missing = list
         .iter()
@@ -276,7 +276,7 @@ async fn restore_cookies(cdp: &CdpSession, list: &[SavedCookie]) -> Result<usize
 /// Shared restore encoding for named sessions and the login sidecar.
 pub(crate) fn cookie_params(value: &Value) -> Result<Value> {
     if value.get("partitionKey").is_some_and(|key| !key.is_null()) {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "partitioned cookies cannot be restored as ordinary cookies".into(),
         ));
     }
@@ -290,7 +290,7 @@ fn saved_cookie_params(c: &SavedCookie) -> Result<Value> {
             .as_deref()
             .is_some_and(|s| !matches!(s, "Strict" | "Lax" | "None"))
     {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "invalid saved cookie {:?}: domain, path or sameSite",
             c.name
         )));

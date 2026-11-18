@@ -1,7 +1,7 @@
 /**
- * Bladebro pi extension — the bladebro MCP server, registered with pi.
+ * Obu pi extension — the obu MCP server, registered with pi.
  *
- * This is the whole extension. It resolves the bladebro binary this package
+ * This is the whole extension. It resolves the obu binary this package
  * installed and hands it to pi as a stdio MCP server; pi's own MCP client does
  * everything else — spawn, handshake, tool-call proxying, shutdown. The five
  * tools arrive with the binary's full definitions (descriptions, schemas and
@@ -21,11 +21,11 @@ import { dirname, join } from "node:path";
 
 /** npm platform packages → the binary each one carries. */
 const PLATFORM_MAP: Record<string, string> = {
-  "linux-x64": "bladebro-linux-x64",
-  "linux-arm64": "bladebro-linux-arm64",
-  "darwin-x64": "bladebro-darwin-x64",
-  "darwin-arm64": "bladebro-darwin-arm64",
-  "win32-x64": "bladebro-windows-x64",
+  "linux-x64": "obu-linux-x64",
+  "linux-arm64": "obu-linux-arm64",
+  "darwin-x64": "obu-darwin-x64",
+  "darwin-arm64": "obu-darwin-arm64",
+  "win32-x64": "obu-windows-x64",
 };
 
 /** Absolute path of this platform's binary, or null when it is not installed. */
@@ -35,26 +35,26 @@ function resolveBinary(): string | null {
   try {
     const pkgJsonPath = require.resolve(`${pkgName}/package.json`);
     const pkgJson = require(pkgJsonPath);
-    const binPath = join(dirname(pkgJsonPath), pkgJson.main || "bladebro");
+    const binPath = join(dirname(pkgJsonPath), pkgJson.main || "obu");
     return existsSync(binPath) ? binPath : null;
   } catch {
     return null;
   }
 }
 
-export default function bladebroExtension(pi: ExtensionAPI) {
+export default function obuExtension(pi: ExtensionAPI) {
   const key = `${process.platform}-${process.arch}`;
   const binary = resolveBinary();
 
   if (!binary || typeof pi.registerMcpServer !== "function") {
     const why = !binary
-      ? `no binary for ${key} — run: npm install bladebro`
+      ? `no binary for ${key} — run: npm install obu`
       : "this pi build has no MCP registration API — update pi";
-    pi.on("session_start", (_event, ctx) => ctx.ui.notify(`Bladebro: ${why}`, "error"));
+    pi.on("session_start", (_event, ctx) => ctx.ui.notify(`Obu: ${why}`, "error"));
     return;
   }
 
-  pi.registerMcpServer("bladebro", {
+  pi.registerMcpServer("obu", {
     command: binary,
     args: ["mcp"],
     exposure: "direct",

@@ -42,7 +42,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
 use crate::cdp::{CdpClient, CdpSession};
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 /// Information about a JavaScript dialog (alert/confirm/prompt/beforeunload)
@@ -244,7 +244,7 @@ pub struct Page {
     /// progressively compress responses after turn 3.
     act_count: std::sync::atomic::AtomicU32,
     /// Context pruning: enabled by default, toggled via
-    /// `BLADE_NO_COMPRESS=1` env var or `state compress off`.
+    /// `OBU_NO_COMPRESS=1` env var or `state compress off`.
     compress_enabled: std::sync::atomic::AtomicBool,
 }
 
@@ -482,9 +482,9 @@ impl Page {
 
     /// S5: pacing governor — sleep so the inter-action gap follows a
     /// log-normal distribution matching fast human think-time. Skipped for
-    /// the first action, disabled by BLADE_PACE=off.
+    /// the first action, disabled by OBU_PACE=off.
     async fn pace(&mut self, action: &crate::action::Action) {
-        if std::env::var("BLADE_PACE").as_deref() == Ok("off") {
+        if std::env::var("OBU_PACE").as_deref() == Ok("off") {
             return;
         }
         let last = self
@@ -578,7 +578,7 @@ impl Page {
         // element's identity and retry ONCE before giving up.
         let (delta, verdict) = match result {
             Ok(v) => v,
-            Err(BladeError::ElementNotFound(_)) if action.ref_id().is_some() => {
+            Err(ObuError::ElementNotFound(_)) if action.ref_id().is_some() => {
                 let ref_id = action.ref_id().unwrap().to_string();
                 match self.heal_by_identity(&ref_id).await? {
                     Some(note) => {
@@ -594,7 +594,7 @@ impl Page {
                         .await?
                     }
                     None => {
-                        return Err(BladeError::ElementNotFound(format!(
+                        return Err(ObuError::ElementNotFound(format!(
                             "{ref_id} not in the live DOM and cannot be re-resolved"
                         )));
                     }
@@ -707,12 +707,12 @@ impl Drop for Page {
 mod tests {
     use super::navigate::with_scheme;
     use super::BusyGuard;
-    use crate::error::BladeError;
+    use crate::error::ObuError;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
     use std::sync::Arc;
 
     fn stale_ref() -> crate::error::Result<()> {
-        Err(BladeError::StaleRef("e4 gone from the current page".into()))
+        Err(ObuError::StaleRef("e4 gone from the current page".into()))
     }
 
     /// P-busy: `act`'s heal path returned through `?` with the busy flag

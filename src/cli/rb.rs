@@ -1,4 +1,4 @@
-//! `bladebro rb` — the real-browser lane command surface: switch, inspect,
+//! `obu rb` — the real-browser lane command surface: switch, inspect,
 //! pick browser/profile, pause/resume, refresh/forget the clone.
 
 use crate::error::Result;
@@ -21,9 +21,9 @@ fn refuse_under_live_clone_sessions(id: &str, sub: &str) -> Result<()> {
         return Ok(());
     }
     let owners: Vec<String> = pids.iter().map(|p| format!("pid {p}")).collect();
-    Err(crate::error::BladeError::Other(format!(
-        "the `{id}` clone is in use by a running bladebro session ({}) — {} Close that \
-         session (its MCP client, or `bladebro stop`), then retry `bladebro rb {sub}`.",
+    Err(crate::error::ObuError::Other(format!(
+        "the `{id}` clone is in use by a running obu session ({}) — {} Close that \
+         session (its MCP client, or `obu stop`), then retry `obu rb {sub}`.",
         owners.join(", "),
         if sub == "forget" {
             "wiping it would delete the profile under its open browser."
@@ -33,7 +33,7 @@ fn refuse_under_live_clone_sessions(id: &str, sub: &str) -> Result<()> {
     )))
 }
 
-/// `bladebro rb ...` — switch between the default agent browser and the
+/// `obu rb ...` — switch between the default agent browser and the
 /// user's real browser (S18). Local config work only: nothing here talks to
 /// a running browser except the daemon restart that makes the switch take
 /// effect on the next launch.
@@ -148,7 +148,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             println!();
             println!(
                 "{}",
-                ui::dim("hint: `bladebro rb on|off` switches the lane · `bladebro help rb` for the full story")
+                ui::dim("hint: `obu rb on|off` switches the lane · `obu help rb` for the full story")
             );
             Ok(())
         }
@@ -166,16 +166,16 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 if json_mode {
                     println!("{}", serde_json::json!({"ok": true, "enabled": true, "note": "already on"}));
                 } else {
-                    println!("{} {}", ui::bold("Real-browser lane:"), ui::bold(&ui::green("already ON")) + " — `bladebro rb status` for details");
+                    println!("{} {}", ui::bold("Real-browser lane:"), ui::bold(&ui::green("already ON")) + " — `obu rb status` for details");
                 }
                 return Ok(());
             }
             let (spec, profile) = rb::resolve_selection(&cfg)?;
             let mode = rb::effective_mode(&cfg, &profile.root);
             if mode != rb::Mode::Attach && spec.binary.as_os_str().is_empty() {
-                return Err(crate::error::BladeError::Other(format!(
+                return Err(crate::error::ObuError::Other(format!(
                     "{} has a profile dir but no launchable binary — install it, or pick \
-                     another browser with `bladebro rb use`.",
+                     another browser with `obu rb use`.",
                     spec.name
                 )));
             }
@@ -222,7 +222,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             println!("    endpoint any local user of this machine can reach — avoid shared/");
             println!("    multi-user hosts (headless sessions idle-close automatically).");
             println!();
-            println!("{}", rb_row("revert", "`bladebro rb off` · wipe the imported copy: `rb forget`"));
+            println!("{}", rb_row("revert", "`obu rb off` · wipe the imported copy: `rb forget`"));
             println!("{}", rb_row("control", "`rb pause` / `rb resume` hand the browser to you"));
             println!("{}", rb_row("note", "running surfaces (daemon, MCP) switch at their next action — an owned browser relaunches; an attached browser is left running"));
             Ok(())
@@ -259,8 +259,8 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
 
         "mode" => {
             let m = rest.first().ok_or_else(|| {
-                crate::error::BladeError::Usage(
-                    "bladebro rb mode <auto|clone|profile|attach>".into(),
+                crate::error::ObuError::Usage(
+                    "obu rb mode <auto|clone|profile|attach>".into(),
                 )
             })?;
             let mode = match m.as_str() {
@@ -269,7 +269,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 "profile" => rb::Mode::Profile,
                 "attach" => rb::Mode::Attach,
                 other => {
-                    return Err(crate::error::BladeError::Usage(format!(
+                    return Err(crate::error::ObuError::Usage(format!(
                         "unknown mode `{other}` — use auto|clone|profile|attach"
                     )))
                 }
@@ -293,8 +293,8 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 "on" | "true" | "1" | "yes" => true,
                 "off" | "false" | "0" | "no" => false,
                 _ => {
-                    return Err(crate::error::BladeError::Usage(format!(
-                        "bladebro rb {sub} <on|off>"
+                    return Err(crate::error::ObuError::Usage(format!(
+                        "obu rb {sub} <on|off>"
                     )))
                 }
             };
@@ -349,8 +349,8 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             });
             if let Some(val) = bin_arg {
                 if val.is_empty() {
-                    return Err(crate::error::BladeError::Usage(
-                        "bladebro rb use --binary <path|auto>".into(),
+                    return Err(crate::error::ObuError::Usage(
+                        "obu rb use --binary <path|auto>".into(),
                     ));
                 }
                 if val == "auto" {
@@ -414,14 +414,14 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     println!(
                         "{}",
                         ui::dim(
-                            "hint: `bladebro rb use <id>` selects one · custom / nix / flatpak install: `rb use --binary <path>`"
+                            "hint: `obu rb use <id>` selects one · custom / nix / flatpak install: `rb use --binary <path>`"
                         )
                     );
                 }
                 Some(id) => {
                     let spec = rb::find_browser(id).ok_or_else(|| {
                         let avail: Vec<String> = rb::discover().iter().map(|b| b.id.clone()).collect();
-                        crate::error::BladeError::Other(format!(
+                        crate::error::ObuError::Other(format!(
                             "browser `{id}` not found. Available: {}",
                             avail.join(", ")
                         ))
@@ -479,7 +479,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     println!(
                         "{}",
                         ui::dim(
-                            "hint: `bladebro rb profile <key>` selects one · `rb profile auto` resets · an absolute path to a profile dir also works"
+                            "hint: `obu rb profile <key>` selects one · `rb profile auto` resets · an absolute path to a profile dir also works"
                         )
                     );
                 }
@@ -495,7 +495,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                         // An absolute path is resolved lazily (root or
                         // profile-subdir); it only has to exist now.
                         if !std::path::Path::new(key).is_dir() {
-                            return Err(crate::error::BladeError::Other(format!(
+                            return Err(crate::error::ObuError::Other(format!(
                                 "profile path not found: {key}"
                             )));
                         }
@@ -510,7 +510,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                         if !profiles.iter().any(|p| p.key == *key) {
                             let avail: Vec<&str> =
                                 profiles.iter().map(|p| p.key.as_str()).collect();
-                            return Err(crate::error::BladeError::Other(format!(
+                            return Err(crate::error::ObuError::Other(format!(
                                 "profile `{key}` not found in {}. Available: {}",
                                 spec.profile_root.display(),
                                 if avail.is_empty() { "(none)".to_string() } else { avail.join(", ") }
@@ -610,7 +610,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             Ok(())
         }
 
-        other => Err(crate::error::BladeError::Usage(format!(
+        other => Err(crate::error::ObuError::Usage(format!(
             "unknown rb subcommand `{other}` — use on|off|status|mode|use|profile|visible|idle-hum|idle-shutdown|refresh|forget|pause|resume"
         ))),
     }

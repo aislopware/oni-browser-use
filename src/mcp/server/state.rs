@@ -55,7 +55,7 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
                     let turn = page.act_turn();
                     Ok(format!("context pruning: {status} (current turn: {turn})"))
                 }
-                _ => Err(crate::error::BladeError::Other(
+                _ => Err(crate::error::ObuError::Other(
                     "compress mode must be 'on', 'off', or 'status'".into(),
                 )),
             };
@@ -237,7 +237,7 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
         "save" => StateOp::SaveSession { name: name.into() },
         "load" => StateOp::LoadSession { name: name.into() },
         _ => {
-            return Err(crate::error::BladeError::Other(format!(
+            return Err(crate::error::ObuError::Other(format!(
                 "unknown state op: {op_str}"
             )))
         }

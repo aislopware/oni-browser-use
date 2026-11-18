@@ -16,7 +16,7 @@ fn run(name: &str, body: &str, exprs: &[(&str, String)]) {
     for (key, js) in exprs {
         script = script.replace(key, js);
     }
-    let path = std::env::temp_dir().join(format!("bladebro-dom-{name}-{}.js", std::process::id()));
+    let path = std::env::temp_dir().join(format!("obu-dom-{name}-{}.js", std::process::id()));
     std::fs::write(&path, format!("{MINI_DOM}\n{script}\ndone({name:?});\n"))
         .expect("write dom case");
     let out = std::process::Command::new("node")

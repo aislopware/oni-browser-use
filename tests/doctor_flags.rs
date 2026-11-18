@@ -1,22 +1,22 @@
-//! `bladebro doctor` must name the setting that is actually broken. A
-//! BLADE_CHROME_FLAGS value with an unterminated quote fails every launch;
+//! `obu doctor` must name the setting that is actually broken. A
+//! OBU_CHROME_FLAGS value with an unterminated quote fails every launch;
 //! it used to be reported under "Agent browser mode" with the fix "Set
-//! BLADE_INCOGNITO to auto, 0 or 1", a setting that was fine.
+//! OBU_INCOGNITO to auto, 0 or 1", a setting that was fine.
 //!
 //! Spawns the real binary: the env vars are process-global.
 
 #[test]
 fn malformed_chrome_flags_are_reported_as_chrome_flags() {
-    let home = std::env::temp_dir().join(format!("bladebro-doctor-flags-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("obu-doctor-flags-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_bladebro"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_obu"))
         .arg("doctor")
-        .env("BLADE_HOME", &home)
-        .env("BLADE_NO_UPDATE_CHECK", "1")
-        .env("BLADE_CHROME_FLAGS", "--user-agent=\"Mozilla/5.0 (X11")
-        .env_remove("BLADE_INCOGNITO")
-        .env_remove("BLADE_PROFILE_DIR")
+        .env("OBU_HOME", &home)
+        .env("OBU_NO_UPDATE_CHECK", "1")
+        .env("OBU_CHROME_FLAGS", "--user-agent=\"Mozilla/5.0 (X11")
+        .env_remove("OBU_INCOGNITO")
+        .env_remove("OBU_PROFILE_DIR")
         .output()
         .expect("doctor must run");
     let _ = std::fs::remove_dir_all(&home);
@@ -30,9 +30,7 @@ fn malformed_chrome_flags_are_reported_as_chrome_flags() {
     let fix = lines.get(at + 1).copied().unwrap_or_default();
     assert!(check.contains("Chrome flags"), "check label: {check}");
     assert!(
-        fix.contains("fix:")
-            && fix.contains("BLADE_CHROME_FLAGS")
-            && !fix.contains("BLADE_INCOGNITO"),
+        fix.contains("fix:") && fix.contains("OBU_CHROME_FLAGS") && !fix.contains("OBU_INCOGNITO"),
         "fix hint: {fix}"
     );
 }

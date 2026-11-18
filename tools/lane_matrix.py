@@ -2,7 +2,7 @@
 """Cold-start matrix: 5 launches per lane, checking the stealth-critical values.
 
 Lanes: daemon (persistent, WS), one-shot (--no-daemon, WS, own Xvfb+WM),
-MCP (stdio; WebSocket by default, zero-port pipe via BLADE_TRANSPORT=pipe).
+MCP (stdio; WebSocket by default, zero-port pipe via OBU_TRANSPORT=pipe).
 The probe checks the two things the whole stealth layer depends on: a live
 WebGL context whose identity matches the machine's GPU profile (hardware
 through EGL on 4.6.0 lanes, the adaptive mask on software boxes — both report
@@ -10,17 +10,17 @@ the same coherent surface), and a coherent display geometry (real decorations;
 the JS geometry shells are gone in 4.6.0, so a panel-less WM truthfully reads
 availHeight == height, exactly like the machine's own session).
 
-Real lane: real-clone (isolated BLADE_HOME, BLADE_LANE=real, invisible) —
+Real lane: real-clone (isolated OBU_HOME, OBU_LANE=real, invisible) —
 the probe checks the REAL-lane contract instead of the mask: navigator.webdriver
 false, and NO GL mask (the browser's own renderer string, reported as-is).
 
-Every lane runs on its own scratch BLADE_HOME (the agent lanes also pin
-BLADE_NO_WARMING=1) and cleans up its daemon/browsers afterwards — a run never
+Every lane runs on its own scratch OBU_HOME (the agent lanes also pin
+OBU_NO_WARMING=1) and cleans up its daemon/browsers afterwards — a run never
 touches the user's real data dir.
 
-Binary under test: `BLADEBRO` env -> the repo build (`target/release/bladebro`)
--> `~/.local/bin/bladebro`; printed at startup. The real lane refuses a binary
-that predates `rb` (BLADE_LANE=real would be silently ignored).
+Binary under test: `OBU` env -> the repo build (`target/release/obu`)
+-> `~/.local/bin/obu`; printed at startup. The real lane refuses a binary
+that predates `rb` (OBU_LANE=real would be silently ignored).
 
 Exit 0 only when every label is clean; exit 1 when any result carries a
 BAD/FAIL/LEAKED label (each labeled line above names one); exit 2 when the
@@ -28,20 +28,20 @@ binary lacks real-lane support.
 """
 import json, os, shutil, signal, subprocess, sys, tempfile, time
 
-def _resolve_blade():
-    """BLADEBRO wins; otherwise prefer the repo build (a stale installed
-    `bladebro` silently changes what is measured); then the user-local install."""
-    env = os.environ.get("BLADEBRO")
+def _resolve_obu():
+    """OBU wins; otherwise prefer the repo build (a stale installed
+    `obu` silently changes what is measured); then the user-local install."""
+    env = os.environ.get("OBU")
     if env:
         return env
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    candidate = os.path.join(repo, "target", "release", "bladebro")
+    candidate = os.path.join(repo, "target", "release", "obu")
     if os.path.exists(candidate) and os.access(candidate, os.X_OK):
         return candidate
-    return os.path.expanduser("~/.local/bin/bladebro")
+    return os.path.expanduser("~/.local/bin/obu")
 
 
-BLADE = _resolve_blade()
+OBU = _resolve_obu()
 PROBE = ("(function(){var o={};try{var c=document.createElement('canvas');var g=c.getContext('webgl');"
          "if(g){var e=g.getExtension('WEBGL_debug_renderer_info');"
          "o.gl=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):'no-ext';o.exts=g.getSupportedExtensions().length;"
@@ -115,7 +115,7 @@ def classify_real(j):
     elif "NULL" in gl or gl.startswith("ERR"):
         # Headless GL support is an environment property — stock Chromium
         # reports exactly the same on this box; the oracle's real-lane gate
-        # proves bladebro-real matches stock on every key.
+        # proves obu-real matches stock on every key.
         ok.append("gl-null(env)")
     else:
         ok.append(f"no-mask({gl[:26]})")
@@ -133,10 +133,10 @@ def _bad(res):
 
 def lane_real(rounds=5):
     """Real-browser lane, clone mechanism, invisible (no display needed):
-    isolated BLADE_HOME + BLADE_LANE=real against a synthetic source profile."""
+    isolated OBU_HOME + OBU_LANE=real against a synthetic source profile."""
     out = []
-    home = tempfile.mkdtemp(prefix="blade-rb-home-")
-    src = tempfile.mkdtemp(prefix="blade-rb-src-")
+    home = tempfile.mkdtemp(prefix="obu-rb-home-")
+    src = tempfile.mkdtemp(prefix="obu-rb-src-")
     os.makedirs(os.path.join(src, "Default"), exist_ok=True)
     with open(os.path.join(src, "Default", "Preferences"), "w") as f:
         f.write("{}")
@@ -144,21 +144,21 @@ def lane_real(rounds=5):
         json.dump({"enabled": True, "mode": "clone", "browser": "chromium",
                    "profile": src, "visible": False}, f)
     env = dict(os.environ)
-    env["BLADE_HOME"] = home
-    env["BLADE_LANE"] = "real"
+    env["OBU_HOME"] = home
+    env["OBU_LANE"] = "real"
     env.pop("DISPLAY", None)
     env.pop("WAYLAND_DISPLAY", None)
     try:
         for i in range(rounds):
             t0 = time.time()
-            subprocess.run([BLADE, "stop"], env=env, stdout=subprocess.DEVNULL,
+            subprocess.run([OBU, "stop"], env=env, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=60)
-            rn = subprocess.run([BLADE, "nav", "https://example.com/", "--json"], env=env,
+            rn = subprocess.run([OBU, "nav", "https://example.com/", "--json"], env=env,
                                 capture_output=True, text=True, timeout=240)
             if rn.returncode != 0:
                 out.append((i + 1, f"NAV-FAIL {rn.stdout[-120:]} {rn.stderr[-120:]}"))
                 continue
-            r2 = subprocess.run([BLADE, "act", "eval", PROBE, "--json"], env=env,
+            r2 = subprocess.run([OBU, "act", "eval", PROBE, "--json"], env=env,
                                 capture_output=True, text=True, timeout=120)
             try:
                 payload = json.loads(r2.stdout.strip().splitlines()[-1])
@@ -168,7 +168,7 @@ def lane_real(rounds=5):
                 continue
             out.append((i + 1, " ".join(classify_real(j)) + f" [{time.time()-t0:.1f}s]"))
     finally:
-        subprocess.run([BLADE, "stop"], env=env, stdout=subprocess.DEVNULL,
+        subprocess.run([OBU, "stop"], env=env, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, timeout=60)
         shutil.rmtree(home, ignore_errors=True)
         shutil.rmtree(src, ignore_errors=True)
@@ -176,23 +176,23 @@ def lane_real(rounds=5):
 
 
 def agent_env(home):
-    """The agent lanes pin BLADE_LANE=agent: a live real-browser config
+    """The agent lanes pin OBU_LANE=agent: a live real-browser config
     (`rb on`) would otherwise silently redirect these runs to the user's own
     browser and every mask assertion would measure the wrong lane.
 
-    Scratch BLADE_HOME + no warming: without a home every run drives its CLI
+    Scratch OBU_HOME + no warming: without a home every run drives its CLI
     daemon on the user's real data dir — test session profiles and a leftover
-    daemon in `~/.blade` (found live 2026-09-26); no warming keeps the cold
+    daemon in `~/.obu` (found live 2026-09-26); no warming keeps the cold
     timings deterministic and offline-safe."""
     env = dict(os.environ)
-    env["BLADE_LANE"] = "agent"
-    env["BLADE_HOME"] = home
-    env["BLADE_NO_WARMING"] = "1"
+    env["OBU_LANE"] = "agent"
+    env["OBU_HOME"] = home
+    env["OBU_NO_WARMING"] = "1"
     return env
 
 
 def lane_home():
-    return tempfile.mkdtemp(prefix="blade-matrix-home-")
+    return tempfile.mkdtemp(prefix="obu-matrix-home-")
 
 
 def cleanup_lane(home, env):
@@ -200,7 +200,7 @@ def cleanup_lane(home, env):
     lanes are killed, so their browser/Xvfb can outlive the parent briefly).
     Wait for the swept processes to die before deleting the home — a dying
     Chromium can re-create its user-data-dir during shutdown writes."""
-    subprocess.run([BLADE, "stop"], env=env, stdout=subprocess.DEVNULL,
+    subprocess.run([OBU, "stop"], env=env, stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL, timeout=60)
     for pid in _pids_under(home):
         try:
@@ -244,10 +244,10 @@ def _lane_daemon_rounds(rounds, env):
     out = []
     for i in range(rounds):
         t0 = time.time()
-        subprocess.run([BLADE, "stop"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-        r = subprocess.run([BLADE, "nav", "https://example.com/", "--json"], env=env,
+        subprocess.run([OBU, "stop"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        r = subprocess.run([OBU, "nav", "https://example.com/", "--json"], env=env,
                            capture_output=True, text=True, timeout=240)
-        r2 = subprocess.run([BLADE, "act", "eval", PROBE, "--json"], env=env,
+        r2 = subprocess.run([OBU, "act", "eval", PROBE, "--json"], env=env,
                             capture_output=True, text=True, timeout=120)
         try:
             payload = json.loads(r2.stdout.strip().splitlines()[-1])
@@ -272,7 +272,7 @@ def _lane_oneshot_rounds(rounds, env):
     out = []
     for i in range(rounds):
         t0 = time.time()
-        r2 = subprocess.run([BLADE, "--no-daemon", "act", "eval", PROBE, "--json"], env=env,
+        r2 = subprocess.run([OBU, "--no-daemon", "act", "eval", PROBE, "--json"], env=env,
                             capture_output=True, text=True, timeout=300)
         try:
             payload = json.loads(r2.stdout.strip().splitlines()[-1])
@@ -317,7 +317,7 @@ def _lane_mcp_rounds(rounds, tool, env):
     out = []
     for i in range(rounds):
         t0 = time.time()
-        proc = subprocess.Popen([BLADE, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        proc = subprocess.Popen([OBU, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, bufsize=1, env=env)
         assert proc.stdin is not None and proc.stdout is not None
         try:
@@ -357,27 +357,27 @@ def _lane_mcp_rounds(rounds, tool, env):
 
 
 def require_real_lane_support():
-    """The real lane is forced via BLADE_LANE=real. A binary that predates the
+    """The real lane is forced via OBU_LANE=real. A binary that predates the
     real-browser lane ignores that variable and the matrix would silently
     measure the AGENT lane against the real-lane contract. Refuse instead."""
     try:
-        r = subprocess.run([BLADE, "help", "--json"], capture_output=True,
+        r = subprocess.run([OBU, "help", "--json"], capture_output=True,
                            text=True, timeout=60)
         ok = r.returncode == 0 and '"rb"' in r.stdout
     except Exception:
         ok = False
     if not ok:
         sys.stderr.write(
-            f"FATAL: {BLADE} does not support the real-browser lane (`rb` missing) — "
-            "BLADE_LANE=real would be ignored and the AGENT lane measured. "
-            "Set BLADEBRO to the build under test.\n")
+            f"FATAL: {OBU} does not support the real-browser lane (`rb` missing) — "
+            "OBU_LANE=real would be ignored and the AGENT lane measured. "
+            "Set OBU to the build under test.\n")
         sys.exit(2)
 
 
 if __name__ == "__main__":
     lane = sys.argv[1] if len(sys.argv) > 1 else "all"
     rounds = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-    print(f"bladebro under test: {BLADE}")
+    print(f"obu under test: {OBU}")
     if lane in ("real", "all"):
         require_real_lane_support()
     bad = 0
@@ -396,7 +396,7 @@ if __name__ == "__main__":
     if lane in ("mcp", "all"):
         show("mcp (stdio, default WS) lane", lane_mcp(rounds))
     if lane in ("mcp-pipe", "all"):
-        show("mcp (pipe opt-in) lane", lane_mcp(rounds, env_extra={"BLADE_TRANSPORT": "pipe"}))
+        show("mcp (pipe opt-in) lane", lane_mcp(rounds, env_extra={"OBU_TRANSPORT": "pipe"}))
     if lane in ("real", "all"):
         show("real lane (clone, isolated home, invisible)", lane_real(rounds))
 

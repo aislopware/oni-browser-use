@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 import threading
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 REQUESTS = []
 CHECKS = 0
 PAYLOAD = b'owned authenticated attachment \xcf\x80\xf0\x9f\xa6\x80\n'
@@ -48,9 +48,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def run_case(root, server, mode, transport):
     label = mode + '-' + transport
     home = root / label
-    env = dict(os.environ, BLADE_HOME=str(home), BLADE_LANE='agent', BLADE_INCOGNITO=mode,
-               BLADE_TRANSPORT=transport, BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1')
-    for key in ('BLADE_CHROME_FLAGS', 'BLADE_PROFILE_DIR', 'BLADE_FRESH', 'BLADE_PROXY',
+    env = dict(os.environ, OBU_HOME=str(home), OBU_LANE='agent', OBU_INCOGNITO=mode,
+               OBU_TRANSPORT=transport, OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1')
+    for key in ('OBU_CHROME_FLAGS', 'OBU_PROFILE_DIR', 'OBU_FRESH', 'OBU_PROXY',
                 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
         env.pop(key, None)
     origin = f'http://127.0.0.1:{server.server_port}/'
@@ -94,7 +94,7 @@ def run_case(root, server, mode, transport):
         check(label + ' fixture really blocks cross-origin fetch ' + path, len(fetches) == 1 and not fetches[0][2], observed)
 
 
-with tempfile.TemporaryDirectory(prefix='blade-download-') as directory:
+with tempfile.TemporaryDirectory(prefix='obu-download-') as directory:
     root = Path(directory)
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()

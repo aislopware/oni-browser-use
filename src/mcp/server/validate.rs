@@ -3,11 +3,11 @@
 
 use serde_json::Value;
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
     if !args.is_object() {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "{tool} arguments must be an object"
         )));
     }
@@ -43,7 +43,7 @@ pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
     };
     for key in strings {
         if args.get(key).is_some_and(|v| !v.is_string()) {
-            return Err(BladeError::Usage(format!("{tool} {key} must be a string")));
+            return Err(ObuError::Usage(format!("{tool} {key} must be a string")));
         }
     }
     for key in [
@@ -60,14 +60,14 @@ pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
         "body",
     ] {
         if args.get(key).is_some_and(|v| !v.is_boolean()) {
-            return Err(BladeError::Usage(format!("{tool} {key} must be a boolean")));
+            return Err(ObuError::Usage(format!("{tool} {key} must be a boolean")));
         }
     }
     for key in ["nth", "budget", "limit", "offset", "max"] {
         if let Some(value) = args.get(key) {
             let valid = value.as_u64().is_some_and(|n| key != "nth" || n > 0);
             if !valid {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "{tool} {key} must be {} integer",
                     if key == "nth" {
                         "a positive (1-based)"
@@ -80,9 +80,7 @@ pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
     }
     for key in ["dx", "dy"] {
         if args.get(key).is_some_and(|v| v.as_i64().is_none()) {
-            return Err(BladeError::Usage(format!(
-                "{tool} {key} must be an integer"
-            )));
+            return Err(ObuError::Usage(format!("{tool} {key} must be an integer")));
         }
     }
     for key in ["x", "y", "scale"] {
@@ -90,25 +88,25 @@ pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
             .get(key)
             .is_some_and(|v| v.as_f64().is_none_or(|n| !n.is_finite()))
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{tool} {key} must be a finite number"
             )));
         }
     }
     if args.get("x").is_some() != args.get("y").is_some() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "coordinate addressing requires both x and y".into(),
         ));
     }
     for key in ["steps", "then", "else"] {
         if args.get(key).is_some_and(|v| !v.is_array()) {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{tool} {key} must be an array of steps"
             )));
         }
     }
     if args.get("template").is_some_and(|v| !v.is_object()) {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "{tool} template must be an object"
         )));
     }
@@ -132,7 +130,7 @@ fn act_fields(args: &Value) -> Result<()> {
     if !crate::action::ACT_ACTIONS.contains(&action)
         && !matches!(action, "state" | "cookies" | "set-cookie")
     {
-        return Err(BladeError::Usage(crate::action::unknown_action_message(
+        return Err(ObuError::Usage(crate::action::unknown_action_message(
             action,
         )));
     }
@@ -142,7 +140,7 @@ fn act_fields(args: &Value) -> Result<()> {
             .and_then(Value::as_str)
             .is_none_or(str::is_empty)
         {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "paginate requires next=CSS or text=Next".into(),
             ));
         }
@@ -151,25 +149,25 @@ fn act_fields(args: &Value) -> Result<()> {
             .and_then(Value::as_u64)
             .is_some_and(|n| !(1..=100).contains(&n))
         {
-            return Err(BladeError::Usage("paginate max must be 1-100".into()));
+            return Err(ObuError::Usage("paginate max must be 1-100".into()));
         }
         let kind = args
             .get("extract")
             .and_then(Value::as_str)
             .unwrap_or("auto");
         if !matches!(kind, "auto" | "json" | "links" | "forms") {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "paginate extract must be auto|json|links|forms".into(),
             ));
         }
         if kind == "json" && args.get("template").is_none_or(|v| !v.is_object()) {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "paginate extract=json requires template".into(),
             ));
         }
     }
     if action == "type" && args.get("text").is_none() {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "type requires text (use clear to empty a field, or text=\"\" explicitly)".into(),
         ));
     }
@@ -179,7 +177,7 @@ fn act_fields(args: &Value) -> Result<()> {
             .and_then(Value::as_str)
             .is_none_or(|s| s.trim().is_empty())
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "press requires key (e.g. Enter, Tab, Control+a)".into(),
         ));
     }
@@ -204,7 +202,7 @@ fn act_fields(args: &Value) -> Result<()> {
                     .and_then(Value::as_array)
                     .is_some_and(|s| !s.is_empty())
             {
-                return Err(BladeError::Usage(
+                return Err(ObuError::Usage(
                     "wait else: 'else' needs a real condition; 'settle' always succeeds".into(),
                 ));
             }
@@ -213,7 +211,7 @@ fn act_fields(args: &Value) -> Result<()> {
         "navigate" => require_nonempty(args, "url", "navigate")?,
         "upload" => require_nonempty(args, "text", "upload file path")?,
         "select" if args.get("option").is_none() && args.get("text").is_none() => {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "select requires option (text or value; empty string is allowed)".into(),
             ));
         }
@@ -238,7 +236,7 @@ fn act_fields(args: &Value) -> Result<()> {
         // The handler resolves only ref/selector to the file input; a label
         // used to pass here and fail after url= pre-navigation/earlier steps.
         if !["ref", "selector"].iter().any(|k| nonempty(args, k)) {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "upload requires ref or selector (the file input; label is not resolved for uploads)"
                     .into(),
             ));
@@ -248,7 +246,7 @@ fn act_fields(args: &Value) -> Result<()> {
             .iter()
             .any(|k| nonempty(args, k))
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{action} requires ref, label or selector"
             )));
         }
@@ -258,7 +256,7 @@ fn act_fields(args: &Value) -> Result<()> {
             .any(|k| nonempty(args, k))
         && !(action == "click" && args.get("x").is_some())
     {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "{action} requires ref, text, label or selector{}",
             if action == "click" {
                 ", or x and y"
@@ -275,7 +273,7 @@ fn act_fields(args: &Value) -> Result<()> {
             )
         })
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "dialog expect must be alert|confirm|prompt|beforeunload|any|clear".into(),
         ));
     }
@@ -284,7 +282,7 @@ fn act_fields(args: &Value) -> Result<()> {
         .and_then(Value::as_str)
         .is_some_and(|s| !matches!(s, "" | "text" | "json"))
     {
-        return Err(BladeError::Usage("format must be text or json".into()));
+        return Err(ObuError::Usage("format must be text or json".into()));
     }
     Ok(())
 }
@@ -295,7 +293,7 @@ pub(super) fn fill(args: &Value) -> Result<()> {
         .get("fields")
         .and_then(Value::as_array)
         .filter(|a| !a.is_empty())
-        .ok_or_else(|| BladeError::Usage("fill requires a non-empty fields array".into()))?;
+        .ok_or_else(|| ObuError::Usage("fill requires a non-empty fields array".into()))?;
     for (i, field) in fields.iter().enumerate() {
         let prefix = format!("fill field {}", i + 1);
         self::fields(field, &prefix)?;
@@ -305,12 +303,12 @@ pub(super) fn fill(args: &Value) -> Result<()> {
                 .and_then(Value::as_str)
                 .is_some_and(|s| !s.is_empty())
         }) {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{prefix} requires ref, label or selector"
             )));
         }
         if field.get("check").is_some_and(|v| !v.is_boolean()) {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{prefix}: check must be a boolean"
             )));
         }
@@ -320,7 +318,7 @@ pub(super) fn fill(args: &Value) -> Result<()> {
             .count()
             > 1
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "{prefix}: supply only one of text, option or check"
             )));
         }
@@ -333,21 +331,17 @@ pub(super) fn see(args: &Value) -> Result<()> {
     if args.get("preview").and_then(Value::as_bool) == Some(true)
         && args.get("extract").and_then(Value::as_str) != Some("auto")
     {
-        return Err(BladeError::Usage(
-            "preview=true requires extract=auto".into(),
-        ));
+        return Err(ObuError::Usage("preview=true requires extract=auto".into()));
     }
     if args.get("items").and_then(Value::as_bool) == Some(true) && !nonempty(args, "artifact") {
-        return Err(BladeError::Usage(
-            "items=true requires artifact=path".into(),
-        ));
+        return Err(ObuError::Usage("items=true requires artifact=path".into()));
     }
     if args.get("changes").and_then(Value::as_bool) == Some(true)
         && ["extract", "logs", "artifact", "scope", "find"]
             .iter()
             .any(|k| nonempty(args, k))
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "changes=true is a model delta read; omit extract/logs/artifact/scope/find".into(),
         ));
     }
@@ -357,7 +351,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
     if nonempty(args, "extract") {
         let mode = args.get("mode").and_then(Value::as_str).unwrap_or("");
         if matches!(mode, "model" | "content" | "outline") {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "extract= and mode={mode} are separate reads; drop mode for the extract, or split into two see calls"
             )));
         }
@@ -365,7 +359,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
             .into_iter()
             .find(|k| nonempty(args, k))
         {
-            return Err(BladeError::Usage(format!(
+            return Err(ObuError::Usage(format!(
                 "extract= and {key}= are separate reads and one would be ignored; split into two see calls"
             )));
         }
@@ -375,7 +369,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
         && !nonempty(args, "artifact")
         && args.get("changes").and_then(Value::as_bool) != Some(true)
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "format=json applies to extract=, artifact= or changes=true; this mode returns text"
                 .into(),
         ));
@@ -385,12 +379,12 @@ pub(super) fn see(args: &Value) -> Result<()> {
             sort,
             "confidence" | "top" | "new" | "controversial" | "old" | "qa"
         ) {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "sort must be confidence|top|new|controversial|old|qa".into(),
             ));
         }
         if args.get("extract").and_then(Value::as_str) != Some("auto") {
-            return Err(BladeError::Usage(
+            return Err(ObuError::Usage(
                 "sort requires extract=auto on a Reddit post".into(),
             ));
         }
@@ -418,7 +412,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
                 continue;
             }
             if !choices.split('|').any(|c| c == value) {
-                return Err(BladeError::Usage(format!(
+                return Err(ObuError::Usage(format!(
                     "unknown {key}: {value} (use {choices})"
                 )));
             }
@@ -427,7 +421,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
     if args.get("extract").and_then(Value::as_str) == Some("json") {
         let template = args
             .get("template")
-            .ok_or_else(|| BladeError::Usage("extract=json requires template".into()))?;
+            .ok_or_else(|| ObuError::Usage("extract=json requires template".into()))?;
         super::extract::template_extract_expr(template, 1)?;
     }
     Ok(())
@@ -443,7 +437,7 @@ fn require_nonempty(args: &Value, key: &str, context: &str) -> Result<()> {
     if nonempty(args, key) {
         Ok(())
     } else {
-        Err(BladeError::Usage(format!("{context} requires {key}")))
+        Err(ObuError::Usage(format!("{context} requires {key}")))
     }
 }
 
@@ -461,17 +455,17 @@ pub(super) fn state(args: &Value) -> Result<()> {
         "classes",
     ] {
         if args.get(key).is_some_and(|v| !v.is_string()) {
-            return Err(BladeError::Usage(format!("state {key} must be a string")));
+            return Err(ObuError::Usage(format!("state {key} must be a string")));
         }
     }
     for key in ["secure", "httpOnly"] {
         if args.get(key).is_some_and(|v| !v.is_boolean()) {
-            return Err(BladeError::Usage(format!("state {key} must be a boolean")));
+            return Err(ObuError::Usage(format!("state {key} must be a boolean")));
         }
     }
     let op = args.get("op").and_then(Value::as_str).unwrap_or("");
     if !crate::mcp::tools::STATE_OPS.contains(&op) {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "unknown state op: {op}; use {}",
             crate::mcp::tools::STATE_OPS.join("|")
         )));
@@ -480,12 +474,12 @@ pub(super) fn state(args: &Value) -> Result<()> {
         require_nonempty(args, "name", op)?;
     }
     if matches!(op, "set-ls" | "set-ss" | "rm-ls" | "rm-ss") && args.get("name").is_none() {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "{op} requires name (empty key is allowed)"
         )));
     }
     if matches!(op, "set-cookie" | "set-ls" | "set-ss") && args.get("value").is_none() {
-        return Err(BladeError::Usage(format!(
+        return Err(ObuError::Usage(format!(
             "{op} requires value (empty string is allowed)"
         )));
     }
@@ -497,7 +491,7 @@ pub(super) fn state(args: &Value) -> Result<()> {
         .and_then(Value::as_str)
         .is_some_and(|s| !matches!(s, "Strict" | "Lax" | "None"))
     {
-        return Err(BladeError::Usage("sameSite must be Strict|Lax|None".into()));
+        return Err(ObuError::Usage("sameSite must be Strict|Lax|None".into()));
     }
     if op == "compress"
         && args
@@ -506,7 +500,7 @@ pub(super) fn state(args: &Value) -> Result<()> {
             .and_then(Value::as_str)
             .is_some_and(|s| !matches!(s, "" | "on" | "off" | "status"))
     {
-        return Err(BladeError::Usage(
+        return Err(ObuError::Usage(
             "compress mode must be on|off|status".into(),
         ));
     }
@@ -516,7 +510,7 @@ pub(super) fn state(args: &Value) -> Result<()> {
 pub(super) fn vision(args: &Value) -> Result<()> {
     fields(args, "vision")?;
     if args.get("marks").is_some_and(|v| !v.is_boolean()) {
-        return Err(BladeError::Usage("vision marks must be a boolean".into()));
+        return Err(ObuError::Usage("vision marks must be a boolean".into()));
     }
     Ok(())
 }
@@ -528,7 +522,7 @@ pub(super) fn run(args: &Value) -> Result<()> {
         .and_then(Value::as_str)
         .is_some_and(|s| !matches!(s, "" | "text" | "json"))
     {
-        return Err(BladeError::Usage("run format must be text or json".into()));
+        return Err(ObuError::Usage("run format must be text or json".into()));
     }
     sequence(args, "steps", false, 0, &mut 0)
 }
@@ -537,19 +531,19 @@ pub(super) fn run(args: &Value) -> Result<()> {
 // that may not run. Bounds protect the async recursive executor's stack/work.
 fn sequence(args: &Value, key: &str, batch: bool, depth: usize, count: &mut usize) -> Result<()> {
     if depth > 32 {
-        return Err(BladeError::Usage("step nesting exceeds 32 levels".into()));
+        return Err(ObuError::Usage("step nesting exceeds 32 levels".into()));
     }
     let steps = args
         .get(key)
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Usage(format!("requires {key} array")))?;
+        .ok_or_else(|| ObuError::Usage(format!("requires {key} array")))?;
     if batch && steps.is_empty() {
-        return Err(BladeError::Usage("batch requires at least one step".into()));
+        return Err(ObuError::Usage("batch requires at least one step".into()));
     }
     for (i, step) in steps.iter().enumerate() {
         *count += 1;
         if *count > 1000 {
-            return Err(BladeError::Usage("plan exceeds 1000 steps".into()));
+            return Err(ObuError::Usage("plan exceeds 1000 steps".into()));
         }
         let check = || -> Result<()> {
             fields(step, "step")?;
@@ -567,10 +561,10 @@ fn sequence(args: &Value, key: &str, batch: bool, depth: usize, count: &mut usiz
                             .and_then(Value::as_u64)
                             .is_some_and(|n| n > 100)
                     {
-                        return Err(BladeError::Usage("while max must be 0-100".into()));
+                        return Err(ObuError::Usage("while max must be 0-100".into()));
                     }
                     if action == "while" && step.get("steps").is_none() {
-                        return Err(BladeError::Usage("while requires steps array".into()));
+                        return Err(ObuError::Usage("while requires steps array".into()));
                     }
                     Ok(())
                 }
@@ -583,13 +577,13 @@ fn sequence(args: &Value, key: &str, batch: bool, depth: usize, count: &mut usiz
                     }
                     act_fields(&eval)
                 }
-                "batch" if batch => Err(BladeError::Usage(
+                "batch" if batch => Err(ObuError::Usage(
                     "batch steps cannot nest batch; use run".into(),
                 )),
                 _ => act_fields(step),
             }
         };
-        check().map_err(|e| BladeError::Usage(format!("step {}: {e}", i + 1)))?;
+        check().map_err(|e| ObuError::Usage(format!("step {}: {e}", i + 1)))?;
         for child in ["then", "else", "steps"] {
             if step.get(child).is_some() {
                 sequence(
@@ -599,7 +593,7 @@ fn sequence(args: &Value, key: &str, batch: bool, depth: usize, count: &mut usiz
                     depth + 1,
                     count,
                 )
-                .map_err(|e| BladeError::Usage(format!("step {} {child}: {e}", i + 1)))?;
+                .map_err(|e| ObuError::Usage(format!("step {} {child}: {e}", i + 1)))?;
             }
         }
     }
@@ -617,7 +611,7 @@ pub(super) fn tool_call(params: &Value) -> Result<()> {
         "state" => state(&args),
         "run" => run(&args),
         "vision" => vision(&args),
-        name => Err(BladeError::Usage(format!(
+        name => Err(ObuError::Usage(format!(
             "unknown tool: {name}; use act|see|state|run|vision"
         ))),
     }

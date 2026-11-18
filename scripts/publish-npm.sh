@@ -10,8 +10,8 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
 # ── resource cap: keep the machine usable while a local build runs ────
-if [[ -z "${BLADE_RELEASE_CAPPED:-}" ]]; then
-    export BLADE_RELEASE_CAPPED=1
+if [[ -z "${OBU_RELEASE_CAPPED:-}" ]]; then
+    export OBU_RELEASE_CAPPED=1
     cpus=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
     half=$(( cpus / 2 )); if (( half < 2 )); then half=2; fi
     cap=()
@@ -33,10 +33,10 @@ if [ -z "$VERSION" ]; then
   echo "ERROR: could not read version from Cargo.toml"
   exit 1
 fi
-echo "Publishing bladebro v$VERSION to npm..."
+echo "Publishing obu v$VERSION to npm..."
 
 # ── sync version into npm package.json files ────────────────────────
-for pkg in npm/bladebro npm/bladebro-linux-x64 npm/bladebro-linux-arm64 npm/bladebro-windows-x64 npm/bladebro-darwin-x64 npm/bladebro-darwin-arm64; do
+for pkg in npm/obu npm/obu-linux-x64 npm/obu-linux-arm64 npm/obu-windows-x64 npm/obu-darwin-x64 npm/obu-darwin-arm64; do
   if [ -f "$pkg/package.json" ]; then
     python3 -c "
 import json
@@ -64,7 +64,7 @@ if [[ "$SKIP_BUILD" == "0" ]]; then
   cargo build --release
   if command -v cargo-zigbuild >/dev/null 2>&1; then
     cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.28
-    cp target/x86_64-unknown-linux-gnu/release/bladebro target/release/bladebro
+    cp target/x86_64-unknown-linux-gnu/release/obu target/release/obu
     cargo zigbuild --release --target aarch64-unknown-linux-gnu.2.28
     cargo zigbuild --release --target x86_64-pc-windows-gnu
     RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-apple-darwin
@@ -77,7 +77,7 @@ else
   echo "Using the binaries from the current release build (--no-build)."
 fi
 
-python3 tools/reliability_probe/linux-abi.py target/release/bladebro target/aarch64-unknown-linux-gnu/release/bladebro
+python3 tools/reliability_probe/linux-abi.py target/release/obu target/aarch64-unknown-linux-gnu/release/obu
 
 # Copy every binary into its package. All five platforms are mandatory —
 # a missing binary is a hard error, never a partial publish.
@@ -89,16 +89,16 @@ copy_bin() {
   cp "$1" "$2"
   chmod +x "$2" 2>/dev/null || true
 }
-copy_bin target/release/bladebro npm/bladebro-linux-x64/bladebro
+copy_bin target/release/obu npm/obu-linux-x64/obu
 
-copy_bin target/aarch64-unknown-linux-gnu/release/bladebro npm/bladebro-linux-arm64/bladebro
-copy_bin target/x86_64-pc-windows-gnu/release/bladebro.exe npm/bladebro-windows-x64/bladebro.exe
-copy_bin target/x86_64-apple-darwin/release/bladebro npm/bladebro-darwin-x64/bladebro
-copy_bin target/aarch64-apple-darwin/release/bladebro npm/bladebro-darwin-arm64/bladebro
+copy_bin target/aarch64-unknown-linux-gnu/release/obu npm/obu-linux-arm64/obu
+copy_bin target/x86_64-pc-windows-gnu/release/obu.exe npm/obu-windows-x64/obu.exe
+copy_bin target/x86_64-apple-darwin/release/obu npm/obu-darwin-x64/obu
+copy_bin target/aarch64-apple-darwin/release/obu npm/obu-darwin-arm64/obu
 
 # ── publish platform packages ───────────────────────────────────────
 echo "Publishing platform packages..."
-for pkg in bladebro-linux-x64 bladebro-linux-arm64 bladebro-windows-x64 bladebro-darwin-x64 bladebro-darwin-arm64; do
+for pkg in obu-linux-x64 obu-linux-arm64 obu-windows-x64 obu-darwin-x64 obu-darwin-arm64; do
   if [ -f "npm/$pkg/package.json" ]; then
     echo "  Publishing $pkg@$VERSION..."
     (cd "npm/$pkg" && npm publish --access public 2>&1 | grep -E "Publishing|error|Tarball")
@@ -112,7 +112,7 @@ done
 echo "Waiting for npm registry propagation..."
 for i in $(seq 1 60); do
   ALL_OK=true
-  for pkg in bladebro-linux-x64 bladebro-linux-arm64 bladebro-windows-x64 bladebro-darwin-x64 bladebro-darwin-arm64; do
+  for pkg in obu-linux-x64 obu-linux-arm64 obu-windows-x64 obu-darwin-x64 obu-darwin-arm64; do
     if ! npm view "$pkg@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"; then
       ALL_OK=false
     fi
@@ -136,20 +136,20 @@ if [[ "$ALL_OK" != true ]]; then
 fi
 
 # ── publish main package ────────────────────────────────────────────
-echo "Publishing main package: bladebro@$VERSION..."
-(cd npm/bladebro && npm publish --access public)
+echo "Publishing main package: obu@$VERSION..."
+(cd npm/obu && npm publish --access public)
 
 # ── verify the main package is actually live ────────────────────────
 # Registry publishes can land asynchronously ("being processed"), and the
 # platform-package check above says nothing about the meta package — a
-# silent miss would leave `npm i -g bladebro` on the PREVIOUS version while
+# silent miss would leave `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` on the PREVIOUS version while
 # this script prints "Done!". `--prefer-online` matters: a plain `npm view`
 # serves a stale cache entry for minutes and reads as "missing".
-echo "Waiting for bladebro@$VERSION to go live..."
+echo "Waiting for obu@$VERSION to go live..."
 META_OK=false
 for i in $(seq 1 60); do
-  if npm view "bladebro@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"; then
-    echo "  bladebro@$VERSION is live after $((i*10))s"
+  if npm view "obu@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"; then
+    echo "  obu@$VERSION is live after $((i*10))s"
     META_OK=true
     break
   fi
@@ -157,7 +157,7 @@ for i in $(seq 1 60); do
   echo "  waiting... ($((i*10))s)"
 done
 if [ "$META_OK" != true ]; then
-  echo "ERROR: bladebro@$VERSION never appeared on the registry after 10 minutes." >&2
+  echo "ERROR: obu@$VERSION never appeared on the registry after 10 minutes." >&2
   echo "       If \`npm stage list\` shows an entry for this version, the publish is STAGED" >&2
   echo "       and awaits approval: npm stage approve <id> (interactive 2FA required)." >&2
   echo "       If it shows nothing, the publish may still be PROCESSING (re-check" >&2
@@ -167,6 +167,6 @@ if [ "$META_OK" != true ]; then
 fi
 
 echo ""
-echo "Done! Published bladebro@$VERSION to npm (all platforms)."
-echo "  Install:  npm install -g bladebro"
-echo "  Run:     npx bladebro mcp"
+echo "Done! Published obu@$VERSION to npm (all platforms)."
+echo "  Install:  cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
+echo "  Run:     npx obu mcp"

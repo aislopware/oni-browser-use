@@ -1,7 +1,7 @@
 //! Reversible Hermes setup through its public CLI. The browser remains the
 //! ordinary MCP server: no copied schemas, Hermes imports, plugin or model code.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -10,7 +10,7 @@ use std::process::Stdio;
 use tokio::io::AsyncReadExt;
 
 const LIMIT: u64 = 256 * 1024;
-const SERVER: &str = "mcp_servers.bladebro";
+const SERVER: &str = "mcp_servers.obu";
 const DISABLED: &str = "agent.disabled_toolsets";
 
 struct Hermes {
@@ -34,21 +34,21 @@ impl Hermes {
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| {
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "cannot start Hermes: {e}; install its CLI or pass --hermes <path>"
                 ))
             })?;
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| BladeError::other("Hermes stdout unavailable"))?;
+            .ok_or_else(|| ObuError::other("Hermes stdout unavailable"))?;
         let stderr = child
             .stderr
             .take()
-            .ok_or_else(|| BladeError::other("Hermes stderr unavailable"))?;
+            .ok_or_else(|| ObuError::other("Hermes stderr unavailable"))?;
         let read = async move { tokio::try_join!(bounded(stdout), bounded(stderr)) };
         let result = tokio::time::timeout(std::time::Duration::from_secs(180), async {
-            let ((out, err), status) = tokio::try_join!(read, async { child.wait().await.map_err(BladeError::from) })?;
+            let ((out, err), status) = tokio::try_join!(read, async { child.wait().await.map_err(ObuError::from) })?;
             // Config reads may return defaults after a malformed YAML warning.
             // Never turn that fallback into a successful installation.
             if !status.success() && args.get(..2) == Some(&["config", "get"]) {
@@ -58,10 +58,10 @@ impl Hermes {
                 }
             }
             if !err.is_empty() && args.get(..2) == Some(&["config", "get"]) {
-                return Err(BladeError::other("Hermes reported a diagnostic; run `hermes config check` and resolve it before switching browsers"));
+                return Err(ObuError::other("Hermes reported a diagnostic; run `hermes config check` and resolve it before switching browsers"));
             }
-            Ok((status.success(), String::from_utf8(out).map_err(BladeError::other)?))
-        }).await.map_err(|_| BladeError::other("Hermes did not finish within 180s; setup state was retained — retry the command"))?;
+            Ok((status.success(), String::from_utf8(out).map_err(ObuError::other)?))
+        }).await.map_err(|_| ObuError::other("Hermes did not finish within 180s; setup state was retained — retry the command"))?;
         result
     }
 
@@ -73,7 +73,7 @@ impl Hermes {
             if out.trim() == format!("Config key not set: {key}") {
                 return Ok(None);
             }
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "Hermes could not read {key}; requires `hermes config get --json --raw`"
             )));
         }
@@ -90,7 +90,9 @@ impl Hermes {
         };
         let (ok, _) = self.call(&args).await?;
         if !ok || self.get(key).await? != value.cloned() {
-            return Err(BladeError::Other(format!("Hermes did not persist {key}; recovery state retained — retry `bladebro hermes off`")));
+            return Err(ObuError::Other(format!(
+                "Hermes did not persist {key}; recovery state retained — retry `obu hermes off`"
+            )));
         }
         Ok(())
     }
@@ -100,7 +102,7 @@ async fn bounded(stream: impl tokio::io::AsyncRead + Unpin) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     stream.take(LIMIT + 1).read_to_end(&mut out).await?;
     if out.len() as u64 > LIMIT {
-        return Err(BladeError::other("Hermes output exceeds 256 KiB"));
+        return Err(ObuError::other("Hermes output exceeds 256 KiB"));
     }
     Ok(out)
 }
@@ -123,7 +125,7 @@ fn disabled(value: Option<Value>) -> Result<Vec<String>> {
         // Hermes accepts a bare name as one item. Ambiguous serialized lists
         // are refused rather than silently losing an existing suppression.
         Some(Value::String(s)) if !s.trim_start().starts_with('[') => Ok(vec![s]),
-        _ => Err(BladeError::other("agent.disabled_toolsets must be a list of names; normalize it with `hermes config set agent.disabled_toolsets '[\"browser\"]'` (retain your other disabled names)")),
+        _ => Err(ObuError::other("agent.disabled_toolsets must be a list of names; normalize it with `hermes config set agent.disabled_toolsets '[\"browser\"]'` (retain your other disabled names)")),
     }
 }
 
@@ -140,7 +142,7 @@ fn check_file(path: &Path) -> Result<()> {
         Err(e) => return Err(e.into()),
     };
     if !md.is_file() || md.file_type().is_symlink() {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "refusing unsafe setup file {}",
             path.display()
         )));
@@ -149,7 +151,7 @@ fn check_file(path: &Path) -> Result<()> {
     {
         use std::os::unix::fs::MetadataExt;
         if md.uid() != unsafe { libc::geteuid() } || md.mode() & 0o077 != 0 {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "setup file must be owned by you and private (0600): {}",
                 path.display()
             )));
@@ -177,16 +179,16 @@ impl Drop for SetupGuard {
 }
 
 fn lock(root: &Path) -> Result<SetupGuard> {
-    platform::validate_dir_ancestors(&root.join("state.json")).map_err(BladeError::other)?;
+    platform::validate_dir_ancestors(&root.join("state.json")).map_err(ObuError::other)?;
     if let Ok(md) = std::fs::symlink_metadata(root) {
         if !md.is_dir() || md.file_type().is_symlink() {
-            return Err(BladeError::other("refusing unsafe Hermes setup directory"));
+            return Err(ObuError::other("refusing unsafe Hermes setup directory"));
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
             if md.uid() != unsafe { libc::geteuid() } || md.mode() & 0o077 != 0 {
-                return Err(BladeError::other(
+                return Err(ObuError::other(
                     "Hermes setup directory must be owned by you and private (0700)",
                 ));
             }
@@ -209,12 +211,12 @@ fn lock(root: &Path) -> Result<SetupGuard> {
     }
     let file = opts
         .open(path)
-        .map_err(|e| BladeError::Other(format!("Hermes setup is busy or inaccessible: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("Hermes setup is busy or inaccessible: {e}")))?;
     #[cfg(unix)]
     {
         use std::os::fd::AsRawFd;
         if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return Err(BladeError::other(
+            return Err(ObuError::other(
                 "Hermes setup is busy; retry when the other switch finishes",
             ));
         }
@@ -235,7 +237,7 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                 let value = iter
                     .next()
                     .filter(|s| !s.trim().is_empty() && !s.starts_with('-'))
-                    .ok_or_else(|| BladeError::Usage(format!("{arg} needs a value")))?;
+                    .ok_or_else(|| ObuError::Usage(format!("{arg} needs a value")))?;
                 if arg == "--profile" {
                     hermes.profile = Some(value.clone());
                 } else {
@@ -244,9 +246,8 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
             }
             "on" | "off" | "status" if action.is_none() => action = Some(arg.as_str()),
             _ => {
-                return Err(BladeError::Usage(
-                    "bladebro hermes on|off|status [--profile <name>] [--hermes <path>] [--json]"
-                        .into(),
+                return Err(ObuError::Usage(
+                    "obu hermes on|off|status [--profile <name>] [--hermes <path>] [--json]".into(),
                 ))
             }
         }
@@ -255,14 +256,14 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
     let (ok, config) = hermes.call(&["config", "path"]).await?;
     let config = PathBuf::from(config.trim());
     if !ok || !config.is_absolute() {
-        return Err(BladeError::other(
+        return Err(ObuError::other(
             "Hermes did not return an absolute config path",
         ));
     }
     let root = config
         .parent()
-        .ok_or_else(|| BladeError::other("Hermes config has no parent"))?
-        .join(".bladebro-browser");
+        .ok_or_else(|| ObuError::other("Hermes config has no parent"))?
+        .join(".obu-browser");
     let _lock = lock(&root)?;
     let state = root.join("state.json");
     check_file(&state)?;
@@ -272,11 +273,11 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
             let mut bytes = Vec::new();
             file.take(LIMIT + 1).read_to_end(&mut bytes)?;
             if bytes.len() as u64 > LIMIT {
-                return Err(BladeError::other("Hermes setup state is too large"));
+                return Err(ObuError::other("Hermes setup state is too large"));
             }
             let s: Saved = serde_json::from_slice(&bytes)?;
             if s.version != 1 || s.config != config {
-                return Err(BladeError::other(
+                return Err(ObuError::other(
                     "Hermes setup state belongs to another config or version; no settings changed",
                 ));
             }
@@ -288,9 +289,9 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
     let agent = hermes
         .get("agent")
         .await?
-        .ok_or_else(|| BladeError::other("Hermes agent config is unavailable"))?;
+        .ok_or_else(|| ObuError::other("Hermes agent config is unavailable"))?;
     if !agent.is_object() {
-        return Err(BladeError::other("Hermes agent config must be a mapping"));
+        return Err(ObuError::other("Hermes agent config must be a mapping"));
     }
     let mut names = disabled(agent.get("disabled_toolsets").cloned())?;
     let servers = hermes
@@ -298,28 +299,28 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
         .await?
         .unwrap_or_else(|| json!({}));
     if !servers.is_object() {
-        return Err(BladeError::other("Hermes mcp_servers must be a mapping"));
+        return Err(ObuError::other("Hermes mcp_servers must be a mapping"));
     }
-    let current = servers.get("bladebro").cloned();
+    let current = servers.get("obu").cloned();
     let text = match action {
         "status" => {
             let active = saved
                 .as_ref()
                 .is_some_and(|s| current.as_ref() == Some(&s.installed))
                 && has_browser(&names);
-            format!("Hermes browser: {}. Config: {}. {}", if active { "Bladebro configured" } else if saved.is_some() { "setup pending or settings changed" } else { "unmanaged" }, config.display(), "Start a new Hermes chat after switching; restart running gateways/desktop clients.")
+            format!("Hermes browser: {}. Config: {}. {}", if active { "Obu configured" } else if saved.is_some() { "setup pending or settings changed" } else { "unmanaged" }, config.display(), "Start a new Hermes chat after switching; restart running gateways/desktop clients.")
         }
         "on" => {
             let s = if let Some(s) = saved {
                 if current != s.before && current.as_ref() != Some(&s.installed) {
-                    return Err(BladeError::other("mcp_servers.bladebro changed after setup; no settings changed. Restore the saved entry before retrying, or review .bladebro-browser/state.json"));
+                    return Err(ObuError::other("mcp_servers.obu changed after setup; no settings changed. Restore the saved entry before retrying, or review .obu-browser/state.json"));
                 }
                 s
             } else {
                 let exe = std::env::current_exe()?;
                 let exe = exe
                     .to_str()
-                    .ok_or_else(|| BladeError::other("Bladebro install path must be UTF-8"))?;
+                    .ok_or_else(|| ObuError::other("Obu install path must be UTF-8"))?;
                 // Hermes filters the parent environment. Keep existing server
                 // options and explicit data/browser paths instead of silently
                 // launching against a different profile or Chromium install.
@@ -327,17 +328,17 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                     None => serde_json::Map::new(),
                     Some(Value::Object(env)) => env.clone(),
                     _ => {
-                        return Err(BladeError::other(
-                            "mcp_servers.bladebro.env must be a mapping; no settings changed",
+                        return Err(ObuError::other(
+                            "mcp_servers.obu.env must be a mapping; no settings changed",
                         ))
                     }
                 };
-                for key in ["BLADE_HOME", "CHROME_PATH"] {
+                for key in ["OBU_HOME", "CHROME_PATH"] {
                     if !env.contains_key(key) {
                         if let Some(value) = std::env::var_os(key) {
                             let value = value
                                 .to_str()
-                                .ok_or_else(|| BladeError::Other(format!("{key} must be UTF-8")))?;
+                                .ok_or_else(|| ObuError::Other(format!("{key} must be UTF-8")))?;
                             let path = PathBuf::from(value);
                             let path = if value.is_empty() || path.is_absolute() {
                                 path
@@ -363,7 +364,7 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                 // resume or restore only the settings it owns.
                 let encoded = serde_json::to_vec(&s)?;
                 if encoded.len() as u64 > LIMIT {
-                    return Err(BladeError::other("Hermes recovery state exceeds 256 KiB; no settings changed — reduce the existing Bladebro server environment before switching"));
+                    return Err(ObuError::other("Hermes recovery state exceeds 256 KiB; no settings changed — reduce the existing Obu server environment before switching"));
                 }
                 platform::secure_write_file(&state, &encoded)?;
                 s
@@ -371,20 +372,20 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
             if current.as_ref() != Some(&s.installed) {
                 hermes.write(SERVER, Some(&s.installed)).await?;
             }
-            let (connected, _) = hermes.call(&["mcp", "test", "bladebro"]).await?;
+            let (connected, _) = hermes.call(&["mcp", "test", "obu"]).await?;
             if !connected {
-                return Err(BladeError::other("Hermes could not connect to Bladebro; built-in browser suppression was not changed. Run `hermes mcp test bladebro`, then retry `bladebro hermes on` or restore with `bladebro hermes off`"));
+                return Err(ObuError::other("Hermes could not connect to Obu; built-in browser suppression was not changed. Run `hermes mcp test obu`, then retry `obu hermes on` or restore with `obu hermes off`"));
             }
             if !has_browser(&names) {
                 names.push("browser".into());
                 hermes.write(DISABLED, Some(&json!(names))).await?;
             }
-            "Bladebro configured through Hermes MCP; built-in browser tools disabled, web tools preserved. Start a new chat; restart running gateways/desktop clients. Revert: bladebro hermes off (same profile). Chrome/Chromium must be installed; `bladebro doctor` checks browser prerequisites.".into()
+            "Obu configured through Hermes MCP; built-in browser tools disabled, web tools preserved. Start a new chat; restart running gateways/desktop clients. Revert: obu hermes off (same profile). Chrome/Chromium must be installed; `obu doctor` checks browser prerequisites.".into()
         }
         "off" => {
             if let Some(s) = saved {
                 if current != s.before && current.as_ref() != Some(&s.installed) {
-                    return Err(BladeError::other("mcp_servers.bladebro changed after setup; refusing to overwrite it. Review .bladebro-browser/state.json and restore the saved entry before retrying"));
+                    return Err(ObuError::other("mcp_servers.obu changed after setup; refusing to overwrite it. Review .obu-browser/state.json and restore the saved entry before retrying"));
                 }
                 // Restore the original browser policy before removing the MCP
                 // entry. Repeated off after a crash is safe at either boundary.
@@ -462,7 +463,7 @@ mod tests {
         // ETXTBSY ("Text file busy") — seen on CI. The counter makes the
         // path unique even when the clock does not advance.
         let seq = NEXT.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!("blade-hermes-{}-{nonce}-{seq}", std::process::id()))
+        std::env::temp_dir().join(format!("obu-hermes-{}-{nonce}-{seq}", std::process::id()))
     }
 
     #[test]

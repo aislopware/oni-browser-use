@@ -1,12 +1,12 @@
-//! Self-update, rollback, and system diagnostics for Bladebro.
+//! Self-update, rollback, and system diagnostics for Obu.
 //!
 //! Commands:
-//! - `bladebro -u` / `bladebro update` — check for updates, download, swap
-//! - `bladebro -u --check` — dry run: check for updates, don't install
-//! - `bladebro -u --force` — force update even if same version
-//! - `bladebro -doc` / `bladebro doctor` — diagnose system, suggest fixes
-//! - `bladebro --rollback` — restore previous binary after broken update
-//! - `bladebro -v` / `bladebro --version` — show version + update status
+//! - `obu -u` / `obu update` — check for updates, download, swap
+//! - `obu -u --check` — dry run: check for updates, don't install
+//! - `obu -u --force` — force update even if same version
+//! - `obu -doc` / `obu doctor` — diagnose system, suggest fixes
+//! - `obu --rollback` — restore previous binary after broken update
+//! - `obu -v` / `obu --version` — show version + update status
 
 pub mod doctor;
 pub mod download;
@@ -14,16 +14,16 @@ pub mod swap;
 pub use crate::ui;
 pub mod version;
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// The current version, baked in at compile time.
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Git commit + dirty flag, baked in by build.rs.
-pub const BUILD_ID: &str = env!("BLADE_BUILD_ID");
+pub const BUILD_ID: &str = env!("OBU_BUILD_ID");
 
 /// The GitHub repo for release checks.
-const GITHUB_REPO: &str = "dondai44423/bladebro";
+const GITHUB_REPO: &str = "aislopware/oni-browser-use";
 
 /// Dispatch an update-hub command.
 pub async fn run(cmd: &str, args: &[String]) -> Result<()> {
@@ -32,15 +32,15 @@ pub async fn run(cmd: &str, args: &[String]) -> Result<()> {
         "doctor" | "-doc" => doctor::run().await,
         "rollback" | "--rollback" => swap::rollback().await,
         "version" | "-v" | "--version" => show_version().await,
-        other => Err(BladeError::Other(format!(
+        other => Err(ObuError::Other(format!(
             "unknown command: {other}\n  \
-             Usage: bladebro <mcp|audit|see|act|state|run|nav|probe|targets|version>\n  \
-             Update hub: bladebro <update|-u|doctor|-doc|rollback|--rollback|-v|--version>"
+             Usage: obu <mcp|audit|see|act|state|run|nav|probe|targets|version>\n  \
+             Update hub: obu <update|-u|doctor|-doc|rollback|--rollback|-v|--version>"
         ))),
     }
 }
 
-/// `bladebro update` / `bladebro -u` — check for updates, download, swap.
+/// `obu update` / `obu -u` — check for updates, download, swap.
 ///
 /// Flags:
 ///   --check / -c  — dry run: check but don't install
@@ -49,7 +49,7 @@ async fn update(args: &[String]) -> Result<()> {
     let force = args.iter().any(|a| a == "--force" || a == "-f");
     let dry_run = args.iter().any(|a| a == "--check" || a == "-c");
 
-    ui::header("Bladebro Update");
+    ui::header("Obu Update");
 
     // Step 1: check current vs latest.
     ui::step(1, 4, "Checking for updates...");
@@ -86,7 +86,7 @@ async fn update(args: &[String]) -> Result<()> {
     // Dry run: stop here.
     if dry_run {
         ui::info("Dry run (--check): skipping download and install");
-        ui::hint("To update: bladebro -u");
+        ui::hint("To update: obu -u");
         return Ok(());
     }
 
@@ -96,9 +96,9 @@ async fn update(args: &[String]) -> Result<()> {
         ui::warn("Self-updating would break the npm installation.");
         println!();
         ui::info("To update via npm:");
-        ui::hint("npm update -g bladebro");
+        ui::hint("cargo install --locked --git https://github.com/aislopware/oni-browser-use obu");
         println!();
-        ui::hint("Or force self-update: bladebro -u --force");
+        ui::hint("Or force self-update: obu -u --force");
         return Ok(());
     }
 
@@ -107,7 +107,7 @@ async fn update(args: &[String]) -> Result<()> {
     // that can never start — and fail the run check with a misleading message.
     // Refuse before the download and name the actual update path.
     if cfg!(target_os = "android") {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "self-update is not available on Android: the published Linux binaries are glibc builds and cannot run on Android.\n  \
              Update from wherever this install came from (package manager, npm, or your own build)."
                 .to_string(),
@@ -141,10 +141,10 @@ async fn update(args: &[String]) -> Result<()> {
     match download::verify_binary_runs(&binary_path).await {
         Ok(()) => ui::info("Binary starts: confirmed"),
         Err(e) => {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "downloaded binary failed verification: {e}\n\
                  The binary may be for the wrong architecture or corrupted.\n\
-                 Try: npm install -g bladebro"
+                 Try: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
             )));
         }
     }
@@ -159,11 +159,11 @@ async fn update(args: &[String]) -> Result<()> {
 
     ui::success(&format!("Updated to {}", latest.tag()));
     ui::hint("Restart your MCP client to use the new version.");
-    ui::hint("If anything breaks: bladebro --rollback");
+    ui::hint("If anything breaks: obu --rollback");
     Ok(())
 }
 
-/// `bladebro -v` / `bladebro --version` — show version + update status.
+/// `obu -v` / `obu --version` — show version + update status.
 ///
 /// Uses `fetch_latest_tag()` (non-rate-limited github.com redirect + npm)
 /// instead of `fetch_latest()` (GitHub API, 60 req/hr unauthenticated).
@@ -172,7 +172,7 @@ async fn update(args: &[String]) -> Result<()> {
 /// - equal:   on the latest release
 /// - ahead:   local build is newer than the latest release
 async fn show_version() -> Result<()> {
-    println!("bladebro v{CURRENT_VERSION} ({BUILD_ID})");
+    println!("obu v{CURRENT_VERSION} ({BUILD_ID})");
 
     // Show install method.
     let method = version::install_method();
@@ -190,7 +190,7 @@ async fn show_version() -> Result<()> {
                     if cfg!(target_os = "android") {
                         println!("  (no Android builds are published — update from your package manager)");
                     } else {
-                        println!("  run: bladebro -u");
+                        println!("  run: obu -u");
                     }
                 }
                 std::cmp::Ordering::Equal => {

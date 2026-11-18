@@ -10,11 +10,11 @@ what happened. Before the fix the drift check required an owned browser
 user's browser after the switch.
 
 Fully isolated: scratch HOME + scratch headless Chromium on an ephemeral
-debug port + scratch BLADE_HOME; no display leak; cleans up its own
+debug port + scratch OBU_HOME; no display leak; cleans up its own
 processes. Exit 0 = the contract holds.
 
 Run:  python3 tools/rb_live/attach_drift.py
-      BLADEBRO=/path/to/bladebro python3 tools/rb_live/attach_drift.py
+      OBU=/path/to/obu python3 tools/rb_live/attach_drift.py
 """
 import http.server
 import json
@@ -31,8 +31,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(ROOT, "..", ".."))
 WORK = os.environ.get("RB_LIVE_DIR", "/tmp/rb_live")
 USERHOME = os.path.join(WORK, "home")
-BLADE_HOME = os.path.join(WORK, "blade")
-BIN = os.environ.get("BLADEBRO", os.path.join(REPO, "target", "release", "bladebro"))
+OBU_HOME = os.path.join(WORK, "obu")
+BIN = os.environ.get("OBU", os.path.join(REPO, "target", "release", "obu"))
 CHROME = os.environ.get("CHROME_PATH", "/usr/sbin/chromium")
 
 failures = 0
@@ -46,13 +46,13 @@ def check(name, ok, detail=""):
 
 
 def write_cfg(enabled):
-    os.makedirs(BLADE_HOME, exist_ok=True)
+    os.makedirs(OBU_HOME, exist_ok=True)
     cfg = {
         "enabled": enabled, "mode": "attach", "browser": "chromium",
         "profile": "Default", "binary": None, "visible": False,
         "idle_shutdown": False, "idle_hum": True,
     }
-    with open(os.path.join(BLADE_HOME, "realbrowser.json"), "w") as f:
+    with open(os.path.join(OBU_HOME, "realbrowser.json"), "w") as f:
         f.write(json.dumps(cfg, indent=2))
 
 
@@ -60,7 +60,7 @@ def clean_env():
     env = dict(os.environ)
     env["HOME"] = USERHOME
     env["CHROME_PATH"] = CHROME
-    for k in ("WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY", "BLADE_LANE"):
+    for k in ("WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY", "OBU_LANE"):
         env.pop(k, None)
     return env
 
@@ -68,7 +68,7 @@ def clean_env():
 class Mcp:
     def __init__(self):
         env = clean_env()
-        env["BLADE_HOME"] = BLADE_HOME
+        env["OBU_HOME"] = OBU_HOME
         self.p = subprocess.Popen(
             [BIN, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, env=env,
@@ -228,8 +228,8 @@ def main():
         t = m.tool("act", {"action": "navigate", "url": attached_url})
         check("attach: nav lands in the attached browser",
               "outcome" in t and attached_url in t, t[:200])
-        check("attach: no blade-owned browser was launched",
-              not pids_under(BLADE_HOME), str(pids_under(BLADE_HOME)))
+        check("attach: no obu-owned browser was launched",
+              not pids_under(OBU_HOME), str(pids_under(OBU_HOME)))
         before = scratch_targets()
         check("attach: scratch browser holds the page",
               attached_url in before, str(before))
@@ -245,7 +245,7 @@ def main():
         check("flip: the attached browser was NOT navigated",
               scratch_targets() == before, f"{before} -> {scratch_targets()}")
         check("flip: relaunched on the current lane (agent browser up)",
-              bool(pids_under(BLADE_HOME)), "no blade-owned browser after the flip")
+              bool(pids_under(OBU_HOME)), "no obu-owned browser after the flip")
         check("flip: nav landed in the new browser",
               detached_url in t, t[:300])
         actual = page_readback(m)

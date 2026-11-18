@@ -74,7 +74,7 @@ pub(crate) fn guard_browser_process_tree() -> crate::Result<()> {
         Ok(handle)
     });
     job.as_ref().map(|_| ()).map_err(|error| {
-        crate::BladeError::Other(format!("cannot guard the browser process tree: {error}"))
+        crate::ObuError::Other(format!("cannot guard the browser process tree: {error}"))
     })
 }
 
@@ -104,8 +104,8 @@ mod tests {
 
     #[test]
     fn hard_exit_cleans_owned_children_only() {
-        const ROLE: &str = "BLADE_JOB_TEST_ROLE";
-        const PID_FILE: &str = "BLADE_JOB_TEST_PID_FILE";
+        const ROLE: &str = "OBU_JOB_TEST_ROLE";
+        const PID_FILE: &str = "OBU_JOB_TEST_PID_FILE";
         if let Ok(role) = std::env::var(ROLE) {
             if role == "guarded" {
                 guard_browser_process_tree().unwrap();
@@ -128,7 +128,7 @@ mod tests {
         // then two fresh owned jobs must clean up without touching the control.
         for guarded in [false, true, true] {
             let marker = std::env::temp_dir().join(format!(
-                "blade-job-{}-{}.pid",
+                "obu-job-{}-{}.pid",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

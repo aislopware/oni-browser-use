@@ -1,7 +1,7 @@
 //! Browser process management — find Chrome, launch it with stealth flags,
 //! wait for the CDP debug endpoint, and clean up on drop.
 //!
-//! The "one binary, works out of the box" promise (D2/D8): Bladebro finds
+//! The "one binary, works out of the box" promise (D2/D8): Obu finds
 //! Chrome itself — no manual `--remote-debugging-port` setup. On NixOS it
 //! scans the nix store via `fd`; on mainstream distros it checks PATH and
 //! common install paths, then Flatpak exports (read-only-root distros such as
@@ -23,7 +23,7 @@
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 
 mod alerts;
@@ -127,7 +127,7 @@ pub(crate) fn upload_path(source: &std::path::Path) -> Result<std::path::PathBuf
     #[cfg(target_os = "linux")]
     {
         flatpak::upload_path(source).map_err(|e| {
-            BladeError::Other(format!(
+            ObuError::Other(format!(
                 "cannot stage {} where the Flatpak browser's sandbox can read it: {e}",
                 source.display()
             ))
@@ -144,7 +144,7 @@ pub(crate) fn upload_path(source: &std::path::Path) -> Result<std::path::PathBuf
 /// Chromium's zygote and utility sandboxes in its own session, so the group
 /// signal never reaches them, and where the portal does not nest them in the
 /// browser's pid namespace they outlive it (observed on SteamOS after failed
-/// launches). Only bladebro's own agent-lane session dirs qualify: a
+/// launches). Only obu's own agent-lane session dirs qualify: a
 /// borrowed or real-lane profile may be shared with the user's own browser.
 /// After a requested close the stragglers get a flush grace first.
 pub(crate) fn stop_profile_processes(
@@ -240,7 +240,7 @@ impl Browser {
             }
         }
         if !self.close_requested {
-            eprintln!("[bladebro] graceful close of the owned browser was unavailable; using process cleanup, recent storage flush is unverified");
+            eprintln!("[obu] graceful close of the owned browser was unavailable; using process cleanup, recent storage flush is unverified");
         }
         let _ = tokio::task::spawn_blocking(move || self.shutdown()).await;
     }
@@ -252,7 +252,7 @@ impl Browser {
         let profile = self.profile.clone();
         drop(self); // kills Chrome + Xvfb
                     // Retain ownership metadata: a path under /tmp is not proof that
-                    // an adopted user profile belongs to Bladebro.
+                    // an adopted user profile belongs to Obu.
         profile.cleanup();
     }
 }
@@ -263,15 +263,15 @@ impl Browser {
 /// the process tree down first (group SIGTERM, bounded wait, SIGKILL: a
 /// launcher that died at startup can leave forked helpers in its group) and
 /// only then removes the profile, exactly as a shut-down `Browser` would.
-/// Before this only the incognito error path cleaned up: with BLADE_FRESH=1
-/// each failed attempt (up to three per launch) left a `bladebro-chrome-*`
+/// Before this only the incognito error path cleaned up: with OBU_FRESH=1
+/// each failed attempt (up to three per launch) left a `obu-chrome-*`
 /// profile in the temp dir, and a failed status poll dropped the child
 /// without killing anything.
 ///
 /// The cleanup is synchronous, as the incognito path's always was: a failed
 /// attempt blocks its runtime worker for up to ~3s (the SIGTERM grace) plus
 /// the profile cleanup, which syncs a seasoned profile back to its template
-/// when BLADE_FRESH is unset.
+/// when OBU_FRESH is unset.
 struct LaunchGuard {
     profile: Option<crate::session_profile::SessionProfile>,
     child: Option<Child>,
@@ -299,7 +299,7 @@ impl LaunchGuard {
                 // both so Drop still cleans up instead of leaking.
                 self.child = child;
                 self.profile = profile;
-                Err(BladeError::Other(
+                Err(ObuError::Other(
                     "browser launch finished without a spawned process".into(),
                 ))
             }
@@ -363,7 +363,7 @@ mod cleanup_tests {
     #[test]
     fn teardown_stops_profile_processes_outside_the_launcher_group() {
         let root = std::env::temp_dir().join(format!(
-            "blade-sweep-{}-{}",
+            "obu-sweep-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -414,7 +414,7 @@ mod cleanup_tests {
     fn failed_launch_attempt_stops_profile_processes_outside_the_launcher_group() {
         use std::os::unix::process::CommandExt;
         let root = std::env::temp_dir().join(format!(
-            "blade-guard-sweep-{}-{}",
+            "obu-guard-sweep-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

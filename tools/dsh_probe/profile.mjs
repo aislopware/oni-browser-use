@@ -6,9 +6,9 @@ import { resolve, join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-if (!process.env.DSH_HOME || !process.env.BLADE_HOME) throw new Error('explicit isolated DSH_HOME and BLADE_HOME required');
+if (!process.env.DSH_HOME || !process.env.OBU_HOME) throw new Error('explicit isolated DSH_HOME and OBU_HOME required');
 process.env.DSH_TELEMETRY_MODE = 'DISABLED';
-await mkdir(process.env.BLADE_HOME, { recursive:true, mode:0o700 });
+await mkdir(process.env.OBU_HOME, { recursive:true, mode:0o700 });
 const host = createRequire(join(resolve(process.env.DSH_RUNTIME || 'work/dsh/runtime'), 'package.json'));
 const load = name => import(pathToFileURL(host.resolve(name)).href);
 const { runProfile } = await load('@deepseek-ai/dsh/profile-boot');
@@ -19,11 +19,11 @@ const watchdog = setTimeout(() => { console.error('FAIL profile probe did not fi
 let checks = 0;
 let completed = false;
 function check(label, value) { assert.ok(value, label); checks++; console.log(`PASS ${label}`); }
-const names = ['act','see','state','run','vision'].map(n => `mcp__bladebro__${n}`);
+const names = ['act','see','state','run','vision'].map(n => `mcp__obu__${n}`);
 try {
-  const bundle = (await ctx.pluginManager.listBundles()).find(b => b.name === 'bladebro');
+  const bundle = (await ctx.pluginManager.listBundles()).find(b => b.name === 'obu');
   check('Plugins page inventory has an installed enabled removable bundle', bundle?.enabled && bundle.installed && bundle.removable && !bundle.error);
-  check('bundle inserts one owned row with no unrelated overrides', bundle.rows.length === 1 && bundle.rows[0].rowId === 'bladebro' && bundle.overrides.length === 0);
+  check('bundle inserts one owned row with no unrelated overrides', bundle.rows.length === 1 && bundle.rows[0].rowId === 'obu' && bundle.overrides.length === 0);
   check('full Web host registers all five browser tools', names.every(name => ctx.tools.get(name)));
   const baseUrl = `http://127.0.0.1:${ctx.webServer.port}/`;
   let response = await fetch(ctx.connection.authenticatedUrl(baseUrl), { redirect:'manual', signal:AbortSignal.timeout(5000) });
@@ -39,7 +39,7 @@ try {
   }
   ctx.llm.registerAdapter(['fixture'], new OfflineMetadata());
   for (const preset of ['standard','ptc','cordis']) {
-    const handle = await ctx.agents.create({ sessionId:`bladebro-probe-${preset}-${randomUUID()}`, meta:{ cwd:resolve(process.env.BLADE_HOME), agentPreset:preset }, agentOptions:{ provider:'fixture', model:'offline' } });
+    const handle = await ctx.agents.create({ sessionId:`obu-probe-${preset}-${randomUUID()}`, meta:{ cwd:resolve(process.env.OBU_HOME), agentPreset:preset }, agentOptions:{ provider:'fixture', model:'offline' } });
     try {
       check(`${preset} agent inherits all five browser capabilities`, names.every(name => handle.agent.ctx.tools.get(name)));
     } finally { await handle.dispose(); }
@@ -48,17 +48,17 @@ try {
   // DSH's generic resource helper tools legitimately disappear with its LAST
   // MCP server; a second server makes this a meaningful unrelated-tool check.
   const profileRequire = createRequire(join(resolve(process.env.DSH_HOME), 'profiles/web/package.json'));
-  const { resolveBinary } = profileRequire('bladebro/binary.cjs');
+  const { resolveBinary } = profileRequire('obu/binary.cjs');
   await ctx.plugin(await load('@deepseek-ai/dsh-mcp-client'), {
     transport:'stdio', serverName:'unrelated_fixture', command:resolveBinary(), args:['mcp'],
-    env:{ BLADE_HOME:join(resolve(process.env.BLADE_HOME), 'other-mcp') }, failOnStartupError:true,
+    env:{ OBU_HOME:join(resolve(process.env.OBU_HOME), 'other-mcp') }, failOnStartupError:true,
   });
   check('independent MCP connection registers its own five tools', ['act','see','state','run','vision'].every(n => ctx.tools.get(`mcp__unrelated_fixture__${n}`)));
   const others = ctx.tools.schemas().filter(t => !names.includes(t.name)).map(t => t.name).sort();
   for (const enabled of [false, true]) {
-    const change = await ctx.pluginManager.setBundleEnabled('bladebro', enabled);
+    const change = await ctx.pluginManager.setBundleEnabled('obu', enabled);
     check(`Plugins bundle toggle ${enabled} persists honestly`, change.changed && ['applied','restart-required'].includes(change.application));
-    const current = (await ctx.pluginManager.listBundles()).find(b => b.name === 'bladebro');
+    const current = (await ctx.pluginManager.listBundles()).find(b => b.name === 'obu');
     check(`Plugins inventory reflects enabled=${enabled}`, current.enabled === enabled && current.installed);
     if (change.application === 'applied') {
       check(`Plugins toggle ${enabled} reaches actual tool registration`, names.every(name => Boolean(ctx.tools.get(name)) === enabled));

@@ -1,8 +1,8 @@
 # Tool guide
 
-[Bladebro README](../README.md) · [Setup](setup.md) · [Architecture](architecture.md)
+[Obu README](../README.md) · [Setup](setup.md) · [Architecture](architecture.md)
 
-MCP exposes exactly five tools. The CLI uses the same handlers and adds shell-friendly shortcuts such as `nav`. Run `bladebro help --json` for the installed binary's schemas or `bladebro help act --json` for the action catalog.
+MCP exposes exactly five tools. The CLI uses the same handlers and adds shell-friendly shortcuts such as `nav`. Run `obu help --json` for the installed binary's schemas or `obu help act --json` for the action catalog.
 
 ## Act
 
@@ -19,9 +19,9 @@ Target a control by ref, selector, label, text, or coordinates. Use a fresh ref 
 | Combine a fixed series | `batch`; use `run` for branches and loops |
 
 ```sh
-bladebro act click --text 'Continue'
-bladebro act read --label 'Country' --format json
-bladebro act wait element --text 'Results'
+obu act click --text 'Continue'
+obu act read --label 'Country' --format json
+obu act wait element --text 'Results'
 ```
 
 Use `url` on supported actions to navigate before interacting. Targeted key presses check focus. An accepted click or submit dispatches once, even if the DOM stays quiet. If a disconnect makes a mutation's outcome unknown, inspect its destination before sending another action.
@@ -44,9 +44,9 @@ Use `url` on supported actions to navigate before interacting. Targeted key pres
 | Inspect changes or logs | `changes: true`, `logs: "console"` or `"network"` |
 
 ```sh
-bladebro see content https://example.com
-bladebro see model --json
-bladebro see extract links --json
+obu see content https://example.com
+obu see model --json
+obu see extract links --json
 ```
 
 The model can fold navigation/footer items and list omitted controls by role. Use `filter` to narrow a crowded page. Auto extraction has site-aware paths for Reddit, X, GitHub, Hacker News, and products. A partial thread carries completeness and fallback information. `preview: true` shows an auto extraction's detected fields before you request rows.
@@ -64,9 +64,9 @@ Large reads give an artifact path and a paging receipt. With `see artifact="<pat
 | Resources and output | `block`, `compress` |
 
 ```sh
-bladebro state tabs
-bladebro state open-tab https://example.com
-bladebro state compress status
+obu state tabs
+obu state open-tab https://example.com
+obu state compress status
 ```
 
 Named sessions save cookies and storage. Return to the saved origin before loading, then reload as needed. Cookie and storage reads keep full values, using artifacts for large results. Treat browser profiles, named sessions, and artifacts as private. An empty string is a valid explicit value for a storage write.
@@ -84,7 +84,7 @@ Use `act batch` for a straight sequence. Use `run` for conditions, loops, or rea
 ```
 
 ```sh
-bladebro run @steps.json
+obu run @steps.json
 ```
 
 For MCP, wrap the array in a `steps` field. Plans validate every static step before the first effect, including unchosen branches. A plan accepts up to 1,000 static steps and 32 nesting levels. A `while` requires a test and step array and accepts a maximum of 100 iterations. `optional: true` allows a runtime failure to be recorded and execution to continue locally. Completed actions remain in effect if a later step stops.
@@ -94,7 +94,7 @@ For machine output, MCP `format: "json"` on `run` reports overall `completed` or
 ## Vision
 
 ```sh
-bladebro vision --marks --json
+obu vision --marks --json
 ```
 
 MCP returns a PNG image block. The CLI saves the image and reports `image_path`. Marks identify interactive elements for visual tasks. Use `see` when text and element refs suffice.
@@ -103,4 +103,4 @@ MCP returns a PNG image block. The CLI saves the image and reports `image_path`.
 
 The CLI uses a persistent daemon by default. `--no-daemon` runs a single command with its own browser. With the `--json` flag, stdout contains one object with `ok`, `is_error`, and `text`, plus `image_path` for a saved screenshot. Exit codes are 0 for success, 1 for execution failure, and 2 for usage errors. Logs go to stderr.
 
-`bladebro stop` shuts down its owned daemon/browser. A running daemon retains its launch settings, so stop it after changing browser configuration. For an independently running debug browser, use the attach workflow described in [Browser modes](browser-modes.md).
+`obu stop` shuts down its owned daemon/browser. A running daemon retains its launch settings, so stop it after changing browser configuration. For an independently running debug browser, use the attach workflow described in [Browser modes](browser-modes.md).

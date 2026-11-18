@@ -12,7 +12,7 @@ use crate::platform;
 use serde_json::{json, Value};
 
 fn path() -> std::path::PathBuf {
-    platform::blade_dir().join(".fingerprint.json")
+    platform::obu_dir().join(".fingerprint.json")
 }
 
 /// Load the stealth seed from the fingerprint file, or generate and persist
@@ -35,7 +35,7 @@ pub fn load_or_create_seed() -> u32 {
 
     // Generate new seed and persist.
     let seed = generate_seed();
-    let _ = platform::secure_create_dir_all(&platform::blade_dir());
+    let _ = platform::secure_create_dir_all(&platform::obu_dir());
     let fingerprint = build_fingerprint(seed);
     let _ = platform::secure_write_file(&p, fingerprint.to_string().as_bytes());
     eprintln!("[stealth] generated new fingerprint seed: {seed}");
@@ -44,17 +44,17 @@ pub fn load_or_create_seed() -> u32 {
 
 fn build_fingerprint(seed: u32) -> Value {
     let mut fp = json!({"seed": seed});
-    if let Ok(proxy) = std::env::var("BLADE_PROXY") {
+    if let Ok(proxy) = std::env::var("OBU_PROXY") {
         if !proxy.is_empty() {
             fp["proxy"] = json!(proxy);
         }
     }
-    if let Ok(tz) = std::env::var("BLADE_TZ") {
+    if let Ok(tz) = std::env::var("OBU_TZ") {
         if !tz.is_empty() {
             fp["timezone"] = json!(tz);
         }
     }
-    if let Ok(locale) = std::env::var("BLADE_LOCALE") {
+    if let Ok(locale) = std::env::var("OBU_LOCALE") {
         if !locale.is_empty() {
             fp["locale"] = json!(locale);
         }
@@ -64,21 +64,21 @@ fn build_fingerprint(seed: u32) -> Value {
 
 fn update_config(path: &std::path::Path, old: &Value, seed: u32) {
     let mut updated = json!({"seed": seed});
-    if let Ok(proxy) = std::env::var("BLADE_PROXY") {
+    if let Ok(proxy) = std::env::var("OBU_PROXY") {
         if !proxy.is_empty() {
             updated["proxy"] = json!(proxy);
         }
     } else if let Some(p) = old.get("proxy") {
         updated["proxy"] = p.clone();
     }
-    if let Ok(tz) = std::env::var("BLADE_TZ") {
+    if let Ok(tz) = std::env::var("OBU_TZ") {
         if !tz.is_empty() {
             updated["timezone"] = json!(tz);
         }
     } else if let Some(t) = old.get("timezone") {
         updated["timezone"] = t.clone();
     }
-    if let Ok(locale) = std::env::var("BLADE_LOCALE") {
+    if let Ok(locale) = std::env::var("OBU_LOCALE") {
         if !locale.is_empty() {
             updated["locale"] = json!(locale);
         }
@@ -86,17 +86,17 @@ fn update_config(path: &std::path::Path, old: &Value, seed: u32) {
         updated["locale"] = l.clone();
     }
     // SECURITY: 0600 like the initial write — this file can carry the
-    // BLADE_PROXY URL, which may embed proxy credentials.
+    // OBU_PROXY URL, which may embed proxy credentials.
     let _ = platform::secure_write_file(path, updated.to_string().as_bytes());
 }
 
 fn check_config_consistency(old: &Value) {
     if let Some(old_proxy) = old.get("proxy").and_then(|p| p.as_str()) {
-        let new_proxy = std::env::var("BLADE_PROXY").unwrap_or_default();
+        let new_proxy = std::env::var("OBU_PROXY").unwrap_or_default();
         if !new_proxy.is_empty() && new_proxy != old_proxy {
             // SECURITY: the stored and live values may embed proxy
             // credentials — the warning shows redacted endpoints only.
-            let redact = |v: &str| match crate::browser::proxy::parse_blade_proxy(v) {
+            let redact = |v: &str| match crate::browser::proxy::parse_obu_proxy(v) {
                 Ok(s) => s.display,
                 Err(_) => "(unparseable, redacted)".to_string(),
             };
@@ -109,7 +109,7 @@ fn check_config_consistency(old: &Value) {
         }
     }
     if let Some(old_tz) = old.get("timezone").and_then(|t| t.as_str()) {
-        let new_tz = std::env::var("BLADE_TZ").unwrap_or_default();
+        let new_tz = std::env::var("OBU_TZ").unwrap_or_default();
         if !new_tz.is_empty() && new_tz != old_tz {
             eprintln!(
                 "[stealth] WARNING: timezone changed since last session ({old_tz} → {new_tz}). \
@@ -118,7 +118,7 @@ fn check_config_consistency(old: &Value) {
         }
     }
     if let Some(old_locale) = old.get("locale").and_then(|l| l.as_str()) {
-        let new_locale = std::env::var("BLADE_LOCALE").unwrap_or_default();
+        let new_locale = std::env::var("OBU_LOCALE").unwrap_or_default();
         if !new_locale.is_empty() && new_locale != old_locale {
             eprintln!(
                 "[stealth] WARNING: locale changed since last session ({old_locale} → {new_locale})."
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn seed_is_stable_across_calls() {
         // load_or_create_seed should return the same value on repeated calls
-        // when the file exists. We can't test against the real ~/.blade, so
+        // when the file exists. We can't test against the real ~/.obu, so
         // test the generation + build_fingerprint round-trip.
         let seed = generate_seed();
         let fp = build_fingerprint(seed);

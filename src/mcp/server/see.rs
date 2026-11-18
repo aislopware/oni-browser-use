@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::artifact_hint;
@@ -61,7 +61,7 @@ fn pdf_read_message(url: &str) -> String {
 }
 
 /// `see` as a tool call (MCP and CLI/daemon): `url=` navigates first, then
-/// reads - the `bladebro see <url>` contract, and what `retry_safe` already
+/// reads - the `obu see <url>` contract, and what `retry_safe` already
 /// assumes. The MCP dispatch used to skip this and silently read whatever page
 /// was current. Steps and act aliases call [`handle_see`] directly because
 /// they navigate on url= themselves (batch/run see steps, act pre-navigation
@@ -104,7 +104,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
     // reads (the JSON.parse pain point). Every other mode stays text.
     let format = args.get("format").and_then(|f| f.as_str()).unwrap_or("");
     if !matches!(format, "" | "text" | "json") {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "unknown format: {format} (use 'text' or 'json')"
         )));
     }
@@ -159,7 +159,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
     // format=json is only meaningful for extract=/artifact= reads; anything
     // else is refused instead of silently returning text.
     if json_out && extract.is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "format=json applies to extract= (auto/json/links/forms) and artifact= reads - this mode returns text; drop format or use an extract read".into(),
         ));
     }
@@ -180,14 +180,14 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
                         .markdown_scoped(budget, &e.raw.sig, &e.raw.frame)
                         .await?;
                     if md.is_empty() {
-                        return Err(BladeError::Other(format!(
+                        return Err(ObuError::Other(format!(
                             "scope {scope}: element found but has no readable text (or it went stale mid-read - recapture with see)"
                         )));
                     }
                     return Ok(md);
                 }
                 None => {
-                    return Err(BladeError::Other(format!(
+                    return Err(ObuError::Other(format!(
                         "scope \"{scope}\" is not a known ref - pass a ref id from see (e.g. e5), or drop scope and use find=\"<text>\" for a cheap existence check"
                     )));
                 }
@@ -228,7 +228,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
 
     // V9: template extraction — structured data in ONE call.
     if extract == "json" {
-        let tpl = template.ok_or_else(|| BladeError::Other(
+        let tpl = template.ok_or_else(|| ObuError::Other(
             "extract=json requires 'template': {\"items\":{\"container\":\"css\",\"fields\":{\"name\":\"css|css@attr\"}}} (text reads are rendered - {\"sel\":\"css\",\"raw\":true} reads hidden text). For template-free structured extraction use extract=auto.".into()
         ))?;
         return handle_template_extract(page, &tpl, limit, json_out).await;
@@ -340,7 +340,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
                 .and_then(Value::as_str)
                 .or_else(|| exc.get("text").and_then(Value::as_str))
                 .unwrap_or("JavaScript failed");
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "extract {extract} failed: {}",
                 crate::platform::truncate_utf8(message, 240)
             )));
@@ -349,7 +349,7 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
             .get("result")
             .and_then(|r| r.get("value"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BladeError::Other(format!("extract {extract}: browser returned no data; retry the read after the page settles")))?;
+            .ok_or_else(|| ObuError::Other(format!("extract {extract}: browser returned no data; retry the read after the page settles")))?;
         // V10: offload large extracts to a file. W2: format=json returns a
         // parseable payload (bare when it fits, an artifact envelope when
         // not) instead of the truncating preview.
@@ -502,7 +502,7 @@ pub async fn handle_logs(page: &mut Page, kind: &str) -> Result<String> {
             }
             Ok(out)
         }
-        _ => Err(BladeError::Other(format!(
+        _ => Err(ObuError::Other(format!(
             "unknown logs kind: {kind} (use 'console' or 'network')"
         ))),
     }
@@ -518,7 +518,7 @@ mod pdf_read_tests {
         assert!(PDF_STATE_EXPR.contains(".pdf"));
         assert!(PDF_STATE_EXPR.contains("contentType"));
         // node --check (skipped when node is unavailable).
-        let dir = std::env::temp_dir().join("bladebro-pdf-tests");
+        let dir = std::env::temp_dir().join("obu-pdf-tests");
         if std::fs::create_dir_all(&dir).is_err() {
             return;
         }

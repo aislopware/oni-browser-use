@@ -12,12 +12,12 @@ import sys
 from pathlib import Path
 
 PACKAGES = [
-    "bladebro",
-    "bladebro-linux-x64",
-    "bladebro-linux-arm64",
-    "bladebro-windows-x64",
-    "bladebro-darwin-x64",
-    "bladebro-darwin-arm64",
+    "obu",
+    "obu-linux-x64",
+    "obu-linux-arm64",
+    "obu-windows-x64",
+    "obu-darwin-x64",
+    "obu-darwin-arm64",
 ]
 
 

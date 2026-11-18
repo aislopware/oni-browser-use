@@ -135,7 +135,7 @@ const x=await r.text();return {{s:r.status,t:x}};}}catch(e){{return {{s:0,t:Stri
             .and_then(|e| e.get("description"))
             .and_then(|d| d.as_str())
             .unwrap_or("fetch failed");
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "x: {}",
             crate::platform::truncate_utf8(msg, 200)
         )));

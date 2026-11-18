@@ -40,9 +40,9 @@ impl Page {
     /// macOS — every click and navigation used to raise it above whatever the
     /// person was working in (issue #89). It is only needed when input would
     /// otherwise go to a background tab (a popup took the foreground, #49).
-    /// `BLADE_NO_ACTIVATE=1` never raises the window, accepting that trade.
+    /// `OBU_NO_ACTIVATE=1` never raises the window, accepting that trade.
     pub async fn activate_if_needed(&self) -> Result<()> {
-        if std::env::var("BLADE_NO_ACTIVATE")
+        if std::env::var("OBU_NO_ACTIVATE")
             .map(|v| v == "1")
             .unwrap_or(false)
         {
@@ -220,19 +220,19 @@ impl Page {
                 .get("targetId")
                 .and_then(|v| v.as_str())
                 .map(String::from)
-                .ok_or_else(|| BladeError::Other("no targetId from Target.createTarget".into()));
+                .ok_or_else(|| ObuError::Other("no targetId from Target.createTarget".into()));
         }
         // WS mode: browser-level connection on demand.
         let ver = crate::cdp::version(&self.base).await?;
         let ws = ver
             .web_socket_debugger_url
-            .ok_or_else(|| BladeError::Other("browser has no webSocketDebuggerUrl".into()))?;
+            .ok_or_else(|| ObuError::Other("browser has no webSocketDebuggerUrl".into()))?;
         let client = CdpClient::connect(&ws).await?;
         let res = client.send("Target.createTarget", Some(params)).await?;
         res.get("targetId")
             .and_then(|v| v.as_str())
             .map(String::from)
-            .ok_or_else(|| BladeError::Other("no targetId from Target.createTarget".into()))
+            .ok_or_else(|| ObuError::Other("no targetId from Target.createTarget".into()))
     }
 
     /// Attach an auxiliary tab without detaching or replacing the active page.
@@ -249,7 +249,7 @@ impl Page {
                 .get("sessionId")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| {
-                    BladeError::Other("Target.attachToTarget returned no sessionId".into())
+                    ObuError::Other("Target.attachToTarget returned no sessionId".into())
                 })?;
             CdpSession::child(client.clone(), sid)
         } else {
@@ -265,7 +265,7 @@ impl Page {
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
-            let t = t.ok_or_else(|| BladeError::Other(format!("tab not found: {target_id}")))?;
+            let t = t.ok_or_else(|| ObuError::Other(format!("tab not found: {target_id}")))?;
             let client = CdpClient::connect(t.ws_url()?).await?;
             CdpSession::root(client)
         };

@@ -1,4 +1,4 @@
-//! CLI argument parsing — the `bladebro <cmd> ...` surface.
+//! CLI argument parsing — the `obu <cmd> ...` surface.
 //!
 //! One parser per command (`nav` / `see` / `act` / `state` / `run` / `vision`)
 //! plus the shared `--host`/`--port` endpoint extraction. All of them are loud
@@ -10,7 +10,7 @@
 //! helpers and the parser tests; the per-command parsers live in `nav`/`see`/
 //! `act`/`state`/`run`/`vision` (re-exported here, one import path for callers).
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use serde_json::{json, Value};
 
 mod act;
@@ -44,7 +44,7 @@ pub(super) fn extract_endpoint(args: &[String]) -> Result<(Vec<String>, Option<S
         match args[i].as_str() {
             "--host" => {
                 let v = args.get(i + 1).ok_or_else(|| {
-                    BladeError::Usage("--host needs a value (e.g. --host 127.0.0.1)".into())
+                    ObuError::Usage("--host needs a value (e.g. --host 127.0.0.1)".into())
                 })?;
                 host = v.clone();
                 i += 2;
@@ -52,13 +52,13 @@ pub(super) fn extract_endpoint(args: &[String]) -> Result<(Vec<String>, Option<S
             }
             "--port" => {
                 let v = args.get(i + 1).ok_or_else(|| {
-                    BladeError::Usage("--port needs a value (e.g. --port 9222)".into())
+                    ObuError::Usage("--port needs a value (e.g. --port 9222)".into())
                 })?;
                 let p: u16 = v
                     .parse()
-                    .map_err(|_| BladeError::Usage(format!("--port needs a number, got '{v}'")))?;
+                    .map_err(|_| ObuError::Usage(format!("--port needs a number, got '{v}'")))?;
                 if p == 0 {
-                    return Err(BladeError::Usage(
+                    return Err(ObuError::Usage(
                         "--port 0 is not a usable debug port".into(),
                     ));
                 }
@@ -92,14 +92,14 @@ fn take_value(args: &[String], i: &mut usize, flag: &str) -> Result<String> {
     *i += 1;
     args.get(*i)
         .cloned()
-        .ok_or_else(|| BladeError::Usage(format!("--{flag} needs a value (e.g. --{flag} <value>)")))
+        .ok_or_else(|| ObuError::Usage(format!("--{flag} needs a value (e.g. --{flag} <value>)")))
 }
 
 /// The next token parsed as a number; loud error on both missing and bad.
 fn take_num<T: std::str::FromStr>(args: &[String], i: &mut usize, flag: &str) -> Result<T> {
     let raw = take_value(args, i, flag)?;
     raw.parse::<T>()
-        .map_err(|_| BladeError::Usage(format!("--{flag} needs a number, got '{raw}'")))
+        .map_err(|_| ObuError::Usage(format!("--{flag} needs a number, got '{raw}'")))
 }
 
 /// Ref ids are `e` followed by digits (e1, e5, e12) — 'Edit'/'Enter' are text.
@@ -114,18 +114,17 @@ fn resolve_payload(arg: &str) -> Result<String> {
         let mut buf = String::new();
         std::io::stdin()
             .read_to_string(&mut buf)
-            .map_err(|e| BladeError::Usage(format!("cannot read stdin: {e}")))?;
+            .map_err(|e| ObuError::Usage(format!("cannot read stdin: {e}")))?;
         if buf.trim().is_empty() {
-            return Err(BladeError::Usage(
-                "stdin was empty — pipe the payload in, e.g. `cat steps.json | bladebro run -`"
-                    .into(),
+            return Err(ObuError::Usage(
+                "stdin was empty — pipe the payload in, e.g. `cat steps.json | obu run -`".into(),
             ));
         }
         return Ok(buf);
     }
     if let Some(path) = arg.strip_prefix('@') {
         return std::fs::read_to_string(path)
-            .map_err(|e| BladeError::Usage(format!("cannot read {arg}: {e}")));
+            .map_err(|e| ObuError::Usage(format!("cannot read {arg}: {e}")));
     }
     Ok(arg.to_string())
 }
@@ -151,7 +150,7 @@ fn normalize_fields(parsed: Value) -> Result<Value> {
                     .collect(),
             ))
         }
-        _ => Err(BladeError::Usage(
+        _ => Err(ObuError::Usage(
             "fields must be a JSON object {\"e3\":\"John\"} (ref map), one spec {\"label\":\"Email\",\"text\":\"x\"}, or an array [{\"ref\":\"e3\",\"text\":\"John\"}]".into(),
         )),
     }
@@ -447,7 +446,7 @@ mod tests {
             );
             if let Ok(Err(e)) = bare {
                 assert!(
-                    matches!(e, BladeError::Usage(_)),
+                    matches!(e, ObuError::Usage(_)),
                     "act {action}: a bare action must be a usage error, got {e}"
                 );
             }
@@ -534,7 +533,7 @@ mod tests {
 
         // The live repro: flags without a kind are a usage error, not a panic.
         let e = parse_act_args(&a(&["dialog", "--accept", "true"])).unwrap_err();
-        assert!(matches!(e, BladeError::Usage(_)), "{e}");
+        assert!(matches!(e, ObuError::Usage(_)), "{e}");
         assert!(e.to_string().contains("dialog needs a kind"), "{e}");
         assert!(parse_act_args(&a(&["dialog", "popup"])).is_err());
         assert!(parse_act_args(&a(&["dialog", "confirm", "extra"])).is_err());
@@ -771,19 +770,19 @@ mod endpoint_args_tests {
         // daemon — against the loud-flag-error contract.
         assert!(matches!(
             extract_endpoint(&args(&["see", "--port"])),
-            Err(BladeError::Usage(_))
+            Err(ObuError::Usage(_))
         ));
         assert!(matches!(
             extract_endpoint(&args(&["see", "--port", "abc"])),
-            Err(BladeError::Usage(_))
+            Err(ObuError::Usage(_))
         ));
         assert!(matches!(
             extract_endpoint(&args(&["see", "--port", "0"])),
-            Err(BladeError::Usage(_))
+            Err(ObuError::Usage(_))
         ));
         assert!(matches!(
             extract_endpoint(&args(&["see", "--host"])),
-            Err(BladeError::Usage(_))
+            Err(ObuError::Usage(_))
         ));
     }
     #[test]

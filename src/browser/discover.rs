@@ -28,7 +28,7 @@ pub(crate) fn find_chrome() -> Result<String> {
         if is_executable(std::path::Path::new(&path)) {
             return Ok(path);
         }
-        return Err(BladeError::Other("CHROME_PATH is not an executable file; set it to the Chrome/Chromium binary or unset it for automatic discovery".into()));
+        return Err(ObuError::Other("CHROME_PATH is not an executable file; set it to the Chrome/Chromium binary or unset it for automatic discovery".into()));
     }
 
     let names = if cfg!(target_os = "macos") {
@@ -93,7 +93,7 @@ pub(crate) fn find_chrome() -> Result<String> {
         }
     }
 
-    Err(BladeError::Other(if cfg!(target_os = "linux") {
+    Err(ObuError::Other(if cfg!(target_os = "linux") {
         "Chrome/Chromium not found. Set CHROME_PATH env var, add chromium to PATH, or install Chrome (read-only systems such as SteamOS: `flatpak install flathub org.chromium.Chromium`).".into()
     } else {
         "Chrome/Chromium not found. Set CHROME_PATH env var, add chromium to PATH, or install Chrome.".into()
@@ -104,7 +104,7 @@ pub(crate) fn find_chrome() -> Result<String> {
 /// not snap-confined, else the first snap one. A snap-confined Chromium
 /// (`/snap/bin/chromium`, what Ubuntu actually ships when you `apt install
 /// chromium`) cannot read a hidden data root such as the default
-/// `~/.local/state/blade` — its home interface excludes dot-directories — so
+/// `~/.local/state/obu` — its home interface excludes dot-directories — so
 /// it is used only when no native install exists (issue #85 item 2). Within a
 /// tier the name order is unchanged, so nobody's engine changes for a reason
 /// other than the snap. Pure, so the ordering is tested without a PATH.
@@ -334,7 +334,7 @@ pub(crate) fn endpoint_owned_by_pid(port: u16, pid: u32) -> bool {
 /// an impostor squatting the remembered port fails it.
 #[cfg(target_os = "linux")]
 pub(crate) fn endpoint_owned_by_own_browser(port: u16) -> bool {
-    let dbg = std::env::var("BLADE_DBG_OWNERSHIP").is_ok();
+    let dbg = std::env::var("OBU_DBG_OWNERSHIP").is_ok();
     let Some(ino) = loopback_listener_inode(port) else {
         if dbg {
             eprintln!("[ownership] port {port}: no listener found in /proc/net/tcp");
@@ -380,7 +380,7 @@ pub(crate) fn endpoint_owned_by_own_browser(port: u16) -> bool {
 /// `--user-data-dir=<dir>` (the spelling `flags` passes). Teardown uses it to
 /// reach browser processes that left the launcher's process group — Flatpak's
 /// portal spawns Chromium's zygote and utility sandboxes in its own session.
-/// A session dir is unique to one bladebro process, so a match is ours; the
+/// A session dir is unique to one obu process, so a match is ours; the
 /// token must end at a separator so `sess-1` never matches `sess-10`.
 #[cfg(target_os = "linux")]
 pub(crate) fn processes_on_user_data_dir(dir: &std::path::Path) -> Vec<u32> {
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn executable_candidates_reject_directories_and_non_executable_files() {
-        let root = std::env::temp_dir().join(format!("blade-discover-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("obu-discover-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         assert!(
             !is_executable(&root),
@@ -501,7 +501,7 @@ mod tests {
     }
 
     /// Issue #57: an AppImage's AppRun forks the real browser instead of
-    /// exec'ing it, so the debug port is held by a child of the PID bladebro
+    /// exec'ing it, so the debug port is held by a child of the PID obu
     /// spawned. The ownership gate must accept that subtree and still refuse
     /// a listener that belongs to a different process tree.
     #[cfg(target_os = "linux")]

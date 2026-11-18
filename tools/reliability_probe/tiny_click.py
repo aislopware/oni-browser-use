@@ -10,7 +10,7 @@ import sys
 import tempfile
 import threading
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 OUT = Path(os.environ.get('POLISH_OUT', 'work/tiny-click.json'))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 checks = []
@@ -43,9 +43,9 @@ def check(name, passed):
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 try:
-    with tempfile.TemporaryDirectory(prefix='blade-tiny-click-') as home:
-        env=dict(os.environ,BLADE_HOME=home,BLADE_NO_WARMING='1',BLADE_NO_UPDATE_CHECK='1',BLADE_LANE='agent')
-        for key in ('BLADE_PROFILE_DIR','BLADE_TRANSPORT','BLADE_PROXY','BLADE_FRESH'):
+    with tempfile.TemporaryDirectory(prefix='obu-tiny-click-') as home:
+        env=dict(os.environ,OBU_HOME=home,OBU_NO_WARMING='1',OBU_NO_UPDATE_CHECK='1',OBU_LANE='agent')
+        for key in ('OBU_PROFILE_DIR','OBU_TRANSPORT','OBU_PROXY','OBU_FRESH'):
             env.pop(key,None)
         args=[dict(action='navigate',url='http://127.0.0.1:'+str(server.server_port))]
         for _ in range(10):

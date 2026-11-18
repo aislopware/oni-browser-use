@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 /// What the agent wants to do with page/browser state.
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ pub enum StateOp {
     OpenTab { url: String },
     /// Close a tab by target id.
     CloseTab { target_id: String },
-    /// Save cookies + localStorage to ~/.blade/sessions/<name>.json.
+    /// Save cookies + localStorage to ~/.obu/sessions/<name>.json.
     SaveSession { name: String },
     /// Load cookies + localStorage from a saved session.
     LoadSession { name: String },
@@ -101,7 +101,7 @@ pub struct Tab {
     #[serde(default)]
     pub title: String,
     /// True if a CDP session is attached (i.e. this is the tab
-    /// bladebro is currently driving).
+    /// obu is currently driving).
     #[serde(default)]
     pub attached: bool,
 }
@@ -128,7 +128,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             let all = res
                 .get("cookies")
                 .and_then(Value::as_array)
-                .ok_or_else(|| BladeError::Other("no cookies field".into()))?;
+                .ok_or_else(|| ObuError::Other("no cookies field".into()))?;
             let raw: Vec<Value> = match domain {
                 Some(d) => all
                     .iter()
@@ -194,7 +194,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
 
             let res = cdp.send("Network.setCookie", Some(params)).await?;
             if res.get("success").and_then(Value::as_bool) == Some(false) {
-                return Err(BladeError::Other(format!("Chrome rejected cookie {name:?}; check its URL, domain and security attributes")));
+                return Err(ObuError::Other(format!("Chrome rejected cookie {name:?}; check its URL, domain and security attributes")));
             }
             let stored = cdp.cookie_store().await?;
             let expected_domain = if let Some(u) = url {
@@ -224,7 +224,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
                     })
                 });
             if !verified {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "cookie {name:?} did not match readback; check its scope and attributes"
                 )));
             }
@@ -255,7 +255,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             cdp.send("Network.deleteCookies", Some(params)).await?;
             let after = cookie_domains_sent_to(cdp, name, &host).await?;
             if let Some(first) = after.first() {
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "cookie {name:?} is still set for {} — Chrome deletes only an exact domain match; retry del-cookie with domain {first}",
                     after.join(", ")
                 )));
@@ -286,7 +286,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             let targets = res
                 .get("targetInfos")
                 .cloned()
-                .ok_or_else(|| BladeError::Other("no targetInfos field".into()))?;
+                .ok_or_else(|| ObuError::Other("no targetInfos field".into()))?;
             let all: Vec<Value> = serde_json::from_value(targets)?;
             let tabs: Vec<Tab> = all
                 .into_iter()
@@ -325,7 +325,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             let target_id = res
                 .get("targetId")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| BladeError::Other("no targetId in response".into()))?;
+                .ok_or_else(|| ObuError::Other("no targetId in response".into()))?;
             Ok(format!("✓ opened tab {target_id}: {}", truncate(&url, 60)))
         }
 
@@ -334,9 +334,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
                 .send("Target.closeTarget", Some(json!({ "targetId": target_id })))
                 .await?;
             if result.get("success").and_then(Value::as_bool) != Some(true) {
-                return Err(BladeError::Other(format!(
-                    "could not close tab {target_id}"
-                )));
+                return Err(ObuError::Other(format!("could not close tab {target_id}")));
             }
             Ok(format!("✓ closed tab {target_id}"))
         }
@@ -347,28 +345,28 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             // ("not our cookie store") — the same boundary must hold here.
             // Without this gate, one agent-callable state save on the rb
             // lane writes the user's REAL browser cookie jar in cleartext
-            // under the blade data dir, where the upload read lane could
+            // under the obu data dir, where the upload read lane could
             // forward it to any driven page.
             if crate::realbrowser::real_lane() {
-                return Err(BladeError::Other(
-                    "state save is disabled on the real-browser lane — it would persist your real browser's cookies into bladebro's data dir".into(),
+                return Err(ObuError::Other(
+                    "state save is disabled on the real-browser lane — it would persist your real browser's cookies into obu's data dir".into(),
                 ));
             }
             validate_session_name(name)?;
 
             let captured = capture_session(cdp).await?;
-            let dir = crate::platform::blade_dir().join("sessions");
+            let dir = crate::platform::obu_dir().join("sessions");
             crate::platform::secure_create_dir_all(&dir)
-                .map_err(|e| BladeError::Other(format!("cannot create sessions dir: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot create sessions dir: {e}")))?;
             let path = dir.join(format!("{name}.json"));
             let bytes = serde_json::to_vec_pretty(&captured.session)?;
             if bytes.len() > 8 * 1024 * 1024 {
-                return Err(BladeError::Other(
+                return Err(ObuError::Other(
                     "session exceeds 8 MiB; existing snapshot preserved".into(),
                 ));
             }
             crate::platform::secure_write_file(&path, &bytes)
-                .map_err(|e| BladeError::Other(format!("cannot write session: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot write session: {e}")))?;
             let skipped = if captured.partitioned > 0 {
                 format!(" ({} partitioned, skipped)", captured.partitioned)
             } else {
@@ -385,7 +383,7 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
 
         StateOp::LoadSession { name } => {
             validate_session_name(name)?;
-            let path = crate::platform::blade_dir()
+            let path = crate::platform::obu_dir()
                 .join("sessions")
                 .join(format!("{name}.json"));
             if std::fs::symlink_metadata(&path)
@@ -394,17 +392,17 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
             {
                 // A symlinked session file is attack state — never read
                 // through it into the restore path.
-                return Err(BladeError::Other(format!(
+                return Err(ObuError::Other(format!(
                     "session '{name}' is a symlink — refusing to read it"
                 )));
             }
             use std::io::Read;
             let file = crate::platform::open_nofollow(&path)
-                .map_err(|e| BladeError::Other(format!("cannot read session '{name}': {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot read session '{name}': {e}")))?;
             let mut content = Vec::new();
             file.take(8 * 1024 * 1024 + 1).read_to_end(&mut content)?;
             if content.len() > 8 * 1024 * 1024 {
-                return Err(BladeError::Other("saved session exceeds 8 MiB".into()));
+                return Err(ObuError::Other("saved session exceeds 8 MiB".into()));
             }
             let session: SavedSession = serde_json::from_slice(&content)?;
             restore_session(cdp, name, &session).await
@@ -431,7 +429,7 @@ async fn cookie_domains_sent_to(cdp: &CdpSession, name: &str, host: &str) -> Res
     let all = store
         .get("cookies")
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Other("cookie readback missing cookie store".into()))?;
+        .ok_or_else(|| ObuError::Other("cookie readback missing cookie store".into()))?;
     let mut domains: Vec<String> = all
         .iter()
         .filter(|c| c["name"].as_str() == Some(name) && !cookie_partitioned(c))
@@ -475,7 +473,7 @@ async fn capture_session(cdp: &CdpSession) -> Result<CapturedSession> {
     // Error pages (chrome-error://) and untouched about:blank report
     // a literal "null" origin.
     if origin.is_empty() || origin == "null" {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "cannot save a session without an open page: navigate to a site first so cookies and storage have an origin".into(),
         ));
     }
@@ -483,7 +481,7 @@ async fn capture_session(cdp: &CdpSession) -> Result<CapturedSession> {
     let all = res
         .get("cookies")
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Other("cookie snapshot missing cookie array".into()))?;
+        .ok_or_else(|| ObuError::Other("cookie snapshot missing cookie array".into()))?;
     // getCookies includes partitioned (CHIPS) cookies, which `state load`
     // cannot set as ordinary cookies: saving one made the whole session
     // unloadable. Leave them out, as the login snapshot does, and count them.
@@ -554,7 +552,7 @@ async fn restore_session(cdp: &CdpSession, name: &str, session: &SavedSession) -
         .await?;
     let origin = extract_eval_value(&origin_res)?;
     if session.origin == "null" || origin.as_str() != Some(session.origin.as_str()) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "session '{name}' belongs to {}; navigate there before loading it",
             session.origin
         )));
@@ -563,7 +561,7 @@ async fn restore_session(cdp: &CdpSession, name: &str, session: &SavedSession) -
     for cookie in &cookies {
         let result = cdp.send("Network.setCookie", Some(cookie.clone())).await?;
         if result.get("success").and_then(Value::as_bool) == Some(false) {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "Chrome rejected saved cookie {}; session only partially restored",
                 cookie["name"]
             )));
@@ -573,7 +571,7 @@ async fn restore_session(cdp: &CdpSession, name: &str, session: &SavedSession) -
     let all = restored
         .get("cookies")
         .and_then(Value::as_array)
-        .ok_or_else(|| BladeError::Other("cookie readback missing after session restore".into()))?;
+        .ok_or_else(|| ObuError::Other("cookie readback missing after session restore".into()))?;
     // Re-read the clock: a cookie may expire between set and readback.
     let now = unix_now()?;
     for saved in live.iter().filter(|c| !cookie_expired(c, now)) {
@@ -583,7 +581,7 @@ async fn restore_session(cdp: &CdpSession, name: &str, session: &SavedSession) -
                 && c["domain"] == saved["domain"]
                 && c["path"] == saved["path"]
         }) {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "saved cookie {} did not match readback; session only partially restored",
                 saved["name"]
             )));
@@ -626,7 +624,7 @@ fn cookie_expired(cookie: &Value, now: f64) -> bool {
 fn unix_now() -> Result<f64> {
     Ok(std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(BladeError::other)?
+        .map_err(ObuError::other)?
         .as_secs_f64())
 }
 
@@ -676,7 +674,7 @@ async fn set_storage(cdp: &CdpSession, storage: &str, key: &str, value: &str) ->
     )
     .await?;
     if extract_eval_value(&result)? != json!(true) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "{storage} mutation did not match readback"
         )));
     }
@@ -694,7 +692,7 @@ async fn remove_storage(cdp: &CdpSession, storage: &str, key: &str) -> Result<St
     )
     .await?;
     if extract_eval_value(&result)? != json!(true) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "{storage} mutation did not match readback"
         )));
     }
@@ -712,7 +710,7 @@ async fn clear_storage(cdp: &CdpSession, storage: &str) -> Result<String> {
         )
         .await?;
     if extract_eval_value(&result)? != json!(true) {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "{storage} mutation did not match readback"
         )));
     }
@@ -727,12 +725,12 @@ fn extract_eval_value(res: &Value) -> Result<Value> {
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown page exception");
-        return Err(BladeError::Other(format!("storage eval failed: {msg}")));
+        return Err(ObuError::Other(format!("storage eval failed: {msg}")));
     }
     res.get("result")
         .and_then(|r| r.get("value"))
         .cloned()
-        .ok_or_else(|| BladeError::Other("evaluate returned no value".into()))
+        .ok_or_else(|| ObuError::Other("evaluate returned no value".into()))
 }
 
 fn truncate(s: &str, n: usize) -> String {
@@ -766,7 +764,7 @@ fn validate_session_name(name: &str) -> Result<()> {
             c.is_control() || matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*')
         })
     {
-        return Err(BladeError::Other(format!("invalid session name: {name:?}")));
+        return Err(ObuError::Other(format!("invalid session name: {name:?}")));
     }
     Ok(())
 }

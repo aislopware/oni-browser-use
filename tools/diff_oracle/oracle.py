@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bladebro differential oracle — stock Chrome vs a bladebro browser, side by
+"""Obu differential oracle — stock Chrome vs a obu browser, side by
 side on the same machine under the same display conditions; every deviation is
 classified EXPECTED (documented mask/isolation surface) or DIVERGENT (a bug).
 
@@ -10,8 +10,8 @@ Usage:
   python3 oracle.py [--chrome PATH] [--url URL] [--lane agent|real] [--report FILE.md] [--keep]
 
 Requirements: Linux + Xvfb (the stock baseline runs on its own Xvfb display so
-the comparison mirrors bladebro's isolated environment), python3, `websockets`,
-and a built bladebro (on PATH or via BLADEBRO env). Exit codes: 0 = clean,
+the comparison mirrors obu's isolated environment), python3, `websockets`,
+and a built obu (on PATH or via OBU env). Exit codes: 0 = clean,
 1 = DIVERGENT present, 2 = setup error.
 """
 import argparse
@@ -125,7 +125,7 @@ async def ws_eval(ws_url, expr, await_promise=True, timeout_ms=90000):
 
 
 def setup_display_session(display):
-    """Mirror bladebro's virtual-display setup: a window manager plus a
+    """Mirror obu's virtual-display setup: a window manager plus a
     declared work area. Without them an Xvfb screen has no work area at all
     (availHeight == height, outerWidth == innerWidth) and every geometry
     comparison would be measuring the display, not the injection layer.
@@ -163,9 +163,9 @@ def seed_oracle_profile(root):
 def pristine_probe(chrome, port, display, url, battery, lane="agent"):
     """Launch stock Chrome on the given display and run the battery.
     In real-lane mode the stock flags mirror the real lane's own launch set
-    (plus the same functional GL enablers bladebro receives), so the only
-    thing under test is bladebro's own behavior."""
-    tmp = tempfile.mkdtemp(prefix="blade-oracle-")
+    (plus the same functional GL enablers obu receives), so the only
+    thing under test is obu's own behavior."""
+    tmp = tempfile.mkdtemp(prefix="obu-oracle-")
     seed_oracle_profile(tmp)
     env = dict(os.environ)
     if display is not None:
@@ -173,7 +173,7 @@ def pristine_probe(chrome, port, display, url, battery, lane="agent"):
         env.pop("WAYLAND_DISPLAY", None)
         env.pop("XDG_SESSION_TYPE", None)
     gl_enablers = [
-        # Environment enablers (identical to bladebro's), NOT stealth:
+        # Environment enablers (identical to obu's), NOT stealth:
         # without them Chrome 139+ on a GPU-less display refuses software
         # WebGL and the baseline has no context at all. In agent mode the
         # stealth injection layer is the only difference under test; in
@@ -189,8 +189,8 @@ def pristine_probe(chrome, port, display, url, battery, lane="agent"):
             "--disable-features=PdfPlugin",
             f"--user-data-dir={tmp}", f"--remote-debugging-port={port}",
             "--profile-directory=Default",
-            # Geometry pinned on BOTH sides (bladebro gets the same two flags
-            # via BLADE_CHROME_FLAGS): window-manager placement jitter is not
+            # Geometry pinned on BOTH sides (obu gets the same two flags
+            # via OBU_CHROME_FLAGS): window-manager placement jitter is not
             # a fingerprint surface, and it must not masquerade as one —
             # everything else stays strict (zero expected).
             "--window-size=1600,900", "--window-position=0,0",
@@ -252,7 +252,7 @@ def pristine_probe(chrome, port, display, url, battery, lane="agent"):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def parse_bladebro_eval(out):
+def parse_obu_eval(out):
     # JSON output can offload a large battery to an artifact; treating the
     # human "result: [artifact ...]" notice as JSON silently loses coverage.
     try:
@@ -282,18 +282,18 @@ def parse_bladebro_eval(out):
                 return json.loads(v1) if isinstance(v1, str) else v1
             except Exception as e:
                 fail(f"cannot parse eval result: {e}")
-    fail("no `result:` line in bladebro output")
+    fail("no `result:` line in obu output")
 
 
-def bladebro_probe(bladebro, url, battery, env=None):
-    subprocess.run([bladebro, "stop"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-    r = subprocess.run([bladebro, "nav", url], env=env, capture_output=True, text=True, timeout=240)
+def obu_probe(obu, url, battery, env=None):
+    subprocess.run([obu, "stop"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+    r = subprocess.run([obu, "nav", url], env=env, capture_output=True, text=True, timeout=240)
     if r.returncode != 0:
-        fail(f"bladebro nav failed: {r.stdout[-300:]} {r.stderr[-300:]}")
-    r = subprocess.run([bladebro, "--json", "act", "eval", battery, "--format", "json"], env=env, capture_output=True, text=True, timeout=240)
+        fail(f"obu nav failed: {r.stdout[-300:]} {r.stderr[-300:]}")
+    r = subprocess.run([obu, "--json", "act", "eval", battery, "--format", "json"], env=env, capture_output=True, text=True, timeout=240)
     if r.returncode != 0:
-        fail(f"bladebro act eval failed: {r.stdout[-300:]} {r.stderr[-300:]}")
-    return parse_bladebro_eval(r.stdout)
+        fail(f"obu act eval failed: {r.stdout[-300:]} {r.stderr[-300:]}")
+    return parse_obu_eval(r.stdout)
 
 
 def classify(key):
@@ -303,26 +303,26 @@ def classify(key):
     return None
 
 
-def require_real_lane_support(bladebro: str) -> None:
-    """The real lane is forced via BLADE_LANE=real. A binary that predates the
+def require_real_lane_support(obu: str) -> None:
+    """The real lane is forced via OBU_LANE=real. A binary that predates the
     real-browser lane ignores that variable, and the run would silently measure
     the AGENT lane (masked GL, masked geometry) and report bogus divergences.
     Refuse instead of producing a lying report."""
     try:
-        r = subprocess.run([bladebro, "help", "--json"], capture_output=True,
+        r = subprocess.run([obu, "help", "--json"], capture_output=True,
                            text=True, timeout=60)
         supported = r.returncode == 0 and '"rb"' in r.stdout
     except Exception:
         supported = False
     if not supported:
-        fail(f"{bladebro} does not support the real-browser lane (`rb` missing) — "
-             "BLADE_LANE=real would be ignored and the AGENT lane measured. Set "
-             "BLADEBRO to the build under test (e.g. "
-             "BLADEBRO=$PWD/target/release/bladebro).")
+        fail(f"{obu} does not support the real-browser lane (`rb` missing) — "
+             "OBU_LANE=real would be ignored and the AGENT lane measured. Set "
+             "OBU to the build under test (e.g. "
+             "OBU=$PWD/target/release/obu).")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="bladebro differential oracle")
+    ap = argparse.ArgumentParser(description="obu differential oracle")
     ap.add_argument("--chrome", help="stock Chrome/Chromium path (default: CHROME_PATH or PATH)")
     ap.add_argument("--url", default="https://example.com", help="page both browsers load")
     ap.add_argument("--lane", choices=("agent", "real"), default="agent",
@@ -340,29 +340,29 @@ def main():
         behavior_body = f.read()
     battery = "(async()=>{" + behavior_body + battery_body + "})()"
 
-    bladebro = os.environ.get("BLADEBRO")
-    if not bladebro:
+    obu = os.environ.get("OBU")
+    if not obu:
         # Prefer the repo build over whatever PATH resolves to: a stale
-        # `bladebro` (an installed release predating a feature) silently
+        # `obu` (an installed release predating a feature) silently
         # changes what is being measured.
         repo = os.path.dirname(os.path.dirname(here))
-        candidate = os.path.join(repo, "target", "release", "bladebro")
-        bladebro = (
+        candidate = os.path.join(repo, "target", "release", "obu")
+        obu = (
             candidate
             if os.path.exists(candidate) and os.access(candidate, os.X_OK)
-            else "bladebro"
+            else "obu"
         )
-    if not shutil.which(bladebro) and not os.path.exists(bladebro):
-        fail("bladebro binary not found (set BLADEBRO)")
+    if not shutil.which(obu) and not os.path.exists(obu):
+        fail("obu binary not found (set OBU)")
     if args.lane == "real":
-        require_real_lane_support(bladebro)
+        require_real_lane_support(obu)
     chrome = find_chrome(args.chrome)
 
     xvfb_proc, display, wm_proc = None, None, None
     if sys.platform.startswith("linux"):
         xvfb = find_xvfb()
         if not xvfb:
-            fail("Xvfb required on Linux (the baseline must mirror bladebro's display)")
+            fail("Xvfb required on Linux (the baseline must mirror obu's display)")
         display = pick_display()
         xvfb_proc = subprocess.Popen(
             [xvfb, f":{display}", "-screen", "0", "1920x1080x24", "-ac", "-nolisten", "tcp"],
@@ -377,9 +377,9 @@ def main():
     if args.lane == "real":
         # Isolated home + a synthetic source profile; the clone lane imports
         # it and runs the real-browser path with zero patches. Forced via
-        # BLADE_LANE so a persisted config can never skew the run.
-        real_home = tempfile.mkdtemp(prefix="blade-oracle-home-")
-        real_src = tempfile.mkdtemp(prefix="blade-oracle-src-")
+        # OBU_LANE so a persisted config can never skew the run.
+        real_home = tempfile.mkdtemp(prefix="obu-oracle-home-")
+        real_src = tempfile.mkdtemp(prefix="obu-oracle-src-")
         seed_oracle_profile(real_src)
         browser_id = "chromium"
         base = os.path.basename(chrome).lower()
@@ -393,12 +393,12 @@ def main():
             json.dump({"enabled": True, "mode": "clone", "browser": browser_id,
                        "profile": real_src, "visible": True}, f)
         real_env = dict(os.environ)
-        for key in ("BLADE_PROFILE_DIR", "BLADE_FRESH"):
+        for key in ("OBU_PROFILE_DIR", "OBU_FRESH"):
             real_env.pop(key, None)
-        real_env["BLADE_HOME"] = real_home
-        real_env["BLADE_LANE"] = "real"
+        real_env["OBU_HOME"] = real_home
+        real_env["OBU_LANE"] = "real"
         # Same functional GL enablers as the stock baseline.
-        real_env["BLADE_CHROME_FLAGS"] = \
+        real_env["OBU_CHROME_FLAGS"] = \
             "--enable-unsafe-swiftshader --ignore-gpu-blocklist --use-angle=gl " \
             "--window-size=1600,900 --window-position=0,0"
         if display is not None:
@@ -410,32 +410,32 @@ def main():
         print(f"[oracle] baseline: stock {chrome} on :{display}")
         stock = pristine_probe(chrome, free_port(), display, args.url, battery, lane=args.lane)
 
-        print(f"[oracle] subject: {bladebro} (lane={args.lane})")
+        print(f"[oracle] subject: {obu} (lane={args.lane})")
         if args.lane == "real":
-            subject = bladebro_probe(bladebro, args.url, battery, env=real_env)
+            subject = obu_probe(obu, args.url, battery, env=real_env)
         else:
             # Pin the agent lane: a live real-browser config (`rb on`) would
             # silently redirect the subject to the user's own browser and the
-            # mask surface would never be measured. Scratch BLADE_HOME too —
+            # mask surface would never be measured. Scratch OBU_HOME too —
             # without one the CLI daemon runs on the user's real data dir
-            # (test session profiles + a leftover daemon in ~/.blade, found
+            # (test session profiles + a leftover daemon in ~/.obu, found
             # live 2026-09-26); no warming keeps runs deterministic.
-            agent_home = tempfile.mkdtemp(prefix="blade-oracle-agent-")
+            agent_home = tempfile.mkdtemp(prefix="obu-oracle-agent-")
             seed_oracle_profile(os.path.join(agent_home, "profile"))
             agent_env = dict(os.environ)
-            for key in ("BLADE_PROFILE_DIR", "BLADE_FRESH"):
+            for key in ("OBU_PROFILE_DIR", "OBU_FRESH"):
                 agent_env.pop(key, None)
-            agent_env["BLADE_LANE"] = "agent"
-            agent_env["BLADE_HOME"] = agent_home
-            agent_env["BLADE_NO_WARMING"] = "1"
+            agent_env["OBU_LANE"] = "agent"
+            agent_env["OBU_HOME"] = agent_home
+            agent_env["OBU_NO_WARMING"] = "1"
             # A screen-sized window straddles xfwm4's automatic-maximize
             # threshold: identical launches can get different frame extents.
             # Mirror the real-lane control on BOTH sides, below that threshold;
             # keep all geometry comparisons strict instead of exempting them.
-            agent_env["BLADE_CHROME_FLAGS"] = (
-                agent_env.get("BLADE_CHROME_FLAGS", "") +
+            agent_env["OBU_CHROME_FLAGS"] = (
+                agent_env.get("OBU_CHROME_FLAGS", "") +
                 " --window-size=1600,900 --window-position=0,0")
-            subject = bladebro_probe(bladebro, args.url, battery, env=agent_env)
+            subject = obu_probe(obu, args.url, battery, env=agent_env)
     finally:
         if wm_proc:
             wm_proc.terminate()
@@ -450,10 +450,10 @@ def main():
             except subprocess.TimeoutExpired:
                 xvfb_proc.kill()
         if real_env is not None:
-            subprocess.run([bladebro, "stop"], env=real_env,
+            subprocess.run([obu, "stop"], env=real_env,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
         if agent_env is not None:
-            subprocess.run([bladebro, "stop"], env=agent_env,
+            subprocess.run([obu, "stop"], env=agent_env,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
         if not args.keep:
             if real_home:
@@ -486,8 +486,8 @@ def main():
             divergent.append(("webdriver-not-false", "false", wd))
 
     lines = []
-    lines.append("== bladebro differential oracle ==")
-    lines.append(f"baseline: stock {chrome} on :{display}  |  subject: {bladebro}")
+    lines.append("== obu differential oracle ==")
+    lines.append(f"baseline: stock {chrome} on :{display}  |  subject: {obu}")
     lines.append(f"lane: {args.lane}")
     lines.append(f"url: {args.url}")
     lines.append(f"keys: {len(keys)}   ok: {len(ok)}   expected: {len(expected)}   divergent: {len(divergent)}")
@@ -497,7 +497,7 @@ def main():
         for k, a, b, reason in expected:
             lines.append(f"  {k}")
             lines.append(f"    stock:     {str(a)[:110]}")
-            lines.append(f"    bladebro:  {str(b)[:110]}")
+            lines.append(f"    obu:  {str(b)[:110]}")
             lines.append(f"    why: {reason}")
     if divergent:
         lines.append("")
@@ -505,7 +505,7 @@ def main():
         for k, a, b in divergent:
             lines.append(f"  {k}")
             lines.append(f"    stock:     {str(a)[:110]}")
-            lines.append(f"    bladebro:  {str(b)[:110]}")
+            lines.append(f"    obu:  {str(b)[:110]}")
     report = "\n".join(lines)
     print(report)
     if args.report:
@@ -514,7 +514,7 @@ def main():
         print(f"[oracle] report written to {args.report}")
     if args.json_report:
         with open(args.json_report, "w", encoding="utf-8") as f:
-            json.dump({"lane": args.lane, "url": args.url, "binary": bladebro,
+            json.dump({"lane": args.lane, "url": args.url, "binary": obu,
                        "chrome": chrome, "stock": stock, "subject": subject,
                        "expected": expected, "divergent": divergent}, f, indent=2)
     sys.exit(1 if divergent else 0)

@@ -2,7 +2,7 @@
 //! profile/binary overrides, visibility and idle settings — mtime-cached so
 //! per-call readers don't re-parse.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::platform;
 use std::path::{Path, PathBuf};
 
@@ -41,7 +41,7 @@ fn default_true() -> bool {
 /// Persisted real-browser configuration (`<data-dir>/realbrowser.json`).
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Config {
-    /// Master switch (`bladebro rb on|off`).
+    /// Master switch (`obu rb on|off`).
     #[serde(default)]
     pub enabled: bool,
     /// Mechanism selection.
@@ -93,7 +93,7 @@ impl Default for Config {
 
 /// `<data-dir>/realbrowser.json`.
 pub fn config_path() -> PathBuf {
-    platform::blade_dir().join("realbrowser.json")
+    platform::obu_dir().join("realbrowser.json")
 }
 
 /// Load the persisted config; a missing or malformed file is the default
@@ -141,10 +141,10 @@ pub fn save_config(cfg: &Config) -> Result<()> {
 pub fn save_config_to(path: &Path, cfg: &Config) -> Result<()> {
     if let Some(parent) = path.parent() {
         platform::secure_create_dir_all(parent)
-            .map_err(|e| BladeError::Other(format!("cannot create data dir: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot create data dir: {e}")))?;
     }
     let body = serde_json::to_string_pretty(cfg)
-        .map_err(|e| BladeError::Other(format!("cannot serialize config: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot serialize config: {e}")))?;
     platform::secure_write_file(path, body.as_bytes())
-        .map_err(|e| BladeError::Other(format!("cannot write realbrowser.json: {e}")))
+        .map_err(|e| ObuError::Other(format!("cannot write realbrowser.json: {e}")))
 }

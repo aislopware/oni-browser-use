@@ -1,4 +1,4 @@
-//! The MCP server module — exposes Bladebro's tools over stdio JSON-RPC.
+//! The MCP server module — exposes Obu's tools over stdio JSON-RPC.
 
 pub mod server;
 pub mod tools;

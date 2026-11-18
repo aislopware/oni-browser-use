@@ -79,14 +79,14 @@ impl Fixture {
     }
 
     fn run(&mut self, args: &[&str], ok: bool) -> Value {
-        let out = Command::new(env!("CARGO_BIN_EXE_bladebro"))
+        let out = Command::new(env!("CARGO_BIN_EXE_obu"))
             .args(["hermes", "--json", "--hermes"])
             .arg(std::env::current_exe().unwrap())
             .args(args)
             .env("HERMES_HOME", &self.root)
             .current_dir(&self.root)
-            .env("BLADE_HOME", "blade")
-            .env("BLADE_NO_UPDATE_CHECK", "1")
+            .env("OBU_HOME", "obu")
+            .env("OBU_NO_UPDATE_CHECK", "1")
             .env("CHROME_PATH", "explicit-chrome")
             .output()
             .unwrap();
@@ -128,17 +128,15 @@ fn main() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "blade Hermes Δ space-{}-{nonce}",
-        std::process::id()
-    ));
+    let root =
+        std::env::temp_dir().join(format!("obu Hermes Δ space-{}-{nonce}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let path = root.join("config.yaml");
     let baseline = json!({"agent":{"disabled_toolsets":["tts"]}, "mcp_servers":{"keep":{"enabled":false}}, "browser":{"backend":"off"}});
     write(&path, &baseline);
     let mut f = Fixture { root, checks: 0 };
     f.run(&["on"], true);
-    let installed = read(&path)["mcp_servers"]["bladebro"].clone();
+    let installed = read(&path)["mcp_servers"]["obu"].clone();
     f.check(
         installed["args"] == json!(["mcp"]),
         "ordinary MCP command configured",
@@ -150,7 +148,7 @@ fn main() {
     // getcwd resolves macOS /var to /private/var. Compare directory identity,
     // while still requiring absolute paths and the exact intended leaf names.
     let cwd = f.root.canonicalize().unwrap();
-    for (key, leaf) in [("BLADE_HOME", "blade"), ("CHROME_PATH", "explicit-chrome")] {
+    for (key, leaf) in [("OBU_HOME", "obu"), ("CHROME_PATH", "explicit-chrome")] {
         let actual = Path::new(installed["env"][key].as_str().unwrap());
         f.check(
             actual.is_absolute()
@@ -159,7 +157,7 @@ fn main() {
             "explicit absolute path reaches the same directory through OS aliases",
         );
     }
-    let recovery = f.root.join(".bladebro-browser/state.json");
+    let recovery = f.root.join(".obu-browser/state.json");
     let saved = std::fs::read(&recovery).unwrap();
     f.run(&["on"], true);
     f.check(
@@ -168,10 +166,7 @@ fn main() {
     );
     let status = f.run(&["status"], true);
     f.check(
-        status["text"]
-            .as_str()
-            .unwrap()
-            .contains("Bladebro configured"),
+        status["text"].as_str().unwrap().contains("Obu configured"),
         "status uses persisted state",
     );
     let mut edited = read(&path);
@@ -194,12 +189,12 @@ fn main() {
 
     let mut prior = baseline.clone();
     prior["agent"]["disabled_toolsets"] = json!(["tts", "browser"]);
-    prior["mcp_servers"]["bladebro"] = json!({"enabled":false,"command":"old", "env":{"TOKEN":"private-sentinel","CHROME_PATH":"configured-chrome"}});
+    prior["mcp_servers"]["obu"] = json!({"enabled":false,"command":"old", "env":{"TOKEN":"private-sentinel","CHROME_PATH":"configured-chrome"}});
     write(&path, &prior);
     f.run(&["on"], true);
     f.check(
-        read(&path)["mcp_servers"]["bladebro"]["env"]["TOKEN"] == "private-sentinel"
-            && read(&path)["mcp_servers"]["bladebro"]["env"]["CHROME_PATH"] == "configured-chrome",
+        read(&path)["mcp_servers"]["obu"]["env"]["TOKEN"] == "private-sentinel"
+            && read(&path)["mcp_servers"]["obu"]["env"]["CHROME_PATH"] == "configured-chrome",
         "prior server environment survives the switch",
     );
     f.run(&["off"], true);
@@ -209,7 +204,7 @@ fn main() {
     );
 
     let mut oversized = baseline.clone();
-    oversized["mcp_servers"]["bladebro"] =
+    oversized["mcp_servers"]["obu"] =
         json!({"enabled":false,"env":{"LARGE":"x".repeat(140 * 1024)}});
     write(&path, &oversized);
     f.run(&["on"], false);
@@ -241,14 +236,14 @@ fn main() {
 
     f.run(&["on"], true);
     let mut conflict = read(&path);
-    conflict["mcp_servers"]["bladebro"]["command"] = json!("user-edited");
+    conflict["mcp_servers"]["obu"]["command"] = json!("user-edited");
     write(&path, &conflict);
     f.run(&["off"], false);
     f.check(
         read(&path) == conflict && recovery.exists(),
         "edited MCP entry refuses restore without writes",
     );
-    conflict["mcp_servers"]["bladebro"] = installed;
+    conflict["mcp_servers"]["obu"] = installed;
     write(&path, &conflict);
     f.run(&["off"], true);
 

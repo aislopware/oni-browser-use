@@ -1,6 +1,6 @@
-# Contributing to Bladebro
+# Contributing to Obu
 
-Thanks for your interest in improving Bladebro. This is a small, focused project — keep PRs scoped.
+Thanks for your interest in improving Obu. This is a small, focused project — keep PRs scoped.
 
 Working with a coding agent? Point it at [AGENTS.md](AGENTS.md) — the agent-facing repo guide (commands, house rules, verification instruments).
 
@@ -22,7 +22,7 @@ If any of these fail, fix them before opening a PR.
 ## What we accept PRs for
 
 - Bug fixes (with a test that would have caught the bug)
-- Stealth improvements (verified against `bladebro audit` + real detection sites)
+- Stealth improvements (verified against `obu audit` + real detection sites)
 - New actions on `act` (that fit the "few tools, full control" philosophy)
 - Adapter fixes (the `extract=auto` site-aware paths — with a live repro on the real site)
 - New adapters (pure optimization only — zero new tools, zero new params; must be live-tested, token-efficient and actually good — reviewed closely)
@@ -55,9 +55,9 @@ If your change touches the stealth system, verify it doesn't regress:
 ```bash
 # Local vectors — no FAIL line, stamps stable (the suite prints its own
 # total; 111 on the reference machine, GPU/profile-dependent elsewhere)
-./target/release/bladebro audit
+./target/release/obu audit
 
-# Differential oracle — divergent must be 0 (stock vs bladebro, same display)
+# Differential oracle — divergent must be 0 (stock vs obu, same display)
 python3 tools/diff_oracle/oracle.py
 
 # CreepJS lie-engine port (tools/diff_oracle/lieport.js) — eval it in the

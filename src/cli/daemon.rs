@@ -2,11 +2,11 @@
 //!
 //! Same lifecycle guarantees as the MCP server: lazy launch, self-healing
 //! mid-session (crash relaunch + lane/settings drift), idle timeout
-//! (`BLADE_IDLE_TIMEOUT`, 0 disables), periodic login snapshot + knowledge
+//! (`OBU_IDLE_TIMEOUT`, 0 disables), periodic login snapshot + knowledge
 //! sync, and pidfile-ownership teardown so a ghost daemon can never unlink a
 //! live daemon's socket.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 #[cfg(unix)]
 use super::{
@@ -39,9 +39,9 @@ pub(super) async fn stop_daemon_for_clone_change() -> Result<()> {
     {
         if daemon_running() {
             stop_daemon().await.map_err(|e| {
-                BladeError::Other(format!(
+                ObuError::Other(format!(
                     "the daemon did not stop ({e}) — its clone session would outlive this \
-                     change. Run `bladebro stop`, then retry."
+                     change. Run `obu stop`, then retry."
                 ))
             })?;
         }
@@ -75,8 +75,8 @@ pub async fn run_daemon() -> Result<()> {
     // would bless any co-user listener planted through a loose tree as
     // "the daemon", capturing every request and authoring every response.
     if !socket_dir_trusted() {
-        return Err(BladeError::Other(format!(
-            "refusing to run the daemon: state dir {} is not an owner-only directory owned by the current user — check BLADE_HOME/XDG_STATE_HOME and its permissions",
+        return Err(ObuError::Other(format!(
+            "refusing to run the daemon: state dir {} is not an owner-only directory owned by the current user — check OBU_HOME/XDG_STATE_HOME and its permissions",
             path.parent()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default()
@@ -94,7 +94,7 @@ pub async fn run_daemon() -> Result<()> {
         let error = std::io::Error::last_os_error();
         if error.kind() == std::io::ErrorKind::WouldBlock {
             eprintln!(
-                "[bladebro] daemon already running or starting on {}",
+                "[obu] daemon already running or starting on {}",
                 path.display()
             );
             return Ok(());
@@ -102,12 +102,12 @@ pub async fn run_daemon() -> Result<()> {
         return Err(error.into());
     }
     // Never steal a LIVE daemon's socket: connect to check first. Without
-    // this, a second `bladebro daemon` rebinds over the active one and
+    // this, a second `obu daemon` rebinds over the active one and
     // orphans it — a ghost that keeps its Chrome but that `stop` can no
     // longer reach (and whose death later unlinks the new daemon's socket).
     if std::os::unix::net::UnixStream::connect(&path).is_ok() {
         eprintln!(
-            "[bladebro] daemon already running on {} — exiting",
+            "[obu] daemon already running on {} — exiting",
             path.display()
         );
         return Ok(());
@@ -120,7 +120,7 @@ pub async fn run_daemon() -> Result<()> {
     }
 
     let listener = UnixListener::bind(&path)
-        .map_err(|e| BladeError::Other(format!("failed to bind socket {}: {e}", path.display())))?;
+        .map_err(|e| ObuError::Other(format!("failed to bind socket {}: {e}", path.display())))?;
 
     // SECURITY: Restrict socket to owner-only. Without this, the socket
     // inherits umask permissions (often 755), which on misconfigured systems
@@ -131,7 +131,7 @@ pub async fn run_daemon() -> Result<()> {
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
 
-    eprintln!("[bladebro] daemon listening on {}", path.display());
+    eprintln!("[obu] daemon listening on {}", path.display());
     let _ = std::fs::write(pid_path(), std::process::id().to_string());
 
     let mut browser: Option<crate::browser::Browser> = None;
@@ -141,7 +141,7 @@ pub async fn run_daemon() -> Result<()> {
     let mut launched = 0u64;
     let mut stale_warned = false;
     let mut last_activity = std::time::Instant::now();
-    let idle_secs: u64 = std::env::var("BLADE_IDLE_TIMEOUT")
+    let idle_secs: u64 = std::env::var("OBU_IDLE_TIMEOUT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(600);
@@ -161,7 +161,7 @@ pub async fn run_daemon() -> Result<()> {
             // another connection is served.
             biased;
             _ = signals.recv() => {
-                eprintln!("[bladebro] termination signal \u{2014} shutting down Chrome gracefully");
+                eprintln!("[obu] termination signal \u{2014} shutting down Chrome gracefully");
                 break;
             }
             // Accept new connections.
@@ -169,7 +169,7 @@ pub async fn run_daemon() -> Result<()> {
                 let (stream, _) = match accept {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!("[bladebro] accept error: {e}");
+                        eprintln!("[obu] accept error: {e}");
                         continue;
                     }
                 };
@@ -219,7 +219,7 @@ pub async fn run_daemon() -> Result<()> {
                 // Stop command.
                 if tool == "stop" {
                     // Flush the knowledge base BEFORE acknowledging: once
-                    // `bladebro stop` returns, consent/visits/timing/block
+                    // `obu stop` returns, consent/visits/timing/block
                     // knowledge must already be durable on disk.
                     if let Ok(mut kb) = knowledge.lock() {
                         kb.prune();
@@ -229,7 +229,7 @@ pub async fn run_daemon() -> Result<()> {
                     let resp_str = serde_json::to_string(&resp).unwrap_or_default();
                     let _ = reader.get_mut().write_all(resp_str.as_bytes()).await;
                     let _ = reader.get_mut().write_all(b"\n").await;
-                    eprintln!("[bladebro] daemon stopping (stop command)");
+                    eprintln!("[obu] daemon stopping (stop command)");
                     break;
                 }
 
@@ -268,7 +268,7 @@ pub async fn run_daemon() -> Result<()> {
                 if need_launch {
                     if browser.is_some() {
                         eprintln!(
-                            "[bladebro] browser relaunch: {}",
+                            "[obu] browser relaunch: {}",
                             if drifted { "lane/settings changed" } else { "connection lost" }
                         );
                         if let Some(b) = browser.take() {
@@ -281,7 +281,7 @@ pub async fn run_daemon() -> Result<()> {
                         // close. The launch below opens the browser the
                         // current lane/settings call for.
                         eprintln!(
-                            "[bladebro] lane/settings changed — detaching from the attached browser"
+                            "[obu] lane/settings changed — detaching from the attached browser"
                         );
                         detached_attach = true;
                         page = None;
@@ -305,7 +305,7 @@ pub async fn run_daemon() -> Result<()> {
                             }
                         }
                         Err(e) => {
-                            eprintln!("[bladebro] Chrome launch failed: {e}");
+                            eprintln!("[obu] Chrome launch failed: {e}");
                             let resp = json!({ "ok": false, "error": format!("Chrome launch failed: {e}") });
                             let resp_str = serde_json::to_string(&resp).unwrap_or_default();
                             let _ = reader.get_mut().write_all(resp_str.as_bytes()).await;
@@ -321,7 +321,7 @@ pub async fn run_daemon() -> Result<()> {
                     dispatch_or_shutdown(&mut signals, tool, &args, p).await
                 };
                 let Some(result) = result else {
-                    eprintln!("[bladebro] termination signal during a command \u{2014} cancelled it; shutting down Chrome gracefully");
+                    eprintln!("[obu] termination signal during a command \u{2014} cancelled it; shutting down Chrome gracefully");
                     let resp_str = serde_json::to_string(&cancelled_by_signal()).unwrap_or_default();
                     let _ = reader.get_mut().write_all(resp_str.as_bytes()).await;
                     let _ = reader.get_mut().write_all(b"\n").await;
@@ -338,7 +338,7 @@ pub async fn run_daemon() -> Result<()> {
 
                 // One-line advisories for the human: a mid-session lane switch
                 // actually landed, or this daemon runs a binary that was
-                // replaced on disk (a restart is one `bladebro stop` away).
+                // replaced on disk (a restart is one `obu stop` away).
                 let mut advisories: Vec<String> = Vec::new();
                 if drifted {
                     advisories.push(match (detached_attach, crate::realbrowser::real_lane()) {
@@ -351,7 +351,7 @@ pub async fn run_daemon() -> Result<()> {
                 if !stale_warned && crate::platform::stale_binary() {
                     stale_warned = true;
                     advisories.push(
-                        "note: this daemon runs a binary that was replaced on disk — `bladebro stop` to pick up the new build".into(),
+                        "note: this daemon runs a binary that was replaced on disk — `obu stop` to pick up the new build".into(),
                     );
                 }
                 advisories.extend(crate::browser::pending_notes());
@@ -372,9 +372,9 @@ pub async fn run_daemon() -> Result<()> {
                         "image_path": r.image_path,
                         "is_error": r.is_error,
                     }),
-                    Err(BladeError::Closed) => {
+                    Err(ObuError::Closed) => {
                         // Self-heal: relaunch and retry.
-                        eprintln!("[bladebro] browser closed during tool call, reconnecting...");
+                        eprintln!("[obu] browser closed during tool call, reconnecting...");
                         if let Some(b) = browser.take() {
                             b.shutdown_gracefully().await;
                         }
@@ -414,7 +414,7 @@ pub async fn run_daemon() -> Result<()> {
                 let _ = reader.get_mut().write_all(resp_str.as_bytes()).await;
                 let _ = reader.get_mut().write_all(b"\n").await;
                 if cancelled {
-                    eprintln!("[bladebro] termination signal during a command \u{2014} cancelled it; shutting down Chrome gracefully");
+                    eprintln!("[obu] termination signal during a command \u{2014} cancelled it; shutting down Chrome gracefully");
                     break;
                 }
 
@@ -428,11 +428,11 @@ pub async fn run_daemon() -> Result<()> {
                     && last_activity.elapsed().as_secs() > idle_secs
                     && crate::realbrowser::should_idle_shutdown()
                 {
-                    eprintln!("[bladebro] idle timeout ({idle_secs}s), shutting down Chrome");
+                    eprintln!("[obu] idle timeout ({idle_secs}s), shutting down Chrome");
                     if let Some(b) = browser.take() {
                         if let Some(ref p) = page {
                             if !crate::realbrowser::real_lane() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[bladebro] login snapshot failed: {e}"); }
+                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
                             }
                         }
                         b.shutdown_gracefully().await;
@@ -448,7 +448,7 @@ pub async fn run_daemon() -> Result<()> {
                     if !crate::realbrowser::real_lane() {
                         if let Some(ref p) = page {
                             if !p.cdp_ref().is_closed() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[bladebro] login snapshot failed: {e}"); }
+                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
                             }
                         }
                     }
@@ -471,7 +471,7 @@ pub async fn run_daemon() -> Result<()> {
     if let Some(ref p) = page {
         if !crate::realbrowser::real_lane() {
             if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await {
-                eprintln!("[bladebro] login snapshot failed: {e}");
+                eprintln!("[obu] login snapshot failed: {e}");
             }
         }
     }
@@ -491,12 +491,12 @@ pub async fn run_daemon() -> Result<()> {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(pid_path());
     }
-    eprintln!("[bladebro] daemon stopped");
+    eprintln!("[obu] daemon stopped");
     Ok(())
 }
 
 /// Run one command unless a termination signal arrives first (`None`).
-/// Cancel rather than finish: `bladebro stop` on a busy daemon and a
+/// Cancel rather than finish: `obu stop` on a busy daemon and a
 /// service manager both escalate to SIGKILL after a short grace, and a long
 /// command (a navigate to a slow server) would outlive it, forfeiting the
 /// graceful Chrome flush the signal is meant to trigger.
@@ -526,7 +526,7 @@ fn cancelled_by_signal() -> Value {
 
 #[cfg(not(unix))]
 pub async fn run_daemon() -> Result<()> {
-    Err(BladeError::Other(
+    Err(ObuError::Other(
         "daemon mode is Unix-only (requires Unix sockets)".into(),
     ))
 }
@@ -574,33 +574,33 @@ pub(super) const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 
 /// Settings a command sets through its environment that the DAEMON reads
 /// from its own — inherited from whichever command auto-started it, or the
-/// shell that ran `bladebro daemon`: the browser binary, network identity,
+/// shell that ran `obu daemon`: the browser binary, network identity,
 /// fingerprint, profile, and how results are shaped. A command that sets
 /// one differently would otherwise run silently with the daemon's value.
-/// Not listed: where the daemon lives (BLADE_HOME/XDG_*: another value is
-/// another daemon), client-side knobs (BLADE_CMD_TIMEOUT, BLADE_PLAIN),
-/// daemon lifecycle (BLADE_IDLE_TIMEOUT), MCP-only (BLADE_TRANSPORT) and
-/// diagnostics. The lane (BLADE_LANE + `rb` config) travels separately as
+/// Not listed: where the daemon lives (OBU_HOME/XDG_*: another value is
+/// another daemon), client-side knobs (OBU_CMD_TIMEOUT, OBU_PLAIN),
+/// daemon lifecycle (OBU_IDLE_TIMEOUT), MCP-only (OBU_TRANSPORT) and
+/// diagnostics. The lane (OBU_LANE + `rb` config) travels separately as
 /// the command's resolved lane.
 #[cfg(unix)]
 const DAEMON_SCOPED_ENV: &[&str] = &[
     "CHROME_PATH",
-    "BLADE_CHROME_FLAGS",
-    "BLADE_PROFILE_DIR",
-    "BLADE_FRESH",
-    "BLADE_INCOGNITO",
-    "BLADE_NO_WARMING",
-    "BLADE_PROXY",
-    "BLADE_LOCALE",
-    "BLADE_TZ",
-    "BLADE_GPU",
-    "BLADE_WEBGL",
-    "BLADE_MEDIA",
-    "BLADE_NOISE",
-    "BLADE_PERMS",
-    "BLADE_CONSENT",
-    "BLADE_PACE",
-    "BLADE_NO_COMPRESS",
+    "OBU_CHROME_FLAGS",
+    "OBU_PROFILE_DIR",
+    "OBU_FRESH",
+    "OBU_INCOGNITO",
+    "OBU_NO_WARMING",
+    "OBU_PROXY",
+    "OBU_LOCALE",
+    "OBU_TZ",
+    "OBU_GPU",
+    "OBU_WEBGL",
+    "OBU_MEDIA",
+    "OBU_NOISE",
+    "OBU_PERMS",
+    "OBU_CONSENT",
+    "OBU_PACE",
+    "OBU_NO_COMPRESS",
 ];
 
 #[cfg(unix)]
@@ -635,11 +635,11 @@ pub(super) fn daemon_request(tool: &str, args: &Value) -> Value {
 /// Why this daemon must not serve `req` (`None` = serve it): the command
 /// resolved another lane, or set a daemon-scoped variable to a value the
 /// daemon does not run with. Without this the daemon ran every command in
-/// ITS lane — `BLADE_LANE=agent bladebro nav bank.com` after `rb on` drove
+/// ITS lane — `OBU_LANE=agent obu nav bank.com` after `rb on` drove
 /// the user's real browser. A setting the command does not set is the
 /// daemon's (documented daemon-wide behavior); a request without the
 /// fields (an older CLI) is served as before. Values are compared, never
-/// echoed: BLADE_PROXY can carry credentials.
+/// echoed: OBU_PROXY can carry credentials.
 #[cfg(unix)]
 fn settings_mismatch(
     req: &Value,
@@ -669,7 +669,7 @@ fn settings_mismatch(
     }
     Some(format!(
         "refused: this command's settings differ from the running daemon's — {}. Nothing was run. \
-         The daemon keeps the settings it was started with: run 'bladebro stop' and retry to \
+         The daemon keeps the settings it was started with: run 'obu stop' and retry to \
          restart it with this command's, or add --no-daemon to run just this command in its own \
          browser.",
         differ.join(", ")
@@ -677,18 +677,18 @@ fn settings_mismatch(
 }
 
 /// Why this daemon must not serve `req` ([`settings_mismatch`]), judged
-/// against the lane it would serve it in — `BLADE_LANE`, else the `rb`
+/// against the lane it would serve it in — `OBU_LANE`, else the `rb`
 /// config, so an `rb on|off` since the last command counts. That lane is
 /// computed here, never switched: the lane flag describes the browser that
 /// is RUNNING, and the login snapshots (periodic, idle, shutdown) and the
 /// idle hum consult it until a served command relaunches. A refusal that
 /// switched it relabelled a live real-lane session as agent, so the
-/// `bladebro stop` the refusal recommends snapshotted the user's own
+/// `obu stop` the refusal recommends snapshotted the user's own
 /// cookies into the agent's logins.json.
 #[cfg(unix)]
 fn refusal(req: &Value) -> Option<String> {
     let serving_lane = crate::realbrowser::lane_from(
-        std::env::var("BLADE_LANE").ok().as_deref(),
+        std::env::var("OBU_LANE").ok().as_deref(),
         crate::realbrowser::config().enabled,
     );
     settings_mismatch(req, serving_lane, |k| std::env::var(k).ok())
@@ -700,7 +700,7 @@ fn refusal(req: &Value) -> Option<String> {
 /// checking whether the pid is alive, and only then killed.
 #[cfg(unix)]
 fn pid_path() -> std::path::PathBuf {
-    crate::platform::blade_dir().join("cli.pid")
+    crate::platform::obu_dir().join("cli.pid")
 }
 
 #[cfg(unix)]
@@ -717,15 +717,14 @@ fn process_alive(pid: i32) -> bool {
     pid > 1 && crate::platform::process_alive(pid as u32)
 }
 
-/// Verify the pid is actually a bladebro process before killing it — pids
+/// Verify the pid is actually a obu process before killing it — pids
 /// get recycled and a blind kill could hit an innocent process. macOS uses
 /// ps executable identity; an unreadable identity never authorizes a kill.
 #[cfg(unix)]
-fn looks_like_bladebro(pid: i32) -> bool {
+fn looks_like_obu(pid: i32) -> bool {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
-        std::fs::read_to_string(format!("/proc/{pid}/comm"))
-            .is_ok_and(|comm| comm.trim() == "bladebro")
+        std::fs::read_to_string(format!("/proc/{pid}/comm")).is_ok_and(|comm| comm.trim() == "obu")
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
@@ -735,7 +734,7 @@ fn looks_like_bladebro(pid: i32) -> bool {
             .is_ok_and(|output| {
                 std::path::Path::new(String::from_utf8_lossy(&output.stdout).trim())
                     .file_name()
-                    .is_some_and(|name| name == "bladebro")
+                    .is_some_and(|name| name == "obu")
             })
     }
 }
@@ -774,7 +773,7 @@ pub async fn stop_daemon() -> Result<String> {
             Ok(_) => {
                 let response: Value = serde_json::from_str(resp.trim())?;
                 if response.get("ok").and_then(Value::as_bool) != Some(true) {
-                    return Err(BladeError::Other(
+                    return Err(ObuError::Other(
                         "daemon did not acknowledge shutdown".into(),
                     ));
                 }
@@ -791,7 +790,7 @@ pub async fn stop_daemon() -> Result<String> {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
                 if path.exists() {
-                    return Err(BladeError::Other("daemon acknowledged stop but cleanup is still running; check again before restarting".into()));
+                    return Err(ObuError::Other("daemon acknowledged stop but cleanup is still running; check again before restarting".into()));
                 }
                 return Ok("daemon stopped".into());
             }
@@ -812,7 +811,7 @@ pub async fn stop_daemon() -> Result<String> {
     // No socket, or no answer: a daemon process may still linger — check
     // the pid file.
     if let Some(pid) = read_pid_file() {
-        if process_alive(pid) && looks_like_bladebro(pid) {
+        if process_alive(pid) && looks_like_obu(pid) {
             unsafe {
                 libc::kill(pid, libc::SIGTERM);
             }
@@ -843,11 +842,11 @@ pub async fn stop_daemon() -> Result<String> {
     }
 
     // Something live holds the socket (it accepted our request) but no
-    // live bladebro is on record: never unlink a live socket or claim
+    // live obu is on record: never unlink a live socket or claim
     // "not running".
     if unanswered {
-        return Err(BladeError::Other(format!(
-            "the daemon on {} did not answer within {STOP_ANSWER_SECS}s and the pid file names no live bladebro process, so it was left running — find it with `pgrep -ax bladebro`, terminate it, then run `bladebro stop` again",
+        return Err(ObuError::Other(format!(
+            "the daemon on {} did not answer within {STOP_ANSWER_SECS}s and the pid file names no live obu process, so it was left running — find it with `pgrep -ax obu`, terminate it, then run `obu stop` again",
             path.display()
         )));
     }
@@ -867,19 +866,19 @@ mod tests {
 
     #[test]
     fn settings_mismatch_refuses_another_lane_and_differing_explicit_settings() {
-        let daemon_env = |k: &str| (k == "BLADE_PROXY").then(|| "http://127.0.0.1:9".to_string());
+        let daemon_env = |k: &str| (k == "OBU_PROXY").then(|| "http://127.0.0.1:9".to_string());
         let check = |req: Value, real: bool| settings_mismatch(&req, real, daemon_env);
 
         // Same lane, nothing set: served.
         assert_eq!(check(json!({"lane": "agent", "env": {}}), false), None);
-        // BLADE_LANE=agent against a real-lane daemon (`rb on`), and back.
+        // OBU_LANE=agent against a real-lane daemon (`rb on`), and back.
         let why = check(json!({"lane": "agent", "env": {}}), true).unwrap();
         assert!(
             why.contains("lane (this command: agent, daemon: real)"),
             "{why}"
         );
         assert!(
-            why.contains("bladebro stop") && why.contains("--no-daemon"),
+            why.contains("obu stop") && why.contains("--no-daemon"),
             "{why}"
         );
         assert!(check(json!({"lane": "real", "env": {}}), false).is_some());
@@ -887,18 +886,18 @@ mod tests {
         // refused by name — the value itself is never echoed.
         assert_eq!(
             check(
-                json!({"lane": "agent", "env": {"BLADE_PROXY": "http://127.0.0.1:9"}}),
+                json!({"lane": "agent", "env": {"OBU_PROXY": "http://127.0.0.1:9"}}),
                 false
             ),
             None
         );
         let why = check(
-            json!({"lane": "agent", "env": {"BLADE_PROXY": "http://u:SECRET@h:1"}}),
+            json!({"lane": "agent", "env": {"OBU_PROXY": "http://u:SECRET@h:1"}}),
             false,
         )
         .unwrap();
         assert!(
-            why.contains("BLADE_PROXY") && !why.contains("SECRET"),
+            why.contains("OBU_PROXY") && !why.contains("SECRET"),
             "{why}"
         );
         let why = check(
@@ -910,7 +909,7 @@ mod tests {
         // Unlisted names are not the daemon's business.
         assert_eq!(
             check(
-                json!({"lane": "agent", "env": {"BLADE_HOME": "/x", "PATH": "/y"}}),
+                json!({"lane": "agent", "env": {"OBU_HOME": "/x", "PATH": "/y"}}),
                 false
             ),
             None
@@ -921,10 +920,10 @@ mod tests {
 
     #[test]
     fn a_refused_request_leaves_the_lane_flag_alone() {
-        // The lane flag and BLADE_HOME are process-global (other tests read
+        // The lane flag and OBU_HOME are process-global (other tests read
         // the flag through `hum_enabled`), so the check runs in a child copy
         // of this test binary with its own scratch home.
-        const CHILD: &str = "BLADE_DAEMON_REFUSAL_TEST_CHILD";
+        const CHILD: &str = "OBU_DAEMON_REFUSAL_TEST_CHILD";
         if std::env::var_os(CHILD).is_some() {
             // A daemon whose browser was launched on the agent lane; the rb
             // config has since been switched on without a daemon restart (a
@@ -937,7 +936,7 @@ mod tests {
             // The flag still describes the browser that is running — the
             // login snapshots and the idle hum consult it until the next
             // served command relaunches. A refusal that switched it let
-            // `bladebro stop` snapshot a real-lane session's cookies into
+            // `obu stop` snapshot a real-lane session's cookies into
             // the agent's logins.json (lane_from is symmetric; this is the
             // direction that never sets the real lane in a test).
             assert!(
@@ -946,7 +945,7 @@ mod tests {
             );
             return;
         }
-        let home = std::env::temp_dir().join(format!("blade-refusal-lane-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("obu-refusal-lane-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).unwrap();
         std::fs::write(home.join("realbrowser.json"), br#"{"enabled":true}"#).unwrap();
@@ -957,8 +956,8 @@ mod tests {
                 "--nocapture",
             ])
             .env(CHILD, "1")
-            .env("BLADE_HOME", &home)
-            .env_remove("BLADE_LANE")
+            .env("OBU_HOME", &home)
+            .env_remove("OBU_LANE")
             .stdin(std::process::Stdio::null())
             .output()
             .unwrap();

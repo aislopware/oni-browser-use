@@ -1,7 +1,7 @@
 # Hermes integration verification
 
 The native `cargo test --release` contract test (`tests/hermes_cli.rs`) runs the
-real Bladebro executable against a separate fake Hermes CLI process. It covers
+real Obu executable against a separate fake Hermes CLI process. It covers
 setup, restore, profiles, recovery, conflicting edits, misleading successful
 writes, and private prior settings on Linux, macOS, and Windows CI.
 
@@ -17,9 +17,9 @@ python3 tools/hermes_probe/run.py \
 ```
 
 `--hermes` selects the CLI executable; `--binary` defaults to
-`target/release/bladebro`. Use the Python environment selected by your Hermes
+`target/release/obu`. Use the Python environment selected by your Hermes
 launcher, which may differ from an older checkout's `venv`. Chrome/Chromium
-and Bladebro's normal headful Linux prerequisites must be installed.
+and Obu's normal headful Linux prerequisites must be installed.
 
 Assertions check browser-only suppression across platform tool policies,
 unchanged web selection, full and Tool Search schemas, and actual dispatch of

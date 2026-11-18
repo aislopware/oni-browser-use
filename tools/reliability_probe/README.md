@@ -2,7 +2,7 @@ Run `python3 tools/reliability_probe/run.py` after `cargo build --release`.
 Run `python3 tools/reliability_probe/tiny_click.py` for trusted, single-dispatch
 activation of tiny buttons and fractional-pixel checkboxes. It compares actual
 page event counts and state; `--baseline` records misses on an old binary.
-Set `BLADEBRO` or `CHROME` to select binaries. Each run owns a fresh Chrome,
+Set `OBU` or `CHROME` to select binaries. Each run owns a fresh Chrome,
 data home and local fixture; no real browser or login data is used.
 Assertions check HTTP mutation counts, full-fidelity state readback,
 origin refusal, cookie rejection and session restoration, portable names,
@@ -19,7 +19,7 @@ The sixteen cases include exact-commit CI dispatch, branch-advance and failed-CI
 refusals, plus security-alert and locked-advisory refusals before
 version changes. Release hosts require cargo-deny; run
 `cargo deny --locked check advisories` against the actual dependency graph.
-`BLADE_RELEASE_VERIFY=/absolute/executable` adds a candidate check after native
+`OBU_RELEASE_VERIFY=/absolute/executable` adds a candidate check after native
 CI and before any public tag/package. It receives the version and exact commit;
 failure, source mutation or replacement of any platform artifact aborts the
 release. The security gate is refreshed after this additional verification.
@@ -68,14 +68,14 @@ artifact fidelity, stopped/optional/nested steps and preflight-before-effects.
 It retains JSON-RPC requests, replies and timings at `POLISH_OUT`; `--baseline`
 records unsupported behavior on an older binary. Run under `capped` locally.
 
-`qol465.py` verifies document/frame-root selector waits, hidden-frame refusal, invalid CSS, toggle value refusal without mutations, nested batch/run parity, explicit/idempotent check states, radio refusal, legacy toggles and explicit textbox clearing. Run with `BLADEBRO=... POLISH_OUT=...`; `--baseline` records all failures against an older binary.
+`qol465.py` verifies document/frame-root selector waits, hidden-frame refusal, invalid CSS, toggle value refusal without mutations, nested batch/run parity, explicit/idempotent check states, radio refusal, legacy toggles and explicit textbox clearing. Run with `OBU=... POLISH_OUT=...`; `--baseline` records all failures against an older binary.
 
 `agent_contract.py` verifies actual MCP preflight rejection without an available
 browser, validation before navigation/input, complete plan validation, nested
 optional failures, failed batches, control-step URL handling, full eval/state/batch
 reads, JSON dialog/popup notices, marks isolation, schema completeness and
 no idle-restart note on a first call made after the idle timeout.
-`BLADEBRO` chooses the binary; `POLISH_OUT` records requests, responses and timing.
+`OBU` chooses the binary; `POLISH_OUT` records requests, responses and timing.
 `--baseline` records failures against an older binary. Run under `capped`; all
 profiles and HTTP fixtures are disposable. Native desktop CI runs normal and
 incognito modes.
@@ -83,5 +83,5 @@ incognito modes.
 `persistence.py` checks complete Unicode localStorage across fresh one-shot
 browsers, MCP EOF on WebSocket/Unix pipe, and Linux forked-launcher sessions.
 It verifies write/readback, clean process exits and owned-process cleanup.
-`BLADEBRO` and `POLISH_OUT` select the binary and retain actual receipts;
+`OBU` and `POLISH_OUT` select the binary and retain actual receipts;
 `--baseline` records old-binary failures. Native CI runs it twice per OS.

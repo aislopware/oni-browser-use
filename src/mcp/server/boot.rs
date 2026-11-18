@@ -6,7 +6,7 @@
 use serde_json::json;
 
 use crate::cdp::{self, CdpClient, CdpSession};
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use crate::page::Page;
 
 use super::serve::serve;
@@ -51,7 +51,7 @@ async fn attach_pipe(client: &CdpClient) -> Result<CdpSession> {
                 .await?;
             res.get("targetId")
                 .and_then(|v| v.as_str())
-                .ok_or(BladeError::NoTarget)?
+                .ok_or(ObuError::NoTarget)?
                 .to_string()
         }
     };
@@ -65,15 +65,15 @@ async fn attach_pipe(client: &CdpClient) -> Result<CdpSession> {
     let session_id = res
         .get("sessionId")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| BladeError::Other("Target.attachToTarget returned no sessionId".into()))?;
+        .ok_or_else(|| ObuError::Other("Target.attachToTarget returned no sessionId".into()))?;
     Ok(CdpSession::child(client.clone(), session_id))
 }
 
 /// Idle timeout: Chrome is shut down after this many seconds of no tool
 /// calls, freeing RAM. 0 disables. Default: 600 (10 minutes).
-/// Configurable via `BLADE_IDLE_TIMEOUT` env var (seconds).
+/// Configurable via `OBU_IDLE_TIMEOUT` env var (seconds).
 pub(super) fn idle_timeout_secs() -> u64 {
-    std::env::var("BLADE_IDLE_TIMEOUT")
+    std::env::var("OBU_IDLE_TIMEOUT")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(600)
@@ -140,7 +140,7 @@ pub(super) async fn launch_browser(
         }
         #[cfg(not(unix))]
         {
-            return Err(BladeError::Other("pipe transport is Unix-only".into()));
+            return Err(ObuError::Other("pipe transport is Unix-only".into()));
         }
     }
 
@@ -183,7 +183,7 @@ pub(super) async fn shutdown_browser(b: crate::browser::Browser) {
 
 /// Warm the profile on first run: navigate to a few top sites to seed
 /// cache, cookies, HSTS, and browsing history. Only runs once (when
-/// `~/.blade/.warmed` doesn't exist). Best-effort: failed navigations are
+/// `~/.obu/.warmed` doesn't exist). Best-effort: failed navigations are
 /// skipped, never fatal. Total time: ~4-6s.
 pub(super) async fn warm_profile(page: &mut Page) {
     let sites = [
@@ -205,12 +205,9 @@ pub(super) async fn warm_profile(page: &mut Page) {
         }
     }
     if ok > 0 {
-        eprintln!(
-            "[bladebro] profile warmed ({ok}/{} sites visited)",
-            sites.len()
-        );
+        eprintln!("[obu] profile warmed ({ok}/{} sites visited)", sites.len());
     } else {
-        eprintln!("[bladebro] WARNING: profile warming failed (all sites unreachable)");
+        eprintln!("[obu] WARNING: profile warming failed (all sites unreachable)");
         crate::session_profile::SessionProfile::release_warming();
     }
 }

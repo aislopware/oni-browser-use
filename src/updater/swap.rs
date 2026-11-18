@@ -1,6 +1,6 @@
 //! Atomic binary swap and rollback.
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 use std::path::{Path, PathBuf};
 
 /// Maximum number of backups to keep. Old backups are pruned.
@@ -8,7 +8,7 @@ const MAX_BACKUPS: usize = 5;
 
 /// Swap the current binary with a downloaded one.
 ///
-/// 1. Back up the current binary to ~/.blade/backups/
+/// 1. Back up the current binary to ~/.obu/backups/
 /// 2. Move the downloaded binary into place
 /// 3. Set executable permissions (Unix)
 /// 4. Prune old backups (keep last MAX_BACKUPS)
@@ -17,17 +17,17 @@ const MAX_BACKUPS: usize = 5;
 /// for overwrite but not for rename on Windows).
 pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
     let current = std::env::current_exe()
-        .map_err(|e| BladeError::Other(format!("cannot find current exe: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot find current exe: {e}")))?;
 
     // Pre-flight: check if we can write to the current binary's location.
     check_writable(&current)?;
 
     // Backup the current binary.
-    let backup_dir = crate::platform::blade_dir().join("backups");
+    let backup_dir = crate::platform::obu_dir().join("backups");
     crate::platform::secure_create_dir_all(&backup_dir)
-        .map_err(|e| BladeError::Other(format!("cannot create backup dir: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot create backup dir: {e}")))?;
 
-    let backup = backup_dir.join(format!("bladebro-v{}", super::CURRENT_VERSION));
+    let backup = backup_dir.join(format!("obu-v{}", super::CURRENT_VERSION));
 
     // Remove old backup if it exists (same version). symlink_metadata, not
     // Path::exists() — exists() follows symlinks, so a pre-planted DANGLING
@@ -36,7 +36,7 @@ pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
     if let Ok(meta) = std::fs::symlink_metadata(&backup) {
         if !meta.is_dir() {
             std::fs::remove_file(&backup)
-                .map_err(|e| BladeError::Other(format!("cannot remove old backup: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot remove old backup: {e}")))?;
         }
     }
 
@@ -49,18 +49,18 @@ pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
             let _ = std::fs::remove_file(&old_path);
         }
         std::fs::rename(&current, &old_path).map_err(|e| {
-            BladeError::Other(format!(
-                "cannot rename current exe (is bladebro running?). Close it first. Error: {e}"
+            ObuError::Other(format!(
+                "cannot rename current exe (is obu running?). Close it first. Error: {e}"
             ))
         })?;
         if let Err(e) = std::fs::copy(downloaded, &current) {
             // Put the old binary back: without this a failed copy left the
             // install with NO binary at the original path.
             let _ = std::fs::rename(&old_path, &current);
-            return Err(BladeError::Other(format!("cannot install new binary: {e}")));
+            return Err(ObuError::Other(format!("cannot install new binary: {e}")));
         }
         std::fs::copy(&old_path, &backup)
-            .map_err(|e| BladeError::Other(format!("cannot save backup: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot save backup: {e}")))?;
         let _ = std::fs::remove_file(downloaded);
         let _ = std::fs::remove_file(&old_path);
     }
@@ -73,17 +73,17 @@ pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
         // fails instead of writing through it.
         {
             let mut src = std::fs::File::open(&current)
-                .map_err(|e| BladeError::Other(format!("cannot open current binary: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot open current binary: {e}")))?;
             let mut dst = std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .open(&backup)
-                .map_err(|e| BladeError::Other(format!("cannot save backup: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot save backup: {e}")))?;
             std::io::copy(&mut src, &mut dst)
-                .map_err(|e| BladeError::Other(format!("cannot save backup: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot save backup: {e}")))?;
             use std::io::Write;
             dst.flush()
-                .map_err(|e| BladeError::Other(format!("cannot save backup: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot save backup: {e}")))?;
         }
         #[cfg(unix)]
         {
@@ -96,17 +96,17 @@ pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
             }
         }
         std::fs::rename(downloaded, &current)
-            .map_err(|e| BladeError::Other(format!("cannot install new binary: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot install new binary: {e}")))?;
         // Set executable permission.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = std::fs::metadata(&current)
-                .map_err(|e| BladeError::Other(format!("cannot read new binary: {e}")))?
+                .map_err(|e| ObuError::Other(format!("cannot read new binary: {e}")))?
                 .permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&current, perms)
-                .map_err(|e| BladeError::Other(format!("cannot set permissions: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot set permissions: {e}")))?;
         }
     }
 
@@ -128,10 +128,7 @@ fn check_writable(current: &Path) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let test_file = parent.join(format!(
-        ".bladebro-write-test-{}-{nanos}",
-        std::process::id()
-    ));
+    let test_file = parent.join(format!(".obu-write-test-{}-{nanos}", std::process::id()));
     match std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -153,23 +150,23 @@ fn check_writable(current: &Path) -> Result<()> {
                 std::io::ErrorKind::PermissionDenied => {
                     if method == "npm" {
                         "This binary was installed via npm. \
-                         Use: npm update -g bladebro\n\
+                         Use: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu\n\
                          Or if you need self-update: \
-                         sudo bladebro -u --force"
+                         sudo obu -u --force"
                             .to_string()
                     } else {
-                        "Permission denied. Try: sudo bladebro -u\n\
-                             Or update via npm: npm install -g bladebro"
+                        "Permission denied. Try: sudo obu -u\n\
+                             Or update via npm: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
                             .to_string()
                     }
                 }
                 std::io::ErrorKind::ReadOnlyFilesystem => "Filesystem is read-only. \
                      Cannot update in place. \
-                     Use: npm install -g bladebro"
+                     Use: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
                     .to_string(),
                 _ => format!("cannot write to {}: {e}", parent.display()),
             };
-            Err(BladeError::Other(format!(
+            Err(ObuError::Other(format!(
                 "cannot update binary at {}\n  {hint}",
                 current.display()
             )))
@@ -184,8 +181,8 @@ fn prune_backups(backup_dir: &Path) {
         Err(_) => return,
     };
 
-    // Filter to bladebro-v* files.
-    backups.retain(|e| e.file_name().to_string_lossy().starts_with("bladebro-v"));
+    // Filter to obu-v* files.
+    backups.retain(|e| e.file_name().to_string_lossy().starts_with("obu-v"));
 
     if backups.len() <= MAX_BACKUPS {
         return;
@@ -214,7 +211,7 @@ fn list_backups(backup_dir: &Path) -> Vec<(PathBuf, String)> {
 
     let mut backups: Vec<(PathBuf, String)> = entries
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_name().to_string_lossy().starts_with("bladebro-v"))
+        .filter(|e| e.file_name().to_string_lossy().starts_with("obu-v"))
         .map(|e| {
             let name = e.file_name().to_string_lossy().to_string();
             (e.path(), name)
@@ -233,21 +230,21 @@ fn list_backups(backup_dir: &Path) -> Vec<(PathBuf, String)> {
 
 /// Rollback to the previous binary.
 ///
-/// Finds the most recent backup in ~/.blade/backups/ and swaps it back.
+/// Finds the most recent backup in ~/.obu/backups/ and swaps it back.
 /// Verifies the backup is a valid binary before restoring.
 pub async fn rollback() -> Result<()> {
-    super::ui::header("Bladebro Rollback");
+    super::ui::header("Obu Rollback");
 
-    let backup_dir = crate::platform::blade_dir().join("backups");
+    let backup_dir = crate::platform::obu_dir().join("backups");
     if !backup_dir.exists() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "no backups found. Nothing to roll back to.".into(),
         ));
     }
 
     let backups = list_backups(&backup_dir);
     if backups.is_empty() {
-        return Err(BladeError::Other(
+        return Err(ObuError::Other(
             "no backups found. Nothing to roll back to.".into(),
         ));
     }
@@ -281,15 +278,15 @@ pub async fn rollback() -> Result<()> {
                     return do_rollback(path, name).await;
                 }
             }
-            return Err(BladeError::Other(
+            return Err(ObuError::Other(
                 "all backups are corrupted. Nothing to roll back to.\n\
-                 Reinstall: npm install -g bladebro"
+                 Reinstall: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
                     .into(),
             ));
         }
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "backup is corrupted and cannot be restored: {e}\n\
-             Reinstall: npm install -g bladebro"
+             Reinstall: cargo install --locked --git https://github.com/aislopware/oni-browser-use obu"
         )));
     }
 
@@ -298,7 +295,7 @@ pub async fn rollback() -> Result<()> {
 
 async fn do_rollback(backup_path: &Path, backup_name: &str) -> Result<()> {
     let current = std::env::current_exe()
-        .map_err(|e| BladeError::Other(format!("cannot find current exe: {e}")))?;
+        .map_err(|e| ObuError::Other(format!("cannot find current exe: {e}")))?;
 
     #[cfg(windows)]
     {
@@ -307,15 +304,15 @@ async fn do_rollback(backup_path: &Path, backup_name: &str) -> Result<()> {
             let _ = std::fs::remove_file(&old_path);
         }
         std::fs::rename(&current, &old_path).map_err(|e| {
-            BladeError::Other(format!(
-                "cannot rename current exe (is bladebro running?). Close it first. Error: {e}"
+            ObuError::Other(format!(
+                "cannot rename current exe (is obu running?). Close it first. Error: {e}"
             ))
         })?;
         if let Err(e) = std::fs::copy(backup_path, &current) {
             // The current binary was already renamed aside — put it back so
             // a failed restore never leaves the install empty.
             let _ = std::fs::rename(&old_path, &current);
-            return Err(BladeError::Other(format!("cannot restore backup: {e}")));
+            return Err(ObuError::Other(format!("cannot restore backup: {e}")));
         }
         let _ = std::fs::remove_file(&old_path);
     }
@@ -331,22 +328,22 @@ async fn do_rollback(backup_path: &Path, backup_name: &str) -> Result<()> {
             let _ = std::fs::remove_file(&old_path);
         }
         std::fs::rename(&current, &old_path)
-            .map_err(|e| BladeError::Other(format!("cannot move current binary: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot move current binary: {e}")))?;
         if let Err(e) = std::fs::copy(backup_path, &current) {
             // The current binary was already renamed aside — put it back so
             // a failed restore never leaves the install empty.
             let _ = std::fs::rename(&old_path, &current);
-            return Err(BladeError::Other(format!("cannot restore backup: {e}")));
+            return Err(ObuError::Other(format!("cannot restore backup: {e}")));
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = std::fs::metadata(&current)
-                .map_err(|e| BladeError::Other(format!("cannot read restored binary: {e}")))?
+                .map_err(|e| ObuError::Other(format!("cannot read restored binary: {e}")))?
                 .permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&current, perms)
-                .map_err(|e| BladeError::Other(format!("cannot set permissions: {e}")))?;
+                .map_err(|e| ObuError::Other(format!("cannot set permissions: {e}")))?;
         }
         let _ = std::fs::remove_file(&old_path);
     }
@@ -359,7 +356,7 @@ async fn do_rollback(backup_path: &Path, backup_name: &str) -> Result<()> {
 /// Verify a backup file is a valid binary (magic bytes + size) AND a
 /// regular file owned by the current user. SECURITY: the backups tree may
 /// be writable by a local co-user (degraded HOME resolution, relocated
-/// BLADE_HOME/XDG_STATE_HOME, legacy group-writable trees). A planted
+/// OBU_HOME/XDG_STATE_HOME, legacy group-writable trees). A planted
 /// "backup" that passes magic+size is installed over the executable and
 /// chmodded 0755 by do_rollback — code execution at the next launch.
 /// Ownership is the one property the planter cannot forge: only the
@@ -369,21 +366,21 @@ fn verify_backup(path: &Path) -> Result<()> {
     {
         use std::os::unix::fs::MetadataExt;
         let meta = std::fs::symlink_metadata(path)
-            .map_err(|e| BladeError::Other(format!("cannot stat backup: {e}")))?;
+            .map_err(|e| ObuError::Other(format!("cannot stat backup: {e}")))?;
         if meta.file_type().is_symlink() {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "backup {} is a symlink — refusing it (possible local hijack)",
                 path.display()
             )));
         }
         if !meta.is_file() {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "backup {} is not a regular file — refusing it",
                 path.display()
             )));
         }
         if meta.uid() != unsafe { libc::getuid() } {
-            return Err(BladeError::Other(format!(
+            return Err(ObuError::Other(format!(
                 "backup {} is owned by uid {} (not this user) — refusing it (possible local hijack)",
                 path.display(),
                 meta.uid()
@@ -391,10 +388,10 @@ fn verify_backup(path: &Path) -> Result<()> {
         }
     }
     let data =
-        std::fs::read(path).map_err(|e| BladeError::Other(format!("cannot read backup: {e}")))?;
+        std::fs::read(path).map_err(|e| ObuError::Other(format!("cannot read backup: {e}")))?;
 
     if data.len() < 4 {
-        return Err(BladeError::Other("backup file too small".into()));
+        return Err(ObuError::Other("backup file too small".into()));
     }
 
     // Shared with the download verifier (updater/download.rs) — one
@@ -403,11 +400,11 @@ fn verify_backup(path: &Path) -> Result<()> {
     let magic_ok = crate::updater::download::binary_magic_ok(&data);
 
     if !magic_ok {
-        return Err(BladeError::Other("invalid magic bytes".into()));
+        return Err(ObuError::Other("invalid magic bytes".into()));
     }
 
     if data.len() < 1_000_000 {
-        return Err(BladeError::Other(format!(
+        return Err(ObuError::Other(format!(
             "suspiciously small ({} bytes)",
             data.len()
         )));
@@ -436,21 +433,21 @@ mod backup_verify_tests {
     #[cfg(unix)]
     #[test]
     fn verify_backup_refuses_symlinks_and_non_files() {
-        let dir = std::env::temp_dir().join(format!("blade-swap-symlink-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-swap-symlink-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let victim = dir.join("victim");
         let mut data = vec![0u8; 1_000_100];
         platform_magic(&mut data);
         std::fs::write(&victim, &data).unwrap();
-        let link = dir.join("bladebro-v9.9.9");
+        let link = dir.join("obu-v9.9.9");
         std::os::unix::fs::symlink(&victim, &link).unwrap();
         assert!(
             verify_backup(&link).is_err(),
             "a symlinked backup must be refused"
         );
         assert!(verify_backup(&dir).is_err(), "a directory is not a backup");
-        let real = dir.join("bladebro-v9.9.8");
+        let real = dir.join("obu-v9.9.8");
         std::fs::write(&real, &data).unwrap();
         assert!(
             verify_backup(&real).is_ok(),
@@ -466,7 +463,7 @@ mod backup_verify_tests {
     /// with, so rollback refused every valid backup on macOS.
     #[test]
     fn verify_backup_accepts_platform_real_magic() {
-        let dir = std::env::temp_dir().join(format!("blade-swap-verify-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("obu-swap-verify-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("backup");

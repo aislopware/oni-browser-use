@@ -1,7 +1,7 @@
 //! Daemon lifecycle integration tests (v3.9.10).
 //!
 //! Two regressions guarded here, both found by the install-surface audit:
-//! 1. A second `bladebro daemon` must NOT steal a live daemon's socket —
+//! 1. A second `obu daemon` must NOT steal a live daemon's socket —
 //!    before, it rebound over the active daemon and orphaned it.
 //! 2. A daemon's shutdown must only remove the socket + pidfile while it
 //!    still owns them — before, a stale ("ghost") daemon dying unlinked the
@@ -14,12 +14,12 @@
 //! "Broken pipe" error.
 //!
 //! Plus the busy daemon: a SIGTERM that lands while a request is in flight
-//! must not be lost, and `bladebro stop` must still stop a daemon that is
+//! must not be lost, and `obu stop` must still stop a daemon that is
 //! too busy (or wedged) to answer.
 //!
-//! Subprocess-based with an isolated BLADE_HOME — no Chrome involved (the
+//! Subprocess-based with an isolated OBU_HOME — no Chrome involved (the
 //! daemon binds lazily; Chrome starts on the first tool call only). Tests
-//! that send tool calls pin `BLADE_LANE=agent` and a missing `CHROME_PATH`,
+//! that send tool calls pin `OBU_LANE=agent` and a missing `CHROME_PATH`,
 //! so a launch fails fast and the real-browser lane is never entered; the
 //! one test that needs a launch in flight uses a stand-in browser script.
 
@@ -32,17 +32,17 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_bladebro")
+    env!("CARGO_BIN_EXE_obu")
 }
 
 fn tmp_home(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bladebro-daemon-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("obu-daemon-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
-/// Spawn `bladebro daemon` and wait (bounded) until it bound its socket
+/// Spawn `obu daemon` and wait (bounded) until it bound its socket
 /// AND wrote its pidfile.
 ///
 /// The socket appears before the pidfile write, so tests that inspect or
@@ -58,7 +58,7 @@ fn start_daemon(home: &Path) -> Child {
 fn start_daemon_with(home: &Path, mut cmd: Command) -> Child {
     let mut child = cmd
         .arg("daemon")
-        .env("BLADE_HOME", home)
+        .env("OBU_HOME", home)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -125,7 +125,7 @@ fn second_daemon_does_not_steal_a_live_socket() {
     // Second start must refuse quickly (exit 0, "already running") — not take over.
     let mut d2 = Command::new(bin())
         .arg("daemon")
-        .env("BLADE_HOME", &home)
+        .env("OBU_HOME", &home)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -210,7 +210,7 @@ fn concurrent_cold_starts_have_one_owner() {
         .map(|_| {
             Command::new(bin())
                 .arg("daemon")
-                .env("BLADE_HOME", &home)
+                .env("OBU_HOME", &home)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -253,7 +253,7 @@ fn stop_json_is_one_object_and_lane_restart_emits_no_stray_stdout() {
     let mut daemon = start_daemon(&home);
     let output = Command::new(bin())
         .args(["--json", "stop"])
-        .env("BLADE_HOME", &home)
+        .env("OBU_HOME", &home)
         .output()
         .unwrap();
     let value: serde_json::Value =
@@ -266,7 +266,7 @@ fn stop_json_is_one_object_and_lane_restart_emits_no_stray_stdout() {
     let mut daemon = start_daemon(&home);
     let output = Command::new(bin())
         .args(["--json", "rb", "off"])
-        .env("BLADE_HOME", &home)
+        .env("OBU_HOME", &home)
         .output()
         .unwrap();
     let value: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -279,22 +279,22 @@ fn stop_json_is_one_object_and_lane_restart_emits_no_stray_stdout() {
 
 // ── Client side of the daemon channel ──────────────────────────────────
 
-/// A `bladebro` process (client or daemon) pinned to the agent lane with a
+/// A `obu` process (client or daemon) pinned to the agent lane with a
 /// Chrome binary that does not exist: a tool call that reaches a launch
 /// fails fast, nothing is ever opened, and the real-browser lane (the
 /// user's own browser) is never entered whatever the code under test does.
 fn agent_cmd(home: &Path) -> Command {
     let mut cmd = Command::new(bin());
-    cmd.env("BLADE_HOME", home)
-        .env("BLADE_LANE", "agent")
+    cmd.env("OBU_HOME", home)
+        .env("OBU_LANE", "agent")
         .env("CHROME_PATH", home.join("missing-chrome"))
-        .env("BLADE_NO_WARMING", "1")
-        .env("BLADE_NO_UPDATE_CHECK", "1")
+        .env("OBU_NO_WARMING", "1")
+        .env("OBU_NO_UPDATE_CHECK", "1")
         .stdin(Stdio::null());
     cmd
 }
 
-/// Run `bladebro --json <args>` as a client; returns (exit status, the one
+/// Run `obu --json <args>` as a client; returns (exit status, the one
 /// stdout JSON object, stderr).
 fn client_json(
     home: &Path,
@@ -457,23 +457,22 @@ fn daemon_closing_without_a_reply_reports_an_unknown_outcome() {
 fn cli_request_carries_its_lane_and_explicit_settings() {
     // The daemon's lane and settings came only from ITS environment —
     // inherited from whichever command auto-started it — so
-    // `BLADE_LANE=agent bladebro nav …` against a real-lane daemon ran in
+    // `OBU_LANE=agent obu nav …` against a real-lane daemon ran in
     // the user's own browser. The request must say what this command asked
     // for.
     let home = tmp_home("carries");
     let fake = fake_daemon(&home, r#"{"ok":true,"text":"ok","is_error":false}"#);
-    let (status, _, stderr) =
-        client_json(&home, &[("BLADE_NO_COMPRESS", "1")], &["see", "content"]);
+    let (status, _, stderr) = client_json(&home, &[("OBU_NO_COMPRESS", "1")], &["see", "content"]);
     let requests = fake.requests.lock().unwrap().clone();
     assert!(status.success(), "stderr: {stderr}");
     assert_eq!(requests.len(), 1);
     let req: serde_json::Value = serde_json::from_str(&requests[0]).unwrap();
     assert_eq!(req["tool"], "see");
     assert_eq!(req["lane"], "agent", "request: {req}");
-    assert_eq!(req["env"]["BLADE_NO_COMPRESS"], "1", "request: {req}");
+    assert_eq!(req["env"]["OBU_NO_COMPRESS"], "1", "request: {req}");
     assert!(
-        req["env"].get("BLADE_HOME").is_none(),
-        "BLADE_HOME picks the daemon itself; it is not a per-command setting: {req}"
+        req["env"].get("OBU_HOME").is_none(),
+        "OBU_HOME picks the daemon itself; it is not a per-command setting: {req}"
     );
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -514,20 +513,20 @@ fn daemon_refuses_a_request_from_another_lane() {
 
 #[test]
 fn daemon_refuses_a_command_whose_settings_differ() {
-    // End to end: the daemon was started without BLADE_NO_COMPRESS; a
+    // End to end: the daemon was started without OBU_NO_COMPRESS; a
     // command that sets it would have been silently served with the
     // daemon's settings. It must be refused, naming the variable and the
     // recovery, without running.
     let home = tmp_home("settings");
     let mut daemon = start_daemon_with(&home, agent_cmd(&home));
     let (status, value, stderr) =
-        client_json(&home, &[("BLADE_NO_COMPRESS", "1")], &["see", "content"]);
+        client_json(&home, &[("OBU_NO_COMPRESS", "1")], &["see", "content"]);
     term(&daemon);
     let _ = wait_exit(&mut daemon, 10);
     assert_eq!(status.code(), Some(1), "stderr: {stderr}");
     let text = value["text"].as_str().unwrap();
     assert!(
-        text.contains("BLADE_NO_COMPRESS") && text.contains("bladebro stop"),
+        text.contains("OBU_NO_COMPRESS") && text.contains("obu stop"),
         "the refusal must name the setting and the recovery: {text}"
     );
     assert!(
@@ -606,10 +605,10 @@ fn sigterm_during_a_request_is_not_lost() {
     let (chrome, started) = fake_chrome(&tools);
     let mut cmd = Command::new(bin());
     cmd.env("CHROME_PATH", &chrome)
-        .env("BLADE_LANE", "agent")
-        .env("BLADE_INCOGNITO", "0")
-        .env("BLADE_NO_WARMING", "1")
-        .env("BLADE_NO_UPDATE_CHECK", "1");
+        .env("OBU_LANE", "agent")
+        .env("OBU_INCOGNITO", "0")
+        .env("OBU_NO_WARMING", "1")
+        .env("OBU_NO_UPDATE_CHECK", "1");
     let mut daemon = start_daemon_with(&home, cmd);
     let sock = home.join("cli.sock");
     let client = std::thread::spawn(move || {
@@ -662,7 +661,7 @@ fn stop_terminates_a_busy_daemon() {
     let begun = Instant::now();
     let stop = Command::new(bin())
         .args(["--json", "stop"])
-        .env("BLADE_HOME", &home)
+        .env("OBU_HOME", &home)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

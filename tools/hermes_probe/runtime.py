@@ -28,9 +28,9 @@ def check(ok, label):
 
 c = load_config()
 disabled = c.get('agent', {}).get('disabled_toolsets', [])
-expected = {f'mcp__bladebro__{n}' for n in ['act', 'see', 'state', 'run', 'vision']}
+expected = {f'mcp__obu__{n}' for n in ['act', 'see', 'state', 'run', 'vision']}
 try:
-    names = set(discover_mcp_tools(['bladebro']))
+    names = set(discover_mcp_tools(['obu']))
     check(names == (set() if a.native else expected), 'discovery matches browser selection')
     # Compare tool selection to the same platform's unsuppressed policy: a
     # deliberately restricted platform must not gain web tools during setup.
@@ -62,7 +62,7 @@ try:
                   for n in TOOLSETS['browser']['tools']), 'no native browser names in assembled schemas')
 
     def call(name, args):
-        result = model_tools.handle_function_call(name, args, task_id='bladebro-hermes-probe',
+        result = model_tools.handle_function_call(name, args, task_id='obu-hermes-probe',
                     enabled_toolsets=ts, disabled_toolsets=disabled)
         text = result if isinstance(result, str) else json.dumps(result)
         print(f'RESULT {name} {text[:1800]}', flush=True)
@@ -71,29 +71,29 @@ try:
     if a.url:
         result = call('tool_describe', {'names': sorted(expected)})
         check(all(n in result for n in expected), 'Tool Search schema loading')
-        result = call('mcp__bladebro__act', {'action': 'navigate', 'url': a.url})
+        result = call('mcp__obu__act', {'action': 'navigate', 'url': a.url})
         check('Hermes fixture' in result, 'act navigates through Hermes dispatcher')
-        result = call('mcp__bladebro__see', {'mode': 'content'})
+        result = call('mcp__obu__see', {'mode': 'content'})
         check('HERMES_VISIBLE_SENTINEL' in result and 'HERMES_HIDDEN_SENTINEL' not in result,
               'see returns visible content without hidden text')
-        result = call('mcp__bladebro__state', {'op': 'set-ls', 'name': 'hermes-probe', 'value': 'Δ✓'})
+        result = call('mcp__obu__state', {'op': 'set-ls', 'name': 'hermes-probe', 'value': 'Δ✓'})
         check('error' not in result.lower(), 'state writes storage through Hermes')
-        result = call('mcp__bladebro__state', {'op': 'ls'})
+        result = call('mcp__obu__state', {'op': 'ls'})
         check('Δ✓' in result or '\\u0394' in result, 'state Unicode storage readback')
-        result = call('mcp__bladebro__run', {'steps': [
+        result = call('mcp__obu__run', {'steps': [
             {'action': 'fill', 'fields': [{'label': 'Name', 'text': 'Hermes Δ✓'}]},
             {'action': 'click', 'text': 'Save'}, {'action': 'see', 'mode': 'content'}]})
         body = json.loads(result)
         check('Saved Hermes Δ✓' in body.get('result', '') and 'readback mismatch' not in result,
               'run submits exact Unicode value and reads the actual receipt')
-        result = call('mcp__bladebro__vision', {'marks': True})
+        result = call('mcp__obu__vision', {'marks': True})
         body = json.loads(result)
         paths = re.findall(r'MEDIA:([^\n]+?\.png)', body.get('result', ''))
         check(bool(paths), 'vision survives MCP image conversion')
         data = Path(paths[0]).read_bytes()
         check(data.startswith(b'\x89PNG\r\n\x1a\n') and len(data) > 1000,
               'vision cached image is an actual nonempty PNG')
-        result = call('mcp__bladebro__act', {'action': 'invalid-hermes-probe'})
+        result = call('mcp__obu__act', {'action': 'invalid-hermes-probe'})
         check('error' in result.lower(), 'invalid operation remains an honest error')
     print(f'PASS TOTAL {count}', flush=True)
 finally:

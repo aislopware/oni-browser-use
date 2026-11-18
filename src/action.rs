@@ -48,7 +48,7 @@ pub use self::verdict::{eval_condition, CondOutcome};
 pub(crate) fn validate_key(key: &str) -> crate::error::Result<()> {
     self::input::parse_key_combo(key)
         .map(|_| ())
-        .map_err(crate::error::BladeError::Usage)
+        .map_err(crate::error::ObuError::Usage)
 }
 /// The act vocabulary — the SINGLE source of truth for the MCP schema enum,
 /// the batch-step vocabulary, the CLI parser AND the unknown-action error.
@@ -708,7 +708,7 @@ mod action_tests {
         ] {
             let js = super::find::find_sig_expr("0|textbox|Post text|1", mode, text, &[0])
                 .expect("find-sig expr builds");
-            let path = std::env::temp_dir().join(format!("bladebro-findsig-{mode}.js"));
+            let path = std::env::temp_dir().join(format!("obu-findsig-{mode}.js"));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -729,7 +729,7 @@ mod action_tests {
             ("Join the conversation", Some("textbox"), true),
         ] {
             let js = super::find::find_text_expr(q, rf, ih).expect("find-text expr builds");
-            let path = std::env::temp_dir().join("bladebro-findtext.js");
+            let path = std::env::temp_dir().join("obu-findtext.js");
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -795,7 +795,7 @@ mod action_tests {
             ),
         ];
         for (name, js) in cases {
-            let path = std::env::temp_dir().join(format!("bladebro-{name}.js"));
+            let path = std::env::temp_dir().join(format!("obu-{name}.js"));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")

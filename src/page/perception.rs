@@ -28,7 +28,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use crate::cdp::CdpSession;
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 mod block;
 mod consent;
@@ -473,7 +473,7 @@ pub async fn capture(cdp: &CdpSession) -> Result<PageCapture> {
         // A dead tab/browser is not a page state: `Closed` is the error the
         // MCP and daemon loops self-heal on. Swallowing it reported a blank
         // "loading" page and hid the death from the relaunch path.
-        Err(BladeError::Closed) => return Err(BladeError::Closed),
+        Err(ObuError::Closed) => return Err(ObuError::Closed),
         // Execution context not ready (page in transition) or a busy main
         // thread: the page did not answer. Not an error for the caller, but
         // not a page state either - the model keeps its previous read.
@@ -488,7 +488,7 @@ pub async fn capture(cdp: &CdpSession) -> Result<PageCapture> {
             .and_then(|d| d.as_str())
             .or_else(|| exc.get("text").and_then(|t| t.as_str()))
             .unwrap_or("unknown page exception");
-        return Err(BladeError::Other(format!("page capture failed: {msg}")));
+        return Err(ObuError::Other(format!("page capture failed: {msg}")));
     }
 
     let value = res.get("result").and_then(|r| r.get("value"));
@@ -581,7 +581,7 @@ mod script_syntax_tests {
             eprintln!("node not available — skipping {name} syntax check");
             return;
         }
-        let path = std::env::temp_dir().join(format!("bladebro-js-check-{name}.js"));
+        let path = std::env::temp_dir().join(format!("obu-js-check-{name}.js"));
         std::fs::write(&path, js).expect("write js fixture");
         let out = Command::new("node")
             .arg("--check")
@@ -609,7 +609,7 @@ mod script_syntax_tests {
             eprintln!("node not available — skipping {name}");
             return None;
         }
-        let path = std::env::temp_dir().join(format!("bladebro-js-run-{name}.js"));
+        let path = std::env::temp_dir().join(format!("obu-js-run-{name}.js"));
         std::fs::write(&path, js).expect("write js fixture");
         let out = Command::new("node").arg(&path).output().expect("run node");
         let _ = std::fs::remove_file(&path);

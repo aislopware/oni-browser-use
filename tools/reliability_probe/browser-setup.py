@@ -2,7 +2,7 @@
 """Owned-browser regression checks for navigation, setup and OTR contexts.
 
 Each invocation owns its HTTP server, daemon/MCP processes and disposable
-homes. Set BLADEBRO to test an exact candidate; no user profile is read.
+homes. Set OBU to test an exact candidate; no user profile is read.
 """
 import http.server
 import json
@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 
-BINARY = os.environ.get('BLADEBRO', str(Path(__file__).resolve().parents[2] / 'target/release/bladebro'))
+BINARY = os.environ.get('OBU', str(Path(__file__).resolve().parents[2] / 'target/release/obu'))
 CHECKS = 0
 REQUESTS = []
 EFFECTS = []
@@ -49,10 +49,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def environment(home, mode):
-    env = dict(os.environ, BLADE_HOME=str(home), BLADE_LANE='agent',
-               BLADE_INCOGNITO=mode, BLADE_NO_WARMING='1', BLADE_NO_UPDATE_CHECK='1')
-    for name in ('BLADE_CHROME_FLAGS', 'BLADE_PROFILE_DIR', 'BLADE_FRESH',
-                 'BLADE_TRANSPORT', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
+    env = dict(os.environ, OBU_HOME=str(home), OBU_LANE='agent',
+               OBU_INCOGNITO=mode, OBU_NO_WARMING='1', OBU_NO_UPDATE_CHECK='1')
+    for name in ('OBU_CHROME_FLAGS', 'OBU_PROFILE_DIR', 'OBU_FRESH',
+                 'OBU_TRANSPORT', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY'):
         env.pop(name, None)
     return env
 
@@ -77,7 +77,7 @@ def owned_browser(root, origin, mode, raw=False):
     home = root / ('owned-' + label)
     env = environment(home, mode)
     if raw:
-        env['BLADE_CHROME_FLAGS'] = '--incognito'
+        env['OBU_CHROME_FLAGS'] = '--incognito'
     def evaluate(js):
         return value_from_eval(cli(env, 'act', 'eval', js)[0])
     try:
@@ -126,7 +126,7 @@ def owned_browser(root, origin, mode, raw=False):
 
 def mcp(root, origin, transport):
     env = environment(root / ('mcp-' + transport), '1')
-    env['BLADE_TRANSPORT'] = transport
+    env['OBU_TRANSPORT'] = transport
     def run(operations):
         requests = [{'jsonrpc':'2.0', 'id':1, 'method':'initialize', 'params':{}}]
         requests += [{'jsonrpc':'2.0', 'id':i + 2, 'method':'tools/call', 'params':{'name':name, 'arguments':args}} for i, (name, args) in enumerate(operations)]
@@ -179,13 +179,13 @@ def setup_errors(root):
     env = environment(root / 'invalid-policy', 'typo')
     try:
         text, _ = cli(env, 'nav', 'about:blank', ok=False)
-        check('invalid compatibility setting fails with recovery guidance', 'BLADE_INCOGNITO must be auto, 0 or 1' in text, text)
-        check('invalid compatibility setting creates no owned browser profile', not (Path(env['BLADE_HOME']) / 'profiles').exists())
+        check('invalid compatibility setting fails with recovery guidance', 'OBU_INCOGNITO must be auto, 0 or 1' in text, text)
+        check('invalid compatibility setting creates no owned browser profile', not (Path(env['OBU_HOME']) / 'profiles').exists())
     finally:
         subprocess.run([BINARY, 'stop'], env=env, capture_output=True, timeout=45)
 
 
-with tempfile.TemporaryDirectory(prefix='blade-setup-') as directory:
+with tempfile.TemporaryDirectory(prefix='obu-setup-') as directory:
     root = Path(directory)
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()

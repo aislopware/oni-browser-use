@@ -6,7 +6,7 @@
 
 use serde_json::{json, Value};
 
-use crate::error::{BladeError, Result};
+use crate::error::{ObuError, Result};
 
 // ── Help ───────────────────────────────────────────────────────────────
 
@@ -15,27 +15,27 @@ use crate::error::{BladeError, Result};
 /// command map, the output contract, and the workflow that gets the most
 /// out of both.
 const INSTRUCTIONS: &str = "\
-Bladebro CLI — drive a real, stealthy browser from shell commands.
-SETUP: none. The first command auto-starts a background daemon (one Chrome for all later commands). --no-daemon forces isolated one-shot runs; 'bladebro stop' cleans up.
-DISCOVERY: 'bladebro help' (human) — 'bladebro help --json' (this document) — 'bladebro help <command>' for one command in depth.
+Obu CLI — drive a real, stealthy browser from shell commands.
+SETUP: none. The first command auto-starts a background daemon (one Chrome for all later commands). --no-daemon forces isolated one-shot runs; 'obu stop' cleans up.
+DISCOVERY: 'obu help' (human) — 'obu help --json' (this document) — 'obu help <command>' for one command in depth.
 OUTPUT CONTRACT: --json on any command gives ONE JSON object on stdout: {\"ok\":bool,\"is_error\":bool,\"text\":string} (+ \"image_path\" for vision — the PNG is saved to a file, never inlined base64). Exit codes: 0 = success; 1 = the command ran but failed (read 'text' — it carries current page state so you can recover without an extra call); 2 = usage error (bad command/flag/argument — fix the command).
 WORKFLOW: 1) nav <url> gives refs + a content preview (often enough to act). 2) Address by text when you can: 'act click \"Sign in\"' needs no see; refs self-heal; labels work for form fields. 3) On list/search/product/profile pages, 'see extract auto' FIRST: one call returns structured items (site adapters add fields on Reddit/GitHub/product pages; on Reddit POST pages it returns the full comment tree — all replies, thread order, complete flag). 4) Collapse round-trips: 'act fill' for whole forms; 'act batch' / 'run' for sequences (if/while branching; {\"action\":\"see\"} steps read inline). 5) Big JSON payloads: @file or - (stdin) — no shell-quoting games. 6) Keep budgets default; big outputs are written to files with an inline preview.
 RELIABILITY: real Chromium with the full stealth stack and human-like input; per-domain knowledge (settle timing, block config, bot risk) compounds across runs. Errors are loud, never silent: unknown flags and missing values fail with exit 2; a failed action returns the page state for recovery. Vision is the last resort — refs and deltas are cheaper.
 ";
 
-/// The human manual — printed by `bladebro help` / `-h` / bare `bladebro`.
+/// The human manual — printed by `obu help` / `-h` / bare `obu`.
 pub fn help_text() -> String {
     crate::ui::style_help(&HELP_TEXT.replace("__VERSION__", env!("CARGO_PKG_VERSION")))
 }
 
-const HELP_TEXT: &str = r#"bladebro __VERSION__ — agentic browser driver (CLI)
+const HELP_TEXT: &str = r#"obu __VERSION__ — agentic browser driver (CLI)
 
 USAGE
-  bladebro <command> [args] [--json] [--no-daemon]
-  bladebro help [command]      this manual (start here)
+  obu <command> [args] [--json] [--no-daemon]
+  obu help [command]      this manual (start here)
 
 The first command auto-starts a background daemon: ONE Chrome instance for
-all later commands (no startup delay after the first launch). `bladebro stop`
+all later commands (no startup delay after the first launch). `obu stop`
 shuts it down. `--no-daemon` forces isolated one-shot runs.
 
 COMMANDS
@@ -54,7 +54,7 @@ COMMANDS
   daemon | stop                   manage the persistent Chrome session
   mcp                             MCP server on stdio — add to your agent's client config
   rb on|off [sub]                 real-browser lane: drive YOUR browser (see 'help rb')
-  hermes on|off|status             switch Hermes' browser to Bladebro; reversible MCP setup
+  hermes on|off|status             switch Hermes' browser to Obu; reversible MCP setup
   audit                           stealth audit — vector suite + boot self-check + drift stamp
   update | -u [--check] [--force]  self-update; --rollback restores the previous binary
   doctor | -doc                   system diagnostics (13 checks)
@@ -62,17 +62,17 @@ COMMANDS
   help [command]                  this manual; 'help --json' for the machine version
 
 QUICK START
-  bladebro nav example.com                      navigate
-  bladebro see model                            interactive elements with refs
-  bladebro see content                          page as clean markdown
-  bladebro see extract auto                     structured data (lists, posts, repos, products)
-  bladebro act click e5                         click by ref
-  bladebro act click "Sign in"                  click by text (no see needed)
-  bladebro act type e12 "hello world"           type into one field
-  bladebro act fill '{"e12":"John"}' --submit e20      fill a form in ONE call
-  bladebro act batch '[{"action":"navigate","url":"x.com"},{"action":"see","mode":"content"}]'
-  bladebro run @steps.json                      big payload from a file (- = stdin)
-  bladebro act eval "document.title"            evaluate JS
+  obu nav example.com                      navigate
+  obu see model                            interactive elements with refs
+  obu see content                          page as clean markdown
+  obu see extract auto                     structured data (lists, posts, repos, products)
+  obu act click e5                         click by ref
+  obu act click "Sign in"                  click by text (no see needed)
+  obu act type e12 "hello world"           type into one field
+  obu act fill '{"e12":"John"}' --submit e20      fill a form in ONE call
+  obu act batch '[{"action":"navigate","url":"x.com"},{"action":"see","mode":"content"}]'
+  obu run @steps.json                      big payload from a file (- = stdin)
+  obu act eval "document.title"            evaluate JS
 
 FLAGS
   --json         one JSON object on stdout: {"ok", "is_error", "text"} (+ "image_path" for vision)
@@ -86,17 +86,17 @@ EXIT CODES
   2  usage error — bad command/flag/argument; the message says how to fix it
 
 ENVIRONMENT
-  BLADE_HOME           isolate everything (daemon, Chrome, sessions, knowledge) in a directory
-  BLADE_CMD_TIMEOUT    client wait for a daemon response, seconds (default 300)
-  BLADE_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
-  BLADE_NO_COMPRESS=1  disable response compression
-  BLADE_LANE           real|agent — force the real-browser lane for this process
-  BLADE_RB_DEBUG=1     real lane: surface the browser's own stderr on launch failures
-  BLADE_PLAIN          plain output — no ANSI even on a terminal
+  OBU_HOME           isolate everything (daemon, Chrome, sessions, knowledge) in a directory
+  OBU_CMD_TIMEOUT    client wait for a daemon response, seconds (default 300)
+  OBU_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
+  OBU_NO_COMPRESS=1  disable response compression
+  OBU_LANE           real|agent — force the real-browser lane for this process
+  OBU_RB_DEBUG=1     real lane: surface the browser's own stderr on launch failures
+  OBU_PLAIN          plain output — no ANSI even on a terminal
                        (NO_COLOR also disables; CLICOLOR_FORCE=1 forces color off-TTY)
   CHROME_PATH          override the Chrome/Chromium binary
 
-Agents: `bladebro help --json` returns the machine version of this manual —
+Agents: `obu help --json` returns the machine version of this manual —
 tool schemas (same as MCP tools/list), per-command usage, exit codes, payload
 conventions, and examples. Fetch it once, then drive the CLI with --json.
 "#;
@@ -186,15 +186,15 @@ fn command_help_json(cmd: &str) -> Option<Value> {
     let cmd = normalize_cmd(cmd);
     let v = match cmd {
         "nav" => json!({
-            "usage": "bladebro nav <url> [--block <classes>]",
+            "usage": "obu nav <url> [--block <classes>]",
             "tool": "act",
             "args": { "url": "target URL; bare domains get https://" },
             "flags": { "--block": "images,fonts,media,trackers (remembered per domain)" },
-            "examples": ["bladebro nav example.com", "bladebro nav https://x.com --block images,fonts --json"],
+            "examples": ["obu nav example.com", "obu nav https://x.com --block images,fonts --json"],
             "notes": ["returns refs + a content preview — often enough to act without a separate see"]
         }),
         "see" => json!({
-            "usage": "bladebro see [mode] [url] [extract <type>] [flags]",
+            "usage": "obu see [mode] [url] [extract <type>] [flags]",
             "tool": "see",
             "args": {
                 "mode": "model (default) | content | outline",
@@ -217,17 +217,17 @@ fn command_help_json(cmd: &str) -> Option<Value> {
                 "--format": "text (default) | json — pure JSON output for extract/artifact reads ({offset,next_offset,data} pages)"
             },
             "examples": [
-                "bladebro see model",
-                "bladebro see content example.com",
-                "bladebro see extract auto --limit 20",
-                "bladebro see extract auto --format json",
-                "bladebro see --find \"Submit\"",
-                "bladebro see --logs network"
+                "obu see model",
+                "obu see content example.com",
+                "obu see extract auto --limit 20",
+                "obu see extract auto --format json",
+                "obu see --find \"Submit\"",
+                "obu see --logs network"
             ],
             "notes": ["extract=auto is the first move on list/search/product/profile pages — one call returns structured items; on Reddit post pages it attempts the full comment tree; complete/partial disclose API denial and missing replies", "extract=auto envelope: container,count,items + page_total/partial/paged when the page claims more results than the DOM holds, sponsored (paid placements), duplicates_removed, redirects_unwrapped/redirects_unresolved — each explained by a note line"]
         }),
         "act" => json!({
-            "usage": "bladebro act <action> [target] [value] [--flags]",
+            "usage": "obu act <action> [target] [value] [--flags]",
             "tool": "act",
             "actions": crate::action::ACT_ACTIONS,
             "universal_flags": {
@@ -248,23 +248,23 @@ fn command_help_json(cmd: &str) -> Option<Value> {
                 "--next": "paginate: CSS selector or text=Next (also label=/ref=)",
                 "--extract": "paginate: read kind per page — auto (default) | links | forms | json (needs --template)",
                 "--limit": "paginate: per-page extraction item limit",
-                "--body": "download: HTTP body, <=32MiB/30s, no browser cookies; honors HTTP(S) BLADE_PROXY",
+                "--body": "download: HTTP body, <=32MiB/30s, no browser cookies; honors HTTP(S) OBU_PROXY",
                 "--sort": "Reddit post extract: confidence|top|new|controversial|old|qa",
                 "--slim": "verdict-only successful actions; batch/run inherit, reads/errors retained",
                 "--format": "read/extract/eval: text (default) | json — read returns live values/state/select choices; {data,note} for notices; {artifact,bytes,next_offset:0} when oversized"
             },
             "examples": [
-                "bladebro act click e5",
-                "bladebro act click \"Sign in\"",
-                "bladebro act type e12 \"hello\"",
-                "bladebro act fill '{\"e3\":\"John\"}' --submit e8",
-                "bladebro act click Submit --url example.com/login",
-                "bladebro act upload e5 /tmp/file.pdf",
-                "bladebro act batch @steps.json",
-                "bladebro act extract --format json",
-                "bladebro act wait settle",
-                "bladebro act dialog confirm --accept false",
-                "bladebro act eval \"document.title\""
+                "obu act click e5",
+                "obu act click \"Sign in\"",
+                "obu act type e12 \"hello\"",
+                "obu act fill '{\"e3\":\"John\"}' --submit e8",
+                "obu act click Submit --url example.com/login",
+                "obu act upload e5 /tmp/file.pdf",
+                "obu act batch @steps.json",
+                "obu act extract --format json",
+                "obu act wait settle",
+                "obu act dialog confirm --accept false",
+                "obu act eval \"document.title\""
             ],
             "notes": [
                 "unquoted multi-word values join: act click Sign in == act click \"Sign in\"",
@@ -274,7 +274,7 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             ]
         }),
         "state" => json!({
-            "usage": "bladebro state <op> [args] [flags]",
+            "usage": "obu state <op> [args] [flags]",
             "tool": "state",
             "ops": ["cookies","set-cookie","del-cookie","ls","ss","set-ls","set-ss","rm-ls","rm-ss","clear-ls","clear-ss","tabs","open-tab","close-tab","switch-tab","save","load","compress","block"],
             "flags": {
@@ -289,61 +289,61 @@ fn command_help_json(cmd: &str) -> Option<Value> {
                 "--mode": "compress: on | off | status"
             },
             "examples": [
-                "bladebro state cookies",
-                "bladebro state cookies example.com",
-                "bladebro state set-cookie token abc --domain example.com",
-                "bladebro state tabs",
-                "bladebro state save my-session",
-                "bladebro state block images,fonts",
-                "bladebro state compress off"
+                "obu state cookies",
+                "obu state cookies example.com",
+                "obu state set-cookie token abc --domain example.com",
+                "obu state tabs",
+                "obu state save my-session",
+                "obu state block images,fonts",
+                "obu state compress off"
             ],
             "notes": ["save/load persists cookies+storage; navigate to the saved origin before load, then reload"]
         }),
         "run" => json!({
-            "usage": "bladebro run '<json-steps>' | @file | -",
+            "usage": "obu run '<json-steps>' | @file | -",
             "tool": "run",
             "steps": "array; each {action:...} uses the same fields as act; plus {action:'if'|'while'|'see'}",
             "examples": [
-                "bladebro run '[{\"action\":\"navigate\",\"url\":\"example.com\"},{\"action\":\"see\",\"mode\":\"content\"}]'",
-                "bladebro run @steps.json",
-                "cat steps.json | bladebro run -"
+                "obu run '[{\"action\":\"navigate\",\"url\":\"example.com\"},{\"action\":\"see\",\"mode\":\"content\"}]'",
+                "obu run @steps.json",
+                "cat steps.json | obu run -"
             ],
             "notes": ["stops on first error with the step number + page state", "while+see reads across pages in ONE call", "--format json: status, results per top-level step, stopped_at/error/page/note on failure; nested observations remain output text; step formats are explicit; large results offload"]
         }),
         "vision" => json!({
-            "usage": "bladebro vision [--marks]",
+            "usage": "obu vision [--marks]",
             "tool": "vision",
             "flags": { "--marks": "numbered ref badges (Set-of-Marks)" },
-            "examples": ["bladebro vision", "bladebro vision --marks --json | jq -r .image_path"],
+            "examples": ["obu vision", "obu vision --marks --json | jq -r .image_path"],
             "notes": ["screenshot is saved to a file; path printed (json: image_path)", "last resort — see/act are cheaper and return actionable refs"]
         }),
         "daemon" => json!({
-            "usage": "bladebro daemon",
+            "usage": "obu daemon",
             "tool": null,
             "examples": [],
             "notes": ["auto-starts on the first command; run manually only to watch startup errors"]
         }),
         "stop" => json!({
-            "usage": "bladebro stop",
+            "usage": "obu stop",
             "tool": null,
             "examples": [],
             "notes": ["graceful (flushes logins + knowledge); idempotent — exit 0 when nothing is running"]
         }),
         "help" => json!({
-            "usage": "bladebro help [command] [--json]",
+            "usage": "obu help [command] [--json]",
             "tool": null,
-            "examples": ["bladebro help --json", "bladebro help act"],
+            "examples": ["obu help --json", "obu help act"],
             "notes": ["the single self-teaching surface — fetch 'help --json' once"]
         }),
         "rb" | "realbrowser" => json!({
-            "usage": "bladebro rb [on|off|status|mode <m>|use [id|--binary <path|auto>]|profile [key|auto]|visible on|off|idle-hum on|off|idle-shutdown on|off|refresh|forget|pause|resume]",
+            "usage": "obu rb [on|off|status|mode <m>|use [id|--binary <path|auto>]|profile [key|auto]|visible on|off|idle-hum on|off|idle-shutdown on|off|refresh|forget|pause|resume]",
             "tool": null,
             "examples": [
-                "bladebro rb on",
-                "bladebro rb status --json",
-                "bladebro rb mode attach",
-                "bladebro rb use --binary /usr/bin/chromium",
-                "bladebro rb pause"
+                "obu rb on",
+                "obu rb status --json",
+                "obu rb mode attach",
+                "obu rb use --binary /usr/bin/chromium",
+                "obu rb pause"
             ],
             "notes": [
                 "real-browser lane: the agent drives YOUR Chromium-family browser (your profile data, your display) with zero page patches; the driver-side stack (perception, LPM, refs, adapters, token efficiency, biometrics) is unchanged",
@@ -354,56 +354,56 @@ fn command_help_json(cmd: &str) -> Option<Value> {
             ]
         }),
         "hermes" => json!({
-            "usage": "bladebro hermes on|off|status [--profile <name>] [--hermes <path>] [--json]",
+            "usage": "obu hermes on|off|status [--profile <name>] [--hermes <path>] [--json]",
             "tool": null,
-            "examples": ["bladebro hermes on", "bladebro hermes off", "bladebro hermes status --json", "bladebro hermes on --profile work"],
-            "notes": ["Uses Hermes' public configuration CLI and the ordinary Bladebro MCP server; no plugin or schema copies. Preserves other disabled toolsets and web search/extraction. off restores the prior MCP entry and browser policy, retaining unrelated settings. Start a new chat and restart gateways/desktop clients after switching. HERMES_HOME or --profile selects the Hermes profile. Chrome/Chromium is required; doctor checks prerequisites."]
+            "examples": ["obu hermes on", "obu hermes off", "obu hermes status --json", "obu hermes on --profile work"],
+            "notes": ["Uses Hermes' public configuration CLI and the ordinary Obu MCP server; no plugin or schema copies. Preserves other disabled toolsets and web search/extraction. off restores the prior MCP entry and browser policy, retaining unrelated settings. Start a new chat and restart gateways/desktop clients after switching. HERMES_HOME or --profile selects the Hermes profile. Chrome/Chromium is required; doctor checks prerequisites."]
         }),
         "mcp" => json!({
-            "usage": "bladebro mcp",
+            "usage": "obu mcp",
             "tool": null,
-            "examples": ["bladebro mcp"],
+            "examples": ["obu mcp"],
             "notes": [
                 "MCP server on stdio — the integration surface for AI agents (Claude, Cursor, opencode, pi)",
-                "client config: {\"command\":\"bladebro\",\"args\":[\"mcp\"]}",
-                "drives Chrome over WebSocket by default (navigator.webdriver stays false natively — zero page patches); BLADE_TRANSPORT=pipe opts into the zero-port pipe transport instead"
+                "client config: {\"command\":\"obu\",\"args\":[\"mcp\"]}",
+                "drives Chrome over WebSocket by default (navigator.webdriver stays false natively — zero page patches); OBU_TRANSPORT=pipe opts into the zero-port pipe transport instead"
             ]
         }),
         "audit" => json!({
-            "usage": "bladebro audit",
+            "usage": "obu audit",
             "tool": null,
-            "examples": ["bladebro audit"],
+            "examples": ["obu audit"],
             "notes": ["stealth audit — local vector suite + boot self-check + cross-restart consistency stamp; every check must pass (the run prints its own total); any FAIL exits non-zero"]
         }),
         "update" => json!({
-            "usage": "bladebro update | -u [--check] [--force]",
+            "usage": "obu update | -u [--check] [--force]",
             "tool": null,
             "flags": {
                 "--check / -c": "dry run — check only",
                 "--force / -f": "reinstall even at the same version"
             },
-            "examples": ["bladebro -u --check", "bladebro -u"],
+            "examples": ["obu -u --check", "obu -u"],
             "notes": [
                 "download → verify → back up → swap, from GitHub releases",
-                "npm installs are detected and redirected to `npm update -g bladebro` (override: --force)"
+                "npm installs are detected and redirected to `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu` (override: --force)"
             ]
         }),
         "doctor" => json!({
-            "usage": "bladebro doctor | -doc",
+            "usage": "obu doctor | -doc",
             "tool": null,
-            "examples": ["bladebro doctor"],
+            "examples": ["obu doctor"],
             "notes": ["13 system checks: data root, Chrome, Xvfb, profile, logins, hygiene, locks, network, binary, disk, version"]
         }),
         "rollback" => json!({
-            "usage": "bladebro --rollback",
+            "usage": "obu --rollback",
             "tool": null,
-            "examples": ["bladebro --rollback"],
+            "examples": ["obu --rollback"],
             "notes": ["restores the previous binary from <data dir>/backups (written by every self-update)"]
         }),
         "version" => json!({
-            "usage": "bladebro -v | --version",
+            "usage": "obu -v | --version",
             "tool": null,
-            "examples": ["bladebro -v"],
+            "examples": ["obu -v"],
             "notes": ["version + install method + update status (behind / on latest / ahead — never a false 'up to date')"]
         }),
         _ => return None,
@@ -424,7 +424,7 @@ fn command_tool(cmd: &str) -> Option<&'static str> {
     }
 }
 
-/// The machine manual — `bladebro help --json` (optionally per command).
+/// The machine manual — `obu help --json` (optionally per command).
 /// One call teaches an agent everything the CLI can do: the same depth as
 /// MCP's tools + instructions, plus CLI-only details (exit codes, stdin/@file
 /// payloads, universal flags, examples).
@@ -434,8 +434,8 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
     if let Some(name) = cmd {
         let norm = if name == "navigate" { "nav" } else { name };
         let detail = command_help_json(norm).ok_or_else(|| {
-            BladeError::Usage(format!(
-                "unknown command '{name}' — run 'bladebro help' for the command list"
+            ObuError::Usage(format!(
+                "unknown command '{name}' — run 'obu help' for the command list"
             ))
         })?;
         let mut out = json!({ "command": norm, "detail": detail });
@@ -461,15 +461,15 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
     }
 
     let out = json!({
-        "bladebro": { "version": env!("CARGO_PKG_VERSION"), "surface": "cli" },
+        "obu": { "version": env!("CARGO_PKG_VERSION"), "surface": "cli" },
         "instructions": INSTRUCTIONS,
         "quick_start": [
-            "bladebro nav example.com",
-            "bladebro see extract auto",
-            "bladebro act click \"Sign in\"",
-            "bladebro act fill '{\"e12\":\"John\"}' --submit e20",
-            "bladebro run '[{\"action\":\"navigate\",\"url\":\"x.com\"},{\"action\":\"see\",\"mode\":\"content\"}]'",
-            "bladebro stop"
+            "obu nav example.com",
+            "obu see extract auto",
+            "obu act click \"Sign in\"",
+            "obu act fill '{\"e12\":\"John\"}' --submit e20",
+            "obu run '[{\"action\":\"navigate\",\"url\":\"x.com\"},{\"action\":\"see\",\"mode\":\"content\"}]'",
+            "obu stop"
         ],
         "commands": commands,
         "tools": tools,
@@ -479,7 +479,7 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
             "payloads": {
                 "@file": "read the argument from a file (steps, fields, templates, js)",
                 "-": "read from stdin",
-                "example": "bladebro run @steps.json  |  cat steps.json | bladebro run -"
+                "example": "obu run @steps.json  |  cat steps.json | obu run -"
             }
         },
         "exit_codes": {
@@ -488,16 +488,16 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
             "2": "usage error — bad command/flag/argument; the message says how to fix it"
         },
         "env": {
-            "BLADE_HOME": "isolate daemon/Chrome/sessions/knowledge in a directory",
-            "BLADE_CMD_TIMEOUT": "client wait for a daemon response, seconds (default 300)",
-            "BLADE_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
-            "BLADE_NO_COMPRESS": "set 1 to disable response compression",
-            "BLADE_LANE": "real|agent — force the real-browser lane for this process",
-            "BLADE_RB_DEBUG": "real lane: set 1 to surface the browser's own stderr on launch failures",
-            "BLADE_PLAIN": "plain CLI output — no ANSI even on a TTY (NO_COLOR also honored; CLICOLOR_FORCE=1 forces color off-TTY)",
-            "BLADE_TRANSPORT": "mcp transport: WebSocket by default (native webdriver=false); set 'pipe' for the zero-port transport (its automation flag is masked)",
+            "OBU_HOME": "isolate daemon/Chrome/sessions/knowledge in a directory",
+            "OBU_CMD_TIMEOUT": "client wait for a daemon response, seconds (default 300)",
+            "OBU_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
+            "OBU_NO_COMPRESS": "set 1 to disable response compression",
+            "OBU_LANE": "real|agent — force the real-browser lane for this process",
+            "OBU_RB_DEBUG": "real lane: set 1 to surface the browser's own stderr on launch failures",
+            "OBU_PLAIN": "plain CLI output — no ANSI even on a TTY (NO_COLOR also honored; CLICOLOR_FORCE=1 forces color off-TTY)",
+            "OBU_TRANSPORT": "mcp transport: WebSocket by default (native webdriver=false); set 'pipe' for the zero-port transport (its automation flag is masked)",
             "CHROME_PATH": "override the Chrome/Chromium binary",
-            "RUST_LOG": "log filter (default warn,bladebro=info)"
+            "RUST_LOG": "log filter (default warn,obu=info)"
         }
     });
     Ok(format!("{out}"))
@@ -508,30 +508,30 @@ pub fn command_help_text(cmd: &str) -> Option<String> {
     let cmd = normalize_cmd(cmd);
     let text = match cmd {
         "nav" => {
-            r#"bladebro nav — navigate
+            r#"obu nav — navigate
 
 USAGE
-  bladebro nav <url> [--block <classes>] [--json]
+  obu nav <url> [--block <classes>] [--json]
 
 Returns the page title/URL, interactive element refs, and a content preview —
 usually enough to act without a separate see call. Bare domains work:
-`bladebro nav example.com` → https://example.com. The first command
+`obu nav example.com` → https://example.com. The first command
 auto-starts the daemon (one Chrome shared by all later commands).
 
 --block <classes>   block inert resources for this load AND remember the
                     choice for the domain: images,fonts,media,trackers
 
 EXAMPLES
-  bladebro nav example.com
-  bladebro nav https://x.com --block images,fonts
-  bladebro nav example.com --json | jq .text
+  obu nav example.com
+  obu nav https://x.com --block images,fonts
+  obu nav example.com --json | jq .text
 "#
         }
         "see" => {
-            r#"bladebro see — read the page without acting
+            r#"obu see — read the page without acting
 
 USAGE
-  bladebro see [mode] [url] [extract <type>] [flags]
+  obu see [mode] [url] [extract <type>] [flags]
 
 MODES
   model (default)   interactive elements with refs (e1, e2, …)
@@ -568,20 +568,20 @@ FLAGS
   --url <url>         navigate first (or pass the URL positionally)
 
 EXAMPLES
-  bladebro see                            interactive elements
-  bladebro see content                    page as markdown
-  bladebro see extract auto --limit 20    structured items
-  bladebro see extract auto --format json  pure JSON output
-  bladebro see example.com content        navigate + read in one call
-  bladebro see --find "Submit"            refs by text
-  bladebro see --logs network             recent requests
+  obu see                            interactive elements
+  obu see content                    page as markdown
+  obu see extract auto --limit 20    structured items
+  obu see extract auto --format json  pure JSON output
+  obu see example.com content        navigate + read in one call
+  obu see --find "Submit"            refs by text
+  obu see --logs network             recent requests
 "#
         }
         "act" => {
-            r#"bladebro act — interact with the page
+            r#"obu act — interact with the page
 
 USAGE
-  bladebro act <action> [target] [value] [--flags]
+  obu act <action> [target] [value] [--flags]
 
 ACTIONS
   click <ref|label>        type <target> <text>      fill <fields> [--submit]
@@ -624,26 +624,26 @@ RESULT SHAPES (stable — parse them without guessing)
                 `note:` line explaining what to do about it.
 
 EXAMPLES
-  bladebro act click e5                          click a ref
-  bladebro act click "Sign in"                   click by text
-  bladebro act click --selector "[role=menuitem]"   click by CSS (searches shadow DOM)
-  bladebro act type e12 "hello world"            type
-  bladebro act fill '{"e3":"John","e5":"Doe"}' --submit e8
-  bladebro act click Submit --url example.com/login   navigate + click in ONE call
-  bladebro act upload e5 /tmp/file.pdf           file upload
-  bladebro act wait settle                       wait for DOM quiet
-  bladebro act wait element --text "Results"     wait for an element
-  bladebro act eval "document.title"             evaluate JS
-  bladebro act batch '[{"action":"reload"}]'     sequential steps in ONE call
-  bladebro act collect https://x.com/list --max 100   infinite-scroll collect
-  bladebro act extract --format json             structured data as JSON
+  obu act click e5                          click a ref
+  obu act click "Sign in"                   click by text
+  obu act click --selector "[role=menuitem]"   click by CSS (searches shadow DOM)
+  obu act type e12 "hello world"            type
+  obu act fill '{"e3":"John","e5":"Doe"}' --submit e8
+  obu act click Submit --url example.com/login   navigate + click in ONE call
+  obu act upload e5 /tmp/file.pdf           file upload
+  obu act wait settle                       wait for DOM quiet
+  obu act wait element --text "Results"     wait for an element
+  obu act eval "document.title"             evaluate JS
+  obu act batch '[{"action":"reload"}]'     sequential steps in ONE call
+  obu act collect https://x.com/list --max 100   infinite-scroll collect
+  obu act extract --format json             structured data as JSON
 "#
         }
         "state" => {
-            r#"bladebro state — cookies, storage, tabs, sessions, blocking
+            r#"obu state — cookies, storage, tabs, sessions, blocking
 
 USAGE
-  bladebro state <op> [args] [flags]
+  obu state <op> [args] [flags]
 
 COOKIES
   cookies [url]                        list (filtered to url / current page)
@@ -667,17 +667,17 @@ SESSIONS / CONTROL
   compress on|off|status               context pruning
 
 EXAMPLES
-  bladebro state cookies
-  bladebro state set-cookie token abc --domain example.com --secure
-  bladebro state tabs
-  bladebro state save my-session
+  obu state cookies
+  obu state set-cookie token abc --domain example.com --secure
+  obu state tabs
+  obu state save my-session
 "#
         }
         "run" => {
-            r#"bladebro run — batch actions with branching and loops
+            r#"obu run — batch actions with branching and loops
 
 USAGE
-  bladebro run '<json-steps>' [--slim] [--format text|json] (or @file / -)
+  obu run '<json-steps>' [--slim] [--format text|json] (or @file / -)
 
 Steps are action objects (same fields as act) plus:
   {"action":"if","condition":…,"then":[…],"else":[…]}   branch
@@ -693,16 +693,16 @@ stopped_at/error/page/note. Nested observations stay in output; set each read's
 format explicitly. Oversized results use the usual artifact paging envelope.
 
 EXAMPLES
-  bladebro run '[{"action":"navigate","url":"example.com"},{"action":"see","mode":"content"}]'
-  bladebro run @steps.json
-  cat steps.json | bladebro run -
+  obu run '[{"action":"navigate","url":"example.com"},{"action":"see","mode":"content"}]'
+  obu run @steps.json
+  cat steps.json | obu run -
 "#
         }
         "vision" => {
-            r#"bladebro vision — screenshot
+            r#"obu vision — screenshot
 
 USAGE
-  bladebro vision [--marks]
+  obu vision [--marks]
 
 Always saves a PNG to a file and prints the path (--json: "image_path").
 --marks overlays numbered ref badges (Set-of-Marks) so you can click by ref
@@ -710,48 +710,48 @@ after looking at the image. Vision is the LAST RESORT: the structural model
 (see/act with refs) is cheaper and gives actionable refs.
 
 EXAMPLES
-  bladebro vision
-  bladebro vision --marks --json | jq -r .image_path
+  obu vision
+  obu vision --marks --json | jq -r .image_path
 "#
         }
         "daemon" => {
-            r#"bladebro daemon — persistent Chrome session
+            r#"obu daemon — persistent Chrome session
 
 USAGE
-  bladebro daemon
+  obu daemon
 
 Auto-starts on the first command — run it manually only to watch startup
 errors. One Chrome instance serves every later command (Unix socket under the
-data dir; socket + pid file are 0600). Idle timeout: BLADE_IDLE_TIMEOUT
+data dir; socket + pid file are 0600). Idle timeout: OBU_IDLE_TIMEOUT
 seconds (default 600), then Chrome shuts down; the next command relaunches it.
 "#
         }
         "rb" | "realbrowser" => {
-            r#"bladebro rb — the real-browser lane
+            r#"obu rb — the real-browser lane
 
 USAGE
-  bladebro rb                     status (same as `rb status`)
-  bladebro rb on | off            switch the lane (true/false also accepted)
-  bladebro rb mode <m>            auto | clone | profile | attach
-  bladebro rb use [id]            list / choose the browser
-  bladebro rb use --binary <path|auto>
+  obu rb                     status (same as `rb status`)
+  obu rb on | off            switch the lane (true/false also accepted)
+  obu rb mode <m>            auto | clone | profile | attach
+  obu rb use [id]            list / choose the browser
+  obu rb use --binary <path|auto>
                                   custom browser binary (nix wrapper, flatpak
                                   launcher script, dev build)
-  bladebro rb profile [key]       list / choose the profile (an absolute path
+  obu rb profile [key]       list / choose the profile (an absolute path
                                   to a profile dir also works; `auto` resets)
-  bladebro rb visible on|off      real window (default) vs --headless=new
-  bladebro rb idle-hum on|off     behavioral idle noise while thinking (default on)
-  bladebro rb idle-shutdown on|off
+  obu rb visible on|off      real window (default) vs --headless=new
+  obu rb idle-hum on|off     behavioral idle noise while thinking (default on)
+  obu rb idle-shutdown on|off
                                   may the idle timeout close the real browser?
                                   (default off — it is the user's)
-  bladebro rb refresh             re-import the profile into the clone
-  bladebro rb forget              wipe the imported copy
-  bladebro rb pause | resume      hand the browser to yourself / back
+  obu rb refresh             re-import the profile into the clone
+  obu rb forget              wipe the imported copy
+  obu rb pause | resume      hand the browser to yourself / back
                                   (paused: input, navigation, history,
                                   downloads, collecting and tab ops refuse;
                                   reads/waits/eval stay)
 
-The lane: instead of Bladebro's isolated browser, the agent drives YOUR
+The lane: instead of Obu's isolated browser, the agent drives YOUR
 Chromium-family browser with YOUR profile data on YOUR display — and the
 page-injection layer switches OFF entirely (a real environment needs no
 masks; truth has no tells to catch). Everything driver-side still runs:
@@ -774,10 +774,10 @@ call; no host restart is ever needed.
 "#
         }
         "stop" => {
-            r#"bladebro stop — shut the daemon down
+            r#"obu stop — shut the daemon down
 
 USAGE
-  bladebro stop
+  obu stop
 
 Graceful: flushes logins + domain knowledge, kills Chrome, removes the
 socket. Idempotent — exit 0 even when nothing is running. The daemon runs
@@ -788,63 +788,63 @@ gracefully; SIGKILL follows if it is still alive 10s later.
 "#
         }
         "help" => {
-            r#"bladebro help — the single self-teaching surface
+            r#"obu help — the single self-teaching surface
 
 USAGE
-  bladebro help              this manual
-  bladebro help <command>    one command in depth
-  bladebro help --json       the machine manual: tool schemas (same as MCP
+  obu help              this manual
+  obu help <command>    one command in depth
+  obu help --json       the machine manual: tool schemas (same as MCP
                              tools/list), per-command usage, exit codes,
                              payload conventions, examples — call ONCE and
                              you know the whole CLI
-  bladebro help <cmd> --json per-command machine help
-  bladebro <cmd> --help      same as help <cmd> (never runs the command)
+  obu help <cmd> --json per-command machine help
+  obu <cmd> --help      same as help <cmd> (never runs the command)
 "#
         }
         "hermes" => {
-            r#"bladebro hermes — reversible Hermes browser setup
+            r#"obu hermes — reversible Hermes browser setup
 
 USAGE
-  bladebro hermes on             connect MCP, then disable Hermes' built-in browser tools
-  bladebro hermes off            restore the previous browser policy and MCP entry
-  bladebro hermes status         inspect the managed setup
+  obu hermes on             connect MCP, then disable Hermes' built-in browser tools
+  obu hermes off            restore the previous browser policy and MCP entry
+  obu hermes status         inspect the managed setup
   --profile <name>               select a Hermes profile (forwarded as hermes -p)
   --hermes <path>                select the Hermes CLI executable
   --json                        one machine-readable result
 
 Uses the ordinary MCP server and Hermes' public configuration commands.
 Web search/extraction and unrelated settings are preserved. Configuration
-recovery is stored privately beside Hermes' config.yaml in .bladebro-browser/.
+recovery is stored privately beside Hermes' config.yaml in .obu-browser/.
 An interrupted switch can resume with on or restore with off. Changed MCP
 entries are never overwritten during recovery. Use the same profile for off.
 Start a new chat; restart running gateways/desktop clients after switching.
-Chrome/Chromium must be installed; bladebro doctor checks prerequisites.
-Updates use your normal Bladebro updater; no separate Hermes plugin to update.
+Chrome/Chromium must be installed; obu doctor checks prerequisites.
+Updates use your normal Obu updater; no separate Hermes plugin to update.
 "#
         }
         "mcp" => {
-            r#"bladebro mcp — MCP server (stdio JSON-RPC)
+            r#"obu mcp — MCP server (stdio JSON-RPC)
 
 USAGE
-  bladebro mcp
+  obu mcp
 
 The integration surface for AI agents. Client config:
 
-  {"mcpServers": {"bladebro": {"command": "bladebro", "args": ["mcp"]}}}
+  {"mcpServers": {"obu": {"command": "obu", "args": ["mcp"]}}}
 
 Speaks MCP 2024-11-05 through 2026-07-28 (legacy initialize handshake +
 the 2026-07-28 stateless dialect). Drives Chrome over WebSocket by default
 (navigator.webdriver stays false natively — zero page patches);
-BLADE_TRANSPORT=pipe opts into the zero-port pipe transport instead (its
+OBU_TRANSPORT=pipe opts into the zero-port pipe transport instead (its
 automation flag is masked — lie-engine-style detectors can see the mask).
 Chrome launches lazily on the first tool call.
 "#
         }
         "audit" => {
-            r#"bladebro audit — stealth audit
+            r#"obu audit — stealth audit
 
 USAGE
-  bladebro audit
+  obu audit
 
 Runs the local vector suite (tests/vectors.html: the core stealth
 surface, the permissions native-parity battery, GL-coherence checks,
@@ -857,23 +857,23 @@ tests/vectors.html in the current directory overrides it.
 "#
         }
         "update" => {
-            r#"bladebro -u / update — self-update
+            r#"obu -u / update — self-update
 
 USAGE
-  bladebro -u [--check | -c] [--force | -f]
+  obu -u [--check | -c] [--force | -f]
 
 Download → verify (magic + size + executes) → back up → swap, from
 GitHub releases. --check is a dry run; --force reinstalls the current
 version. npm installs are detected (path contains node_modules) and
-redirected to `npm update -g bladebro`; --force overrides. After an
-update: restart your MCP client. Regret it: bladebro --rollback.
+redirected to `cargo install --locked --git https://github.com/aislopware/oni-browser-use obu`; --force overrides. After an
+update: restart your MCP client. Regret it: obu --rollback.
 "#
         }
         "doctor" => {
-            r#"bladebro doctor / -doc — system diagnostics
+            r#"obu doctor / -doc — system diagnostics
 
 USAGE
-  bladebro doctor
+  obu doctor
 
 13 checks: data directory, Chrome (+version), Xvfb, profile dir, login
 persistence, profile hygiene, stale locks, GitHub reachability, binary
@@ -881,10 +881,10 @@ integrity, disk space, version-vs-latest. Failures print a fix.
 "#
         }
         "rollback" => {
-            r#"bladebro --rollback — restore the previous binary
+            r#"obu --rollback — restore the previous binary
 
 USAGE
-  bladebro --rollback
+  obu --rollback
 
 Restores the most recent backup from <data dir>/backups (written by every
 self-update). The backup is verified as a valid binary first — a corrupted
@@ -892,10 +892,10 @@ newest backup falls through to the next one.
 "#
         }
         "version" => {
-            r#"bladebro -v / --version — version + update status
+            r#"obu -v / --version — version + update status
 
 USAGE
-  bladebro -v
+  obu -v
 
 Version + build id, install method (npm / source / binary) and update
 state: behind (with the hint), on the latest release, or ahead of it
