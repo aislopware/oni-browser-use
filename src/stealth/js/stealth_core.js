@@ -17,9 +17,11 @@ for(var i=0;i<p.length;i++){if(p[i].indexOf('cdc_')===0){try{delete document[p[i
 // is already positive (real WM), the natural value is coherent and stays
 // native (coherence over noise, D14). outerHeight is left native: its
 // natural diff (title/tab bar, here ~143px) is realistic.
+// Never on macOS: its windows have no side chrome, so a 0 diff is what every
+// Mac browser reports, and +16 there was a Windows frame on a Mac.
 try{
 var _w0=window.outerWidth,_i0=window.innerWidth;
-if(_w0-_i0<=0){
+if(_w0-_i0<=0&&navigator.platform.indexOf('Mac')!==0){
 var _mow=function(th,a,og){og.apply(th,a);return window.innerWidth+16;};
 var _ow=Object.getOwnPropertyDescriptor(window,'outerWidth');
 if(_ow&&_ow.configurable&&_ow.get){_defGet(window,'outerWidth',_ow.get,_mow);}

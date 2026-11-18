@@ -20,9 +20,10 @@ const STEALTH_FLAGS: &[&str] = &[
     "--disable-dev-shm-usage",
     "--disable-background-networking",
     "--disable-sync",
-    // Allow window.open popups (OAuth, payment flows). Without this,
-    // Chrome blocks popups and the agent gets no feedback.
-    "--disable-popup-blocking",
+    // No --disable-popup-blocking: a page reads it in one line (a
+    // window.open without a click that returns a window), and detectors do.
+    // A click the driver sends carries a user gesture, so the popups of
+    // OAuth and payment flows still open.
     // Download PDFs instead of opening in Chrome's viewer.
     // Without this, PDF URLs open inline and can't be captured as downloads.
     "--disable-features=PdfPlugin",
@@ -411,9 +412,6 @@ pub(super) fn launch_args_real(cfg: &RealLaunchCfg<'_>) -> Vec<String> {
         // Functional renderer-crash guard in small-/dev/shm containers.
         // Changes nothing a page can observe.
         "--disable-dev-shm-usage".into(),
-        // Driver functionality: allow window.open popups (OAuth, payment
-        // flows) in agent tabs.
-        "--disable-popup-blocking".into(),
         // Driver functionality: PDFs download instead of opening inline.
         "--disable-features=PdfPlugin".into(),
     ];

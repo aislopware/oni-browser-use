@@ -185,7 +185,7 @@ def pristine_probe(chrome, port, display, url, battery, lane="agent"):
     if lane == "real":
         args = [
             chrome, "--no-first-run", "--no-default-browser-check",
-            "--disable-dev-shm-usage", "--disable-popup-blocking",
+            "--disable-dev-shm-usage",
             "--disable-features=PdfPlugin",
             f"--user-data-dir={tmp}", f"--remote-debugging-port={port}",
             "--profile-directory=Default",

@@ -96,6 +96,9 @@ pub async fn handle_eval(
                     "expression": expression,
                     "returnByValue": true,
                     "awaitPromise": true,
+                    // The agent asked for the popup: let it pass the blocker
+                    // as a click would, now that the blocker is on.
+                    "userGesture": wants_popups,
                 })),
             )
             .await
@@ -179,7 +182,6 @@ pub async fn handle_eval(
 
         // Bug 3: Detect window.open popups. After eval, if the expression
         // contained window.open, check for new page targets and report them.
-        // Without --disable-popup-blocking, popups are silently swallowed.
         if wants_popups {
             if let Ok(targets) = page.cdp_ref().send("Target.getTargets", None).await {
                 if let Some(infos) = targets.get("targetInfos").and_then(|t| t.as_array()) {
