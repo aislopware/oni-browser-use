@@ -8,7 +8,7 @@ Working with a coding agent? Point it at [AGENTS.md](AGENTS.md) — the agent-fa
 
 ```bash
 # Lint — zero warnings allowed
-cargo clippy --release -- -D warnings
+cargo clippy --release --all-targets -- -D warnings
 
 # Tests — all must pass (gate profile: release codegen without LTO)
 cargo test --profile gate
@@ -32,7 +32,7 @@ If any of these fail, fix them before opening a PR.
 
 ## What we don't accept
 
-- More tools — the surface is 5. New capabilities go as params/behaviors of existing tools; a sixth tool only lands if it is massively net-positive, never marginal.
+- More tools — the surface is 5 (`act`, `see`, `state`, `run`, `vision`). New capabilities go as params/behaviors of those five.
 - An LLM inside the driver. Deterministic machinery only.
 - CAPTCHA solving as a general capability. Detect + honest `blocked:` verdict + remediation ladder. One exception, kept deliberately narrow: a site adapter may pass a challenge that is trivial for a human — a single checkbox click, like reddit's humanity gate; image grids are never solved.
 - Chromium source forks. Stock Chrome stays the engine.

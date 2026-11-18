@@ -13,7 +13,7 @@
 
 ## Checklist
 
-- [ ] `cargo clippy --release -- -D warnings` passes
+- [ ] `cargo clippy --release --all-targets -- -D warnings` passes
 - [ ] `cargo test --profile gate` passes
 - [ ] `cargo build --release` produces a clean binary
 - [ ] Commit message follows conventional commits (`feat:` / `fix:` / `stealth:` / `docs:`)
@@ -22,7 +22,7 @@
 
 ## Stealth changes (if applicable)
 
-- [ ] `obu audit` still scores 111/111
+- [ ] `obu audit` prints no `FAIL` line and its stamps are stable
 - [ ] bot.sannysoft.com still ALL PASS
 - [ ] Before/after scores included below
 

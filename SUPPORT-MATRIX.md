@@ -86,7 +86,7 @@ is still needed to remove those toolchain diagnostics without suppression.
 ## Re-run
 
 ```bash
-cargo fmt --check && cargo clippy --release -- -D warnings && cargo test --profile gate
+cargo fmt --check && cargo clippy --release --all-targets -- -D warnings && cargo test --profile gate
 ./target/release/obu audit
 python3 tools/reliability_probe/agent_contract.py
 python3 tools/reliability_probe/persistence.py
