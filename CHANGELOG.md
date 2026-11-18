@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.9.0] - 2026-11-19
+
 ### Added
 - `vision` can stand in for a headless screenshot script. `path` writes the PNG to a file and returns the path with its pixel size, with no image block. `full` captures the whole page. `size` (`1440x900`, or `1440x900@2` for twice the output pixels) sets the viewport for that capture only and hands it back after; the image is exactly that size on any display, up to 16,384 pixels on a side and 40 megapixels. The largest CDP message accepted goes from 64 to 224 MiB, so a reply carrying a capture that size never closes the browser connection. `url` opens the page first, at that size when `size` is given. On the CLI: `obu vision [url] [--full] [--size WxH[@scale]] [--out file.png]`.
 - `run` takes `vision` steps, which always save to a file, so a set of captures such as every slide of a deck is one call.
@@ -2235,7 +2237,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.8.1...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.9.0...HEAD
+[4.9.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.0
 [4.8.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.1
 [4.8.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.0
 [4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0

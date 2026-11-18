@@ -1,6 +1,6 @@
 {
   "name": "obu-darwin-x64",
-  "version": "4.8.1",
+  "version": "4.9.0",
   "description": "Obu binary for macOS Intel",
   "license": "Apache-2.0",
   "os": [

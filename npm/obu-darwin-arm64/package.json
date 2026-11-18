@@ -1,6 +1,6 @@
 {
   "name": "obu-darwin-arm64",
-  "version": "4.8.1",
+  "version": "4.9.0",
   "description": "Obu binary for macOS Apple Silicon",
   "license": "Apache-2.0",
   "os": [
