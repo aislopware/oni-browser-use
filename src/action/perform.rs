@@ -731,15 +731,20 @@ pub async fn perform_with_network(
                 let t0 = i as f64 / steps as f64;
                 let t1 = (i + 1) as f64 / steps as f64;
                 let e = |t: f64| 3.0 * t * t - 2.0 * t * t * t;
-                let step_dx = total_x * (e(t1) - e(t0));
-                let step_dy = total_y * (e(t1) - e(t0));
+                // Whole-pixel deltas that still add up to the total: a wheel
+                // or trackpad reports no `46.875`.
+                let step_dx = (total_x * e(t1)).round() - (total_x * e(t0)).round();
+                let step_dy = (total_y * e(t1)).round() - (total_y * e(t0)).round();
+                if step_dx == 0.0 && step_dy == 0.0 {
+                    continue;
+                }
 
                 cdp.send_with_timeout(
                     "Input.dispatchMouseEvent",
                     Some(json!({
                         "type": "mouseWheel",
-                        "x": cx,
-                        "y": cy,
+                        "x": cx.round(),
+                        "y": cy.round(),
                         "deltaX": step_dx,
                         "deltaY": step_dy,
                     })),

@@ -54,6 +54,49 @@ async fn send_mouse_move(
     }
 }
 
+/// A mouse reports whole device pixels, so a pointer event at `97.68` is one
+/// no hardware sends (measured, Chrome 158: every CDP coordinate reaches the
+/// page as sent). Whole CSS pixels are on the device grid at any integer
+/// scale factor. A target narrower than a pixel keeps its fractional point
+/// when rounding would leave it.
+pub(crate) fn snap(point: (f64, f64), bounds: Option<[f64; 4]>) -> (f64, f64) {
+    let (x, y) = (point.0.round(), point.1.round());
+    match bounds {
+        Some(b) if !(x > b[0] && x < b[0] + b[2] && y > b[1] && y < b[1] + b[3]) => point,
+        _ => (x, y),
+    }
+}
+
+/// One `mouseMoved` to `to`, with the deltas a page reads as
+/// `movementX`/`movementY`. A move that stays on the pixel the pointer is
+/// already on is not sent: hardware reports none.
+async fn move_to(
+    cdp: &CdpSession,
+    to: (f64, f64),
+    last_mouse: &Arc<std::sync::Mutex<Option<(f64, f64)>>>,
+    queued: &mut bool,
+) -> Result<()> {
+    let last = *last_mouse.lock().unwrap_or_else(|e| e.into_inner());
+    if last == Some(to) {
+        return Ok(());
+    }
+    let (mx, my) = last
+        .map(|(lx, ly)| ((to.0 - lx).round() as i64, (to.1 - ly).round() as i64))
+        .unwrap_or((0, 0));
+    send_mouse_move(
+        cdp,
+        json!({
+            "type": "mouseMoved",
+            "x": to.0, "y": to.1,
+            "movementX": mx, "movementY": my,
+        }),
+        queued,
+    )
+    .await?;
+    *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some(to);
+    Ok(())
+}
+
 /// Dispatch a human-like mouse move from a random start point to `target`.
 /// Returns the final (click) position after bezier path + overshoot correction.
 /// Shared by click (adds press/release after) and hover (no click).
@@ -99,32 +142,18 @@ async fn dispatch_mouse_move_bounded(
         }
     }
 
-    // Move along the path, dispatching mouseMoved events with natural delays.
-    // Include movementX/movementY deltas — PerimeterX/HUMAN tracks these
-    // coordinate deltas as behavioral biometrics; missing or zero values
-    // are an instant bot flag.
-    for pt in &path {
-        let (mx, my) = {
-            let lm = last_mouse.lock().unwrap_or_else(|e| e.into_inner());
-            lm.map(|(lx, ly)| ((pt.x - lx).round() as i64, (pt.y - ly).round() as i64))
-                .unwrap_or((0, 0))
-        };
-        send_mouse_move(
-            cdp,
-            json!({
-                "type": "mouseMoved",
-                "x": pt.x, "y": pt.y,
-                "movementX": mx, "movementY": my,
-            }),
-            queued,
-        )
-        .await?;
-        *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((pt.x, pt.y));
+    // Move along the path with natural delays. The last two points are the
+    // click point, already inside `bounds`; the rest may overshoot it.
+    let bounded_from = path.len().saturating_sub(2);
+    let mut end = snap(crate::stealth::click_target(&path), bounds);
+    for (i, pt) in path.iter().enumerate() {
+        let to = snap((pt.x, pt.y), bounds.filter(|_| i >= bounded_from));
+        move_to(cdp, to, last_mouse, queued).await?;
+        end = to;
         tokio::time::sleep(pt.delay).await;
     }
 
-    // Return the final click point (after overshoot correction).
-    Ok(crate::stealth::click_target(&path))
+    Ok(end)
 }
 
 /// Dispatch a real mouse click at (x, y) via `Input.dispatchMouseEvent`,
@@ -192,32 +221,21 @@ async fn dispatch_mouse_click_bounded(
     for _ in 0..tremor_count {
         let jx = gaussian(&mut rng, 0.0, 1.5).clamp(-3.0, 3.0);
         let jy = gaussian(&mut rng, 0.0, 1.5).clamp(-3.0, 3.0);
-        let (tx, ty) = bounds
+        let tremor = bounds
             .map(|box_| bounded_click_point((cx + jx, cy + jy), box_))
             .unwrap_or((cx + jx, cy + jy));
-        let (mx, my) = {
-            let lm = last_mouse.lock().unwrap_or_else(|e| e.into_inner());
-            lm.map(|(lx, ly)| ((tx - lx).round() as i64, (ty - ly).round() as i64))
-                .unwrap_or((0, 0))
-        };
-        send_mouse_move(
-            cdp,
-            json!({
-                "type": "mouseMoved",
-                "x": tx, "y": ty,
-                "movementX": mx, "movementY": my,
-            }),
-            &mut queued,
-        )
-        .await?;
-        *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((tx, ty));
+        move_to(cdp, snap(tremor, bounds), last_mouse, &mut queued).await?;
         tokio::time::sleep(Duration::from_millis(rng.range(8, 24) as u64)).await;
     }
-    // Press + release at the final position.
+    // The tremor ends back on the click point, then press + release there.
+    // CDP defaults leave `buttons` 0 and `force` 0: a `pointerdown` whose
+    // pressure is 0, where Blink gives a pressed mouse button 0.5.
+    move_to(cdp, (cx, cy), last_mouse, &mut queued).await?;
     cdp.send_with_timeout(
         "Input.dispatchMouseEvent",
         Some(json!({
             "type": "mousePressed", "x": cx, "y": cy, "button": "left", "clickCount": 1,
+            "buttons": 1, "force": 0.5,
             "movementX": 0, "movementY": 0,
         })),
         to,
@@ -229,6 +247,7 @@ async fn dispatch_mouse_click_bounded(
         "Input.dispatchMouseEvent",
         Some(json!({
             "type": "mouseReleased", "x": cx, "y": cy, "button": "left", "clickCount": 1,
+            "buttons": 0,
             "movementX": 0, "movementY": 0,
         })),
         to,
@@ -241,6 +260,16 @@ async fn dispatch_mouse_click_bounded(
 #[cfg(test)]
 mod click_bounds_tests {
     use super::*;
+
+    #[test]
+    fn snap_lands_on_whole_pixels_unless_the_target_is_narrower_than_one() {
+        assert_eq!(snap((97.68, 405.33), None), (98.0, 405.0));
+        let wide = [90.0, 400.0, 20.0, 10.0];
+        assert_eq!(snap((97.68, 405.33), Some(wide)), (98.0, 405.0));
+        // 0.3 px wide, between two pixel centres: no whole pixel is inside.
+        let hair = [200.6, 100.0, 0.3, 10.0];
+        assert_eq!(snap((200.75, 105.2), Some(hair)), (200.75, 105.2));
+    }
 
     #[test]
     fn extreme_offsets_stay_inside_tiny_fractional_and_regular_targets() {

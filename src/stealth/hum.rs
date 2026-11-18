@@ -37,8 +37,10 @@ async fn hum_loop(
     last_mouse: Arc<std::sync::Mutex<Option<(f64, f64)>>>,
 ) {
     let mut rng = Rng::new();
-    // Random-walk starting position — center of a typical viewport.
-    let (mut mx, mut my) = (480.0_f64, 270.0_f64);
+    // The walk's position when no action has put the pointer anywhere yet;
+    // chosen inside the viewport on the first hum.
+    let (mut mx, mut my) = (0.0_f64, 0.0_f64);
+    let mut placed = false;
     // Cached viewport dims. Probing every cycle would put a metronome-
     // regular Runtime.evaluate on the wire — evaluation-timing is an L1
     // fingerprint surface. Probe rarely (first hum, then every ~12 cycles);
@@ -96,6 +98,21 @@ async fn hum_loop(
             }
         }
 
+        // The walk continues from where the last action left the pointer.
+        // A walk of its own, from one fixed start, sent the pointer across
+        // the page in a single event on the first hum after every click
+        // (measured: 640 px between two consecutive mousemoves), and always
+        // to the same spot.
+        let known = *last_mouse.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((lx, ly)) = known {
+            mx = lx;
+            my = ly;
+        } else if !placed {
+            mx = 20.0 + rng.uniform() * (vw - 40.0).max(1.0);
+            my = 20.0 + rng.uniform() * (vh - 40.0).max(1.0);
+        }
+        placed = true;
+
         // Random walk: small jitter from current position. Guard the
         // clamp bounds: a tiny viewport (<40px) would make min>max and
         // panic-clamp, silently killing the hum task.
@@ -103,27 +120,30 @@ async fn hum_loop(
         let jy = rng.range(-12, 12) as f64;
         let xmax = (vw - 20.0).max(21.0);
         let ymax = (vh - 20.0).max(21.0);
-        let new_x = (mx + jx).clamp(20.0, xmax);
-        let new_y = (my + jy).clamp(20.0, ymax);
-        // movementX/movementY deltas — PerimeterX/HUMAN tracks these.
-        let (dmx, dmy) = {
-            let lm = last_mouse.lock().unwrap_or_else(|e| e.into_inner());
-            lm.map(|(lx, ly)| ((new_x - lx).round() as i64, (new_y - ly).round() as i64))
-                .unwrap_or((jx as i64, jy as i64))
-        };
-        let _ = cdp
-            .send(
-                "Input.dispatchMouseEvent",
-                Some(json!({
-                    "type": "mouseMoved",
-                    "x": new_x,
-                    "y": new_y,
-                    "movementX": dmx,
-                    "movementY": dmy,
-                })),
-            )
-            .await;
-        *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((new_x, new_y));
+        // Whole pixels, as a mouse reports them; a walk that lands on the
+        // pixel it left sends nothing.
+        let new_x = (mx + jx).clamp(20.0, xmax).round();
+        let new_y = (my + jy).clamp(20.0, ymax).round();
+        let last = *last_mouse.lock().unwrap_or_else(|e| e.into_inner());
+        if last != Some((new_x, new_y)) {
+            // movementX/movementY deltas — PerimeterX/HUMAN tracks these.
+            let (dmx, dmy) = last
+                .map(|(lx, ly)| ((new_x - lx).round() as i64, (new_y - ly).round() as i64))
+                .unwrap_or((jx as i64, jy as i64));
+            let _ = cdp
+                .send(
+                    "Input.dispatchMouseEvent",
+                    Some(json!({
+                        "type": "mouseMoved",
+                        "x": new_x,
+                        "y": new_y,
+                        "movementX": dmx,
+                        "movementY": dmy,
+                    })),
+                )
+                .await;
+            *last_mouse.lock().unwrap_or_else(|e| e.into_inner()) = Some((new_x, new_y));
+        }
         mx = new_x;
         my = new_y;
 

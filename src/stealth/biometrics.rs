@@ -151,9 +151,13 @@ pub fn mouse_path(start: (f64, f64), target: (f64, f64), rng: &mut Rng) -> Vec<P
 
     let mut path = Vec::with_capacity(steps + 4);
 
-    // Bezier curve to the (offset) click point.
+    // Bezier curve to the (offset) click point. Equal time steps advance
+    // along it by the minimum-jerk law (10u^3 - 15u^4 + 6u^5): a reach starts
+    // slow, peaks mid-way and settles, where equal parameter steps hold one
+    // speed from the first sample to the last.
     for i in 1..=steps {
-        let t = i as f64 / steps as f64;
+        let u = i as f64 / steps as f64;
+        let t = u * u * u * (10.0 - 15.0 * u + 6.0 * u * u);
         let mt = 1.0 - t;
         let x = mt * mt * mt * start.0
             + 3.0 * mt * mt * t * cp1.0
@@ -311,6 +315,25 @@ mod tests {
         assert!(
             overshoot_dist >= final_dist - 5.0,
             "overshoot ({overshoot_dist}) should be >= final ({final_dist})"
+        );
+    }
+
+    #[test]
+    fn mouse_path_starts_slow_peaks_and_settles() {
+        let mut rng = Rng::new();
+        let path = mouse_path((0.0, 0.0), (1200.0, 0.0), &mut rng);
+        // The reach itself: the last three points are overshoot and settle.
+        let reach = &path[..path.len() - 3];
+        let step = |i: usize| {
+            let (a, b) = (&reach[i - 1], &reach[i]);
+            ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt()
+        };
+        let mid = step(reach.len() / 2);
+        assert!(step(1) * 3.0 < mid, "first step {} vs mid {mid}", step(1));
+        assert!(
+            step(reach.len() - 1) * 3.0 < mid,
+            "last step {} vs mid {mid}",
+            step(reach.len() - 1)
         );
     }
 

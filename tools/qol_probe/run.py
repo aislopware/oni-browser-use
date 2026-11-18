@@ -246,6 +246,32 @@ def main():
                 check("Unicode native input " + target + " " + sample,
                       "true" in trusted and "false" not in trusted, trusted)
 
+        # A click reaches the page as a mouse would send it: whole pixels,
+        # deltas that match the positions, and 0.5 pressure while the button
+        # is down (CDP's own defaults give 0, which no mouse reports).
+        ev("window.__ptr=[];for(const t of ['pointermove','pointerdown','pointerup'])"
+           "addEventListener(t,e=>window.__ptr.push([t,e.clientX,e.clientY,e.movementX,"
+           "e.movementY,e.pressure,e.buttons]),true);''")
+        cli("act", "click", see_ref("Plain text input"))
+        ptr = json.loads(ev("JSON.stringify(window.__ptr)") or "[]")
+        downs = [e for e in ptr if e[0] == "pointerdown"]
+        ups = [e for e in ptr if e[0] == "pointerup"]
+        moves = [e for e in ptr if e[0] == "pointermove"]
+        check("press reports a held button at mouse pressure",
+              bool(downs) and all(e[5] == 0.5 and e[6] == 1 for e in downs), repr(downs))
+        check("release reports no button and no pressure",
+              bool(ups) and all(e[5] == 0 and e[6] == 0 for e in ups), repr(ups))
+        check("pointer positions are whole pixels",
+              bool(moves) and all(float(e[1]).is_integer() and float(e[2]).is_integer() for e in ptr),
+              repr([e for e in ptr if not float(e[1]).is_integer()][:3]))
+        # The first move has no earlier one in this document to differ from.
+        drift = [(a, b) for a, b in zip(moves, moves[1:])
+                 if (b[3], b[4]) != (b[1] - a[1], b[2] - a[2])]
+        check("movement deltas match the positions", not drift, repr(drift[:2]))
+        check("no move repeats the pixel before it",
+              all((a[1], a[2]) != (b[1], b[2]) for a, b in zip(moves, moves[1:])),
+              repr(moves[:4]))
+
         # S9: fill as a BATCH step (the schema used to reject it outright).
         out = cli("act", "batch", '[{"action":"fill","fields":[{"label":"Plain text input","text":"batch-fill"}]}]')
         check("batch accepts a fill step", "step1[fill]:" in out and "HALT" not in out, first_line(out))
