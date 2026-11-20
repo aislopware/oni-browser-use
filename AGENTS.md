@@ -13,6 +13,7 @@ cargo fmt --check
 cargo clippy --release --all-targets -- -D warnings
 cargo test --profile gate
 python3 scripts/fork-rename.py --check               # see Merging upstream
+cargo deny check                                     # after a dependency change (deny.toml)
 ```
 
 For manual runs, export a scratch home first, so that every command in the shell stays off the real browser profile:
@@ -96,7 +97,7 @@ A stealth change also needs before/after results in the PR description from bot.
 
 ## Git and PRs
 
-Use Conventional Commits (`feat:`, `fix:`, `stealth:`, `perf:`, `docs:`, `chore:`), and keep one concern per PR: a stealth fix and a refactor are two PRs. Fill in `.github/PULL_REQUEST_TEMPLATE.md` with what changed, how you verified it (commands and output), and before/after numbers for stealth or performance work. CI runs fmt, the rename check, clippy and tests on Linux, plus the cross-compile, MSRV and native Windows checks; a change to Markdown files alone skips it.
+Use Conventional Commits (`feat:`, `fix:`, `stealth:`, `perf:`, `docs:`, `chore:`), and keep one concern per PR: a stealth fix and a refactor are two PRs. Fill in `.github/PULL_REQUEST_TEMPLATE.md` with what changed, how you verified it (commands and output), and before/after numbers for stealth or performance work. CI runs fmt, the rename check, clippy and tests on Linux, plus the cross-compile, MSRV and native Windows checks; a change to Markdown files alone skips it. `supply-chain.yml` runs `cargo deny check` and `cargo audit` when the dependencies change and nightly.
 
 ## Shipping
 

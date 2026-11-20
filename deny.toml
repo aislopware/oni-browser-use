@@ -1,2 +1,26 @@
+# `cargo deny check` runs in .github/workflows/supply-chain.yml. Every target
+# triple is in the graph, so Windows-only and wasm-only crates are checked too.
+
 [advisories]
 yanked = "deny"
+
+[licenses]
+# Exactly the licences the dependency tree needs; cargo-deny warns when one
+# stops being used. Crates offering a choice (MIT OR Apache-2.0, …) are
+# satisfied by one of these, so their other options need no entry.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",        # subtle
+    "CDLA-Permissive-2.0", # webpki-roots (the Mozilla CA list)
+    "ISC",                 # ring, rustls-webpki, untrusted
+    "MIT",
+    "Unicode-3.0",         # icu_*, unicode-ident
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

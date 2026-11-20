@@ -1,0 +1,55 @@
+name: Supply chain
+
+# Advisories, licences, bans and sources of the dependency tree (deny.toml).
+# Pull requests run it when the dependencies change; the schedule catches
+# advisories published against a lockfile nobody touched.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * *"
+  push:
+    branches: [main]
+    paths: &deps
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/supply-chain.yml"
+  pull_request:
+    branches: [main]
+    paths: *deps
+
+concurrency:
+  group: supply-chain-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 5
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.100.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: supply-chain
+      - name: Install cargo-deny and cargo-audit
+        # Pinned; rust-cache keeps ~/.cargo/bin, so later runs skip the build.
+        run: cargo install --locked cargo-deny@0.22.0 cargo-audit@0.23.0
+      - name: cargo deny
+        run: cargo deny check
+      - name: cargo audit
+        # cargo-deny checks the crates the build compiles; cargo-audit reads
+        # every Cargo.lock entry, including ones never compiled (older Cargo
+        # locked weak optional deps), which is where the quinn advisories sat.
+        run: cargo audit
