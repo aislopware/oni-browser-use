@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Upstream 4.6.10 and 4.7.0, merged.
+
+### Added
+- `see logs=xhr` lists the page's XHR and fetch calls, one row per endpoint: method, status (or `PENDING` or the error), the full URL with its query and GraphQL variables, and the names of the request headers, never their values. Failures come first; `clear=true` resets the list, and more than 30 endpoints go to an artifact.
+- A navigation that fails on an HTTP status names it: `HTTP 429 Too Many Requests (retry-after: 45s)`, with the reason phrase when the server sends none and what to do next. A 4xx or 5xx page that loads with a body gets an `http:` notice.
+- `see` takes `url` and `block`, so opening a page and reading it is one call (`--block` on the CLI).
+- `format=json` returns JSON for `see logs=console|network|xhr` and `see find`, moved to an artifact past 12 KB.
+- `act fill` takes `nth` and `role` per field for a form that repeats a label, and `submit` takes `selector=`, `ref=`, `text=` and `label=`.
+
+### Changed
+- The tool descriptions, the MCP instructions and `help --json` are rewritten within the same token budget: the instructions now lead with the one-call patterns (read a URL in one `see`, `fill` with `submit`, `batch`, arming `dialog` before the click) and say that navigation errors carry the HTTP status.
+
+### Fixed
+- Text or label addressing that matches several live elements lists the candidate refs (`ref role "name" [ctx]`), so no extra `see` is needed to pick one.
+- After Chrome reconnects, a call that navigates (`act navigate`, a `url=` on `act` or `see`) no longer says the page was reset to `about:blank`.
+- The CLI matches MCP: with `--format json` a notice (dialog, consent, `http:`) wraps the output as `{data,note}` instead of trailing it, and an error carries the current page state. `state` tab ops take `--slim`, and `act upload` refuses a positional that is not a ref.
+- `act press` on a target raises the tab only when it has to, so `OBU_NO_ACTIVATE=1` holds for it too.
+- A `body: true` download without `OBU_PROXY` goes direct instead of through an ambient `HTTP_PROXY`/`ALL_PROXY`, and proxy schemes are matched case-insensitively.
+- `act download` checks the URL first: `javascript:`, `chrome:`, `devtools:`, `about:` and other schemes it cannot fetch are refused, a bare host gets a scheme, and a relative path resolves against the current page.
+- A real-browser profile whose lock names a pid from another namespace (a Flatpak sandbox, pid 1, a recycled pid) is no longer reported as in use.
+- A CDP session ends when Chrome detaches its target, so waiting on a closed tab or worker returns at once instead of at its deadline.
+
+### Stealth
+- WebGL `getParameter` passes a native `null` through: a lost context and enums gated on an extension answer as stock Chrome does instead of with a made-up limit.
+- Xvfb runs at 96 DPI, so `devicePixelRatio` is 1 and the screen matches the display's pixels.
+
+### Performance
+- A navigation with no requests in flight skips the second settle (about 120–160 ms), and `url=` read steps in `act batch` and `run` no longer wait 1.2 s twice.
+
 ## [4.9.1] - 2026-11-20
 
 ### Added

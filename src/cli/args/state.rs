@@ -77,6 +77,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 "secure" => j["secure"] = json!(true),
                 "http-only" => j["httpOnly"] = json!(true),
                 "clear" => j["clear"] = json!(true),
+                "slim" => j["slim"] = json!(true),
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for state — see 'obu help state'"

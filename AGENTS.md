@@ -66,7 +66,7 @@ Ask the maintainer (an issue or a draft PR) before you add a dependency (binary 
 
 ## Verification
 
-Reproduce a bug before you fix it, and judge a change by live readback: a command that exits 0 does not show that the behavior works. The instruments below run as parallel CI jobs in `.github/workflows/probes.yml` (nightly, on `v*` tags, and on demand). Locally, run only the one that covers your change, with `OBU=target/gate/obu`; each tool's README has the details.
+Reproduce a bug before you fix it, and judge a change by live readback: a command that exits 0 does not show that the behavior works. The instruments below run as parallel CI jobs in `.github/workflows/probes.yml` (nightly, on `v*` tags, and on demand). Locally, run only the one that covers your change, with `OBU=target/gate/obu`; [tools/README.md](tools/README.md) has the details.
 
 - `target/gate/obu audit`: stealth vectors and cross-restart stamps. The suite prints its own total, which depends on GPU and profile; the bar is no `FAIL` line and stable stamps.
 - `python3 tools/diff_oracle/oracle.py`: stock Chrome against obu on the same display. Each difference is EXPECTED (a documented mask) or DIVERGENT; the bar is `divergent: 0`, and a DIVERGENT line blocks the change. `--lane real` checks the real-browser lane, where the bar is 0 expected and 0 divergent.

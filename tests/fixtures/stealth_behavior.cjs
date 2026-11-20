@@ -114,10 +114,13 @@ async function glLimits() {
   // the differential oracle flags the same gap (issue #85 item 10).
   const { ctx, g } = mockWindow();
   class WebGLRenderingContext {
-    constructor() { this.native = { 3379: 8192, 35661: 16, 3386: new Int32Array([8192, 8192]), 33902: new Float32Array([1, 1]), 33901: new Float32Array([1, 1]) }; }
+    constructor() { this.native = { 3379: 8192, 35661: 16, 3386: new Int32Array([8192, 8192]), 33902: new Float32Array([1, 1]), 33901: new Float32Array([1, 1]), 36183: null, 37445: null, 37446: null }; }
     getParameter(p) {
-      const v = this.native[p];
-      return v === undefined ? 0 : (typeof v === 'object' ? new v.constructor(v) : v);
+      if (p in this.native) {
+        const v = this.native[p];
+        return v && typeof v === 'object' ? new v.constructor(v) : v;
+      }
+      return 0;
     }
   }
   class WebGL2RenderingContext extends WebGLRenderingContext {
@@ -131,6 +134,18 @@ async function glLimits() {
   assert.equal(one.getParameter(35661), 16, 'combined texture units capped at the backend');
   assert.deepEqual(Array.from(one.getParameter(3386)), [8192, 8192], 'viewport dims capped at the backend');
   assert.deepEqual(Array.from(one.getParameter(33902)), [1, 1], 'a range never exceeds the backend maximum');
+  assert.equal(one.getParameter(36183), null, 'WebGL2-only MAX_SAMPLES stays null on WebGL1');
+  assert.equal(one.getParameter(37445), null, 'UNMASKED_VENDOR_WEBGL stays null before WEBGL_debug_renderer_info');
+  assert.equal(one.getParameter(37446), null, 'UNMASKED_RENDERER_WEBGL stays null before WEBGL_debug_renderer_info');
+  one.native[37445] = 'Google Inc. (Mesa)';
+  one.native[37446] = 'ANGLE (Mesa, llvmpipe, OpenGL 4.5)';
+  assert.notEqual(one.getParameter(37445), null, 'enabled extension returns spoofed vendor');
+  assert.ok(!String(one.getParameter(37446)).includes('llvmpipe'), 'enabled extension masks software renderer');
+  // Lost context: native returns null for every enum; mask must pass null through.
+  one.native[3379] = null;
+  one.native[3386] = null;
+  assert.equal(one.getParameter(3379), null, 'lost-context scalar stays null');
+  assert.equal(one.getParameter(3386), null, 'lost-context viewport stays null');
   // The profile's own ranges differ per platform (Intel 255, Apple 511, …):
   // the property is that the backend's narrower maximum wins, whatever it is.
   assert.deepEqual(Array.from(one.getParameter(33901)), [1, 1], 'a second range clamps the same way');
