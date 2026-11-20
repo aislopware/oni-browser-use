@@ -1,6 +1,6 @@
 {
   "name": "obu-windows-x64",
-  "version": "4.9.1",
+  "version": "4.10.0",
   "description": "Obu binary for Windows x86_64",
   "license": "Apache-2.0",
   "os": [
