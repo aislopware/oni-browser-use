@@ -1,24 +1,24 @@
 # Support Matrix
 
-Current verification coverage by platform, browser engine, and runnable instrument. Current release: `4.6.9` (verified locally on Arch Linux x86_64 with Chromium `157.0.8103.38` and pinned `rustc 1.100.0`).
+Verification coverage by platform, browser engine and instrument, as the workflows run it. CI builds with the toolchain pinned in `rust-toolchain.toml` and checks the MSRV in `Cargo.toml`.
 
 ## Platforms
 
 | Platform | Blocking CI (`ci.yml` / `gate.yml`) | Release & Runtime Coverage |
 |---|---|---|
-| Linux x86_64 | `fmt`, `clippy --release --all-targets -D warnings`, `cargo test --profile gate`, MSRV `1.88.0` check | glibc `2.28` `zigbuild` + ABI check + binary smoke in `release.yml`; parallel Chrome suite in `probes.yml`; full local probe floor + `diff_oracle` on both lanes |
-| Linux ARM64 | Cross `cargo check --all-targets` (`zig cc`) | glibc `2.28` `zigbuild` + ABI check in `release.yml`; physical ARM64/Raspberry Pi browser runtime not run |
-| macOS Apple Silicon (`darwin-arm64`) | Native `cargo check --all-targets`, unit tests (`--lib`), `cargo build --release` on `macos-26` | Native `macos-26` release binary in `release.yml` |
-| macOS Intel (`darwin-x64`) | Cross `cargo check --all-targets` | Built on `macos-26` (`--target x86_64-apple-darwin`) in `release.yml`; not executed natively (`macos-26-intel` wedges headful Chrome in `ISIconManager` XPC) |
-| Windows x86_64 | Cross `cargo check --all-targets` + native check, unit tests (`--lib`), and `cargo build --release` on `windows-latest` | `zigbuild` PE binary in `release.yml` |
+| Linux x86_64 | `fmt`, rename check, `clippy --release --all-targets -D warnings`, `cargo test --profile gate`, MSRV check | glibc `2.28` `zigbuild` + ABI check + binary smoke in `release.yml`; parallel Chrome suite in `probes.yml` |
+| Linux ARM64 | Cross `clippy --all-targets -D warnings` (`zig cc`) | Not built by `release.yml`; no binary published, no browser runtime in CI |
+| macOS Apple Silicon (`darwin-arm64`) | Cross `clippy --all-targets -D warnings` | Native release binary in `release.yml`, built on the organisation's own Mac, where the release gate also runs native `cargo check --all-targets`, unit tests (`--lib`) and `cargo build --release` |
+| macOS Intel (`darwin-x64`) | Cross `clippy --all-targets -D warnings` | Not built by `release.yml`; no binary published |
+| Windows x86_64 | Cross `clippy --all-targets -D warnings` + native check, unit tests (`--lib`), and `cargo build --release` on `windows-latest` | `zigbuild` PE binary in `release.yml`, run on `windows-latest` (`--version`, `obu audit` with the runner's Chrome) before publishing |
 | Android (`aarch64-linux-android`) | Source compile check (`ci.yml` NDK job) | Source-level `cfg` guard only; no binary published and no runtime claim |
 
 ## Browser Engines
 
 | Engine | Verified scope |
 |---|---|
-| Chromium `157` (Arch Linux x86_64) | Full local verification floor (`audit`, `diff_oracle` agent + real lanes, `qol_probe`, `lane_matrix`, `gap44`, `reliability_probe`) |
-| Google Chrome Stable (Ubuntu CI) | Parallel `probes.yml` browser jobs (`audit`, `qol`, `lanes`, `gap44`, `reliability`) |
+| Google Chrome Stable (Ubuntu CI) | Parallel `probes.yml` browser jobs (`audit`, `oracle`, `qol`, `lanes`, `gap44`, `reliability`) |
+| Google Chrome (Windows CI) | `obu audit` with the release binary in `release.yml` |
 | Flatpak `org.chromium.Chromium` (`1.18.4` x86_64) | Discovery, sandboxed launch, host persistence, upload staging, download, and teardown verified on Linux x86_64 |
 | Chromium forks (Brave, Helium, Edge, Vivaldi, Opera) | Discovery, wrapper/AppImage PID ownership, and clone unit/integration fixtures (`tools/rb_live/helium.py` available for manual Helium runs) |
 
@@ -45,7 +45,7 @@ See [tools/README.md](tools/README.md) for exact invocations and pass criteria.
 ## Unverified Gaps
 
 - **Remote `oracle` job in `probes.yml`**: currently fails on GitHub's Ubuntu runner before comparison starts (`stock Chrome debug endpoint did not come up`); verified locally on Linux x86_64.
-- **macOS & Windows live browser probes**: `gate.yml` runs native compile, unit tests, and release linking on `macos-26` and `windows-latest`; the live browser probe suite (`probes.yml`) runs on Linux only.
-- **Physical ARM64 / Raspberry Pi & SteamOS/Silverblue hosts**: covered by cross-builds, ABI checks, host-selector unit tests, and x86_64 Flatpak runs, not physical device runs.
+- **macOS & Windows live browser probes**: `gate.yml` runs native compile, unit tests and release linking on Windows for every change and on the organisation's Mac for releases, and `release.yml` runs `obu audit` on Windows; the probe suite (`probes.yml`) runs on Linux only.
+- **Physical ARM64 / Raspberry Pi & SteamOS/Silverblue hosts**: covered by the cross-target lint, host-selector unit tests, and x86_64 Flatpak runs, not physical device runs.
 - **Commercial upstream proxies & non-stock fork GUIs**: proxy tests use local forward proxies; non-Chromium forks outside manual Helium runs are covered by discovery/ownership fixtures rather than full GUI suites.
 - **`SharedWorker` stealth scope & scanned PDFs**: `SharedWorker` globals remain native by design to avoid breaking module/shared workers; scanned image PDFs have no in-driver OCR (`act download` hands raw bytes to the caller).
