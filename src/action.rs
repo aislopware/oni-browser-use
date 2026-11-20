@@ -561,6 +561,23 @@ mod action_tests {
     }
 
     #[test]
+    fn a_scroll_burst_never_outruns_the_room_it_can_travel() {
+        use super::verdict::wheel_total;
+        // `scroll 0 999999` on a page with 2422px left sends 2422, not 999999.
+        assert_eq!(wheel_total(999_999, Some((2422.0, 0.0)), 413.0), 2422.0);
+        assert_eq!(wheel_total(-999_999, Some((0.0, 1336.0)), 413.0), -1336.0);
+        // Within the room, the request stands.
+        assert_eq!(wheel_total(300, Some((2422.0, 0.0)), 413.0), 300.0);
+        // At the end of the room a viewport still goes out, so the wheel
+        // events a page may listen for still arrive.
+        assert_eq!(wheel_total(999_999, Some((0.0, 2422.0)), 413.0), 413.0);
+        assert_eq!(wheel_total(200, Some((0.0, 2422.0)), 413.0), 200.0);
+        // Unmeasured room: the request is sent as asked.
+        assert_eq!(wheel_total(999_999, None, 413.0), 999_999.0);
+        assert_eq!(wheel_total(0, Some((0.0, 0.0)), 413.0), 0.0);
+    }
+
+    #[test]
     fn scroll_verdict_reports_both_axes() {
         // A-hscroll: a carousel / wide page that DID scroll horizontally was
         // reported as "no movement - page already at the top".

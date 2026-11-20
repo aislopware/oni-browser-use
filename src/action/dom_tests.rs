@@ -593,6 +593,27 @@ eq([p.elx, p.elLeft], ['div#car', 300], 'the horizontal scroller under the wheel
     );
 }
 
+// ---- the probe measures how far a wheel burst can travel ----
+// A burst far past that room (`scroll 0 999999`) left Chrome animating the
+// overshoot after the call returned, and the next scroll moved the page.
+#[test]
+fn scroll_probe_measures_how_far_the_wheel_can_travel() {
+    let body = r#"
+const d = use(page({vw: 756, vh: 413, h: 2835},
+  h('div', {id: 'inner-scroll', rect: [178, 106, 400, 200], style: {overflow: 'auto'}, props: {scrollHeight: 604, clientHeight: 200, scrollTop: 40, scrollWidth: 400, clientWidth: 400, scrollLeft: 0}},
+    h('div', {id: 'content', rect: [178, 106, 400, 600]}, 'inner scroll content'))));
+d._sy = 100;
+const p = __PROBE__;
+eq([p.down, p.up], [2322 + 364, 100 + 40], 'page room plus the nested scroller room, both ways');
+eq([p.right, p.left], [0, 0], 'nothing scrolls horizontally');
+"#;
+    run(
+        "scroll_room",
+        body,
+        &[("__PROBE__", scroll_probe_expr(378.0, 206.0))],
+    );
+}
+
 // ---- A-ws: value fields read back exactly ----
 #[test]
 fn value_field_readback_keeps_whitespace() {

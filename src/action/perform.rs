@@ -678,10 +678,6 @@ pub async fn perform_with_network(
         Action::Scroll { dx, dy } => {
             // S16: eased multi-step scroll via Input.dispatchMouseEvent.
             // Produces trusted wheel events (window.scrollBy is untrusted).
-            let total_x = *dx as f64;
-            let total_y = *dy as f64;
-            let steps = (((total_x.abs() + total_y.abs()) / 150.0).round() as usize).clamp(4, 12);
-
             // Viewport center for the wheel event position.
             let (cx, cy) = cdp
                 .send(
@@ -710,6 +706,18 @@ pub async fn perform_with_network(
                 .await
                 .ok()
                 .and_then(|r| r.get("result").and_then(|x| x.get("value")).cloned());
+            let jnum = |v: &Option<serde_json::Value>, k: &str| {
+                v.as_ref().and_then(|o| o.get(k)).and_then(|n| n.as_f64())
+            };
+            let room = |forward: &str, back: &str| {
+                Some((jnum(&before_v, forward)?, jnum(&before_v, back)?))
+            };
+            // Chrome keeps animating a burst far past the scrollable room
+            // after the call returns (measured: `scroll 0 999999` moved the
+            // page again a second later, under the next action).
+            let total_x = wheel_total(*dx, room("right", "left"), 2.0 * cx);
+            let total_y = wheel_total(*dy, room("down", "up"), 2.0 * cy);
+            let steps = (((total_x.abs() + total_y.abs()) / 150.0).round() as usize).clamp(4, 12);
 
             let mut rng = crate::stealth::biometrics::Rng::new();
             for i in 0..steps {
@@ -743,6 +751,18 @@ pub async fn perform_with_network(
                 tokio::time::sleep(std::time::Duration::from_millis(jitter)).await;
             }
 
+            let _ = cdp
+                .send_with_timeout(
+                    "Runtime.evaluate",
+                    Some(json!({
+                        "expression": scroll_settle_expr(cx, cy),
+                        "awaitPromise": true,
+                        "returnByValue": true,
+                    })),
+                    Duration::from_secs(2),
+                )
+                .await;
+
             // Sample again and record the measured movement for the verdict.
             let after_v = cdp
                 .send(
@@ -752,9 +772,6 @@ pub async fn perform_with_network(
                 .await
                 .ok()
                 .and_then(|r| r.get("result").and_then(|x| x.get("value")).cloned());
-            let jnum = |v: &Option<serde_json::Value>, k: &str| {
-                v.as_ref().and_then(|o| o.get(k)).and_then(|n| n.as_f64())
-            };
             // Both samples must be real measurements: a failed probe must not
             // degrade into zeroes, or the verdict would say "already at the
             // top" with no measurement behind it - exactly the class this

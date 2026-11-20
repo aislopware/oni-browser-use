@@ -136,13 +136,37 @@ pub struct ScrollReport {
     pub scroller_x_after: Option<f64>,
 }
 
-/// Build the scroll-position probe: window scroller state on both axes + the
-/// deepest vertical and horizontal scrollable elements under (cx, cy). One
-/// evaluate, best-effort.
+/// Build the scroll-position probe: window scroller state on both axes, the
+/// deepest vertical and horizontal scrollable elements under (cx, cy), and
+/// the room a wheel there can travel each way (`down`/`up`/`right`/`left`:
+/// the page plus every scroller under the point). One evaluate, best-effort.
 pub(super) fn scroll_probe_expr(cx: f64, cy: f64) -> String {
-    let js = "(()=>{var d=document;var se=d.scrollingElement||d.documentElement;var out={y:se?se.scrollTop:0,max:Math.max(0,(se?se.scrollHeight:0)-(window.innerHeight||0)),el:'',elTop:null,x:se?se.scrollLeft:0,maxX:Math.max(0,(se?se.scrollWidth:0)-(window.innerWidth||0)),elx:'',elLeft:null};try{var desc=function(e){return e.tagName.toLowerCase()+((e.getAttribute&&e.getAttribute('id'))?('#'+String(e.getAttribute('id')).slice(0,24)):'');};var can=function(v){return v==='auto'||v==='scroll'||v==='overlay';};var hit=d.elementFromPoint(__X__,__Y__);var hops=0;while(hit&&hops<40&&(out.elTop===null||out.elLeft===null)){if(hit!==d.body&&hit!==d.documentElement){var cs=getComputedStyle(hit);if(out.elTop===null&&can(cs.overflowY)&&hit.scrollHeight>hit.clientHeight+1){out.el=desc(hit);out.elTop=hit.scrollTop;}if(out.elLeft===null&&can(cs.overflowX)&&hit.scrollWidth>hit.clientWidth+1){out.elx=desc(hit);out.elLeft=hit.scrollLeft;}}hit=hit.parentElement||(hit.getRootNode&&hit.getRootNode().host)||null;hops++;}}catch(e){}return out;})()";
+    let js = "(()=>{var d=document;var se=d.scrollingElement||d.documentElement;var out={y:se?se.scrollTop:0,max:Math.max(0,(se?se.scrollHeight:0)-(window.innerHeight||0)),el:'',elTop:null,x:se?se.scrollLeft:0,maxX:Math.max(0,(se?se.scrollWidth:0)-(window.innerWidth||0)),elx:'',elLeft:null};out.down=Math.max(0,out.max-out.y);out.up=out.y;out.right=Math.max(0,out.maxX-out.x);out.left=out.x;try{var desc=function(e){return e.tagName.toLowerCase()+((e.getAttribute&&e.getAttribute('id'))?('#'+String(e.getAttribute('id')).slice(0,24)):'');};var can=function(v){return v==='auto'||v==='scroll'||v==='overlay';};var hit=d.elementFromPoint(__X__,__Y__);var hops=0;while(hit&&hops<40){if(hit!==d.body&&hit!==d.documentElement){var cs=getComputedStyle(hit);if(can(cs.overflowY)&&hit.scrollHeight>hit.clientHeight+1){if(out.elTop===null){out.el=desc(hit);out.elTop=hit.scrollTop;}out.down+=Math.max(0,hit.scrollHeight-hit.clientHeight-hit.scrollTop);out.up+=hit.scrollTop;}if(can(cs.overflowX)&&hit.scrollWidth>hit.clientWidth+1){if(out.elLeft===null){out.elx=desc(hit);out.elLeft=hit.scrollLeft;}out.right+=Math.max(0,hit.scrollWidth-hit.clientWidth-hit.scrollLeft);out.left+=hit.scrollLeft;}}hit=hit.parentElement||(hit.getRootNode&&hit.getRootNode().host)||null;hops++;}}catch(e){}return out;})()";
     js.replace("__X__", &format!("{cx}"))
         .replace("__Y__", &format!("{cy}"))
+}
+
+/// Resolves once the page and every scroller under (cx, cy) have held still
+/// for three frames (false after 1 s). Chrome animates a wheel burst after
+/// the last event is acknowledged, so a read taken at once under-reports the
+/// move and the tail lands in the next action.
+pub(super) fn scroll_settle_expr(cx: f64, cy: f64) -> String {
+    let js = "new Promise(function(r){var d=document;var els=[d.scrollingElement||d.documentElement];var hit=d.elementFromPoint(__X__,__Y__);var hops=0;while(hit&&hops<40){els.push(hit);hit=hit.parentElement||(hit.getRootNode&&hit.getRootNode().host)||null;hops++;}var pos=function(){return els.map(function(e){return e?e.scrollTop+','+e.scrollLeft:'';}).join(';');};var last=pos(),still=0;setTimeout(function(){r(false);},1000);var f=function(){var p=pos();if(p===last){if(++still>=3){return r(true);}}else{still=0;last=p;}requestAnimationFrame(f);};requestAnimationFrame(f);})";
+    js.replace("__X__", &format!("{cx}"))
+        .replace("__Y__", &format!("{cy}"))
+}
+
+/// The wheel delta a scroll burst sends on one axis: the request, capped at
+/// the measured room in its direction (`room` = forward, back) but never
+/// below one viewport, so a page still receives its wheel events at an edge.
+/// Unmeasured room leaves the request as asked.
+pub(super) fn wheel_total(requested: i64, room: Option<(f64, f64)>, viewport: f64) -> f64 {
+    let requested = requested as f64;
+    let Some((forward, back)) = room else {
+        return requested;
+    };
+    let room = if requested > 0.0 { forward } else { back };
+    requested.signum() * requested.abs().min(room.max(viewport).ceil())
 }
 
 /// G01/G09: observable toggle state (checked / aria-selected / aria-checked)
