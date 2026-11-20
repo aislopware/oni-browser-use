@@ -6,7 +6,7 @@ Current verification coverage by platform, browser engine, and runnable instrume
 
 | Platform | Blocking CI (`ci.yml` / `gate.yml`) | Release & Runtime Coverage |
 |---|---|---|
-| Linux x86_64 | `fmt`, `clippy --release --all-targets -D warnings`, `cargo test --profile gate`, MSRV `1.86.0` check | glibc `2.28` `zigbuild` + ABI check + binary smoke in `release.yml`; parallel Chrome suite in `probes.yml`; full local probe floor + `diff_oracle` on both lanes |
+| Linux x86_64 | `fmt`, `clippy --release --all-targets -D warnings`, `cargo test --profile gate`, MSRV `1.88.0` check | glibc `2.28` `zigbuild` + ABI check + binary smoke in `release.yml`; parallel Chrome suite in `probes.yml`; full local probe floor + `diff_oracle` on both lanes |
 | Linux ARM64 | Cross `cargo check --all-targets` (`zig cc`) | glibc `2.28` `zigbuild` + ABI check in `release.yml`; physical ARM64/Raspberry Pi browser runtime not run |
 | macOS Apple Silicon (`darwin-arm64`) | Native `cargo check --all-targets`, unit tests (`--lib`), `cargo build --release` on `macos-26` | Native `macos-26` release binary in `release.yml` |
 | macOS Intel (`darwin-x64`) | Cross `cargo check --all-targets` | Built on `macos-26` (`--target x86_64-apple-darwin`) in `release.yml`; not executed natively (`macos-26-intel` wedges headful Chrome in `ISIconManager` XPC) |

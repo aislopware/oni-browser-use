@@ -26,7 +26,7 @@ export OBU_HOME=$(mktemp -d)
 
 A running daemon or MCP server keeps executing the old binary, so stop it after each rebuild. `obu doctor` checks the environment.
 
-`rust-toolchain.toml` pins the toolchain CI uses; bump it deliberately and run the gate on the new version. CI also checks the MSRV (1.86), so no std APIs newer than that. Chrome or Chromium must be installed; on headless Linux obu runs its own Xvfb and window manager.
+`rust-toolchain.toml` pins the toolchain CI uses; bump it deliberately and run the gate on the new version. CI also checks the MSRV (1.88), so no std APIs newer than that. Chrome or Chromium must be installed; on headless Linux obu runs its own Xvfb and window manager.
 
 ## Where to change what
 

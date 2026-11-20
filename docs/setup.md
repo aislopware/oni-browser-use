@@ -56,7 +56,7 @@ Use the same `--profile` for setup and restore when choosing a named profile. `H
 
 ## From source
 
-The crate declares Rust 1.86 as its minimum and the checkout pins the toolchain used by CI. Use the repository pin for development.
+The crate declares Rust 1.88 as its minimum and the checkout pins the toolchain used by CI. Use the repository pin for development.
 
 ```sh
 git clone https://github.com/aislopware/oni-browser-use.git

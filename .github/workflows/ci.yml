@@ -34,18 +34,18 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
-          key: msrv-1.86
+          key: msrv-1.88
       - name: Check advertised minimum Rust version
         # rust-toolchain.toml pins 1.100.0 for the workspace; this job must
         # override it explicitly or rustup follows the file and the grep below
         # fails on the pinned version instead of exercising the MSRV.
         env:
-          RUSTUP_TOOLCHAIN: "1.86.0"
+          RUSTUP_TOOLCHAIN: "1.88.0"
         run: |
-          rustc --version | grep -E '^rustc 1[.]86[.]0 '
+          rustc --version | grep -E '^rustc 1[.]88[.]0 '
           cargo check --locked --all-targets
 
   # The android cfg gates are source-level support (no Android artifact is

@@ -77,7 +77,7 @@ async fn hum_loop(
         }
 
         cycle = cycle.wrapping_add(1);
-        if cycle == 1 || cycle % 12 == 0 {
+        if cycle == 1 || cycle.is_multiple_of(12) {
             if let Some(dims) = cdp
                 .send(
                     "Runtime.evaluate",

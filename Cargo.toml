@@ -2,7 +2,7 @@
 name = "obu"
 version = "4.9.1"
 edition = "2021"
-rust-version = "1.86"
+rust-version = "1.88"
 license = "Apache-2.0"
 description = "An agentic browser driver for AI — few tools, full control, real stealth, god-tier token efficiency."
 repository = "https://github.com/aislopware/oni-browser-use"
