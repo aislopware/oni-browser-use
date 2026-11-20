@@ -77,6 +77,14 @@ pub async fn handle_see_tool(args: &Value, page: &mut Page) -> Result<String> {
         if crate::realbrowser::input_paused() {
             return Err(crate::realbrowser::paused_error());
         }
+        if let Some(block) = args
+            .get("block")
+            .and_then(Value::as_str)
+            .filter(|b| !b.is_empty())
+        {
+            let mask = page.set_block_classes(block).await?;
+            page.remember_block_choice(url, block, mask != 0);
+        }
         page.navigate(url).await?;
     }
     handle_see(args, page).await
@@ -156,11 +164,11 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
             Ok(page.delta_view(&delta, budget))
         };
     }
-    // format=json is only meaningful for extract=/artifact= reads; anything
-    // else is refused instead of silently returning text.
-    if json_out && extract.is_empty() {
+    // format=json is only meaningful for structured reads; anything else is
+    // refused instead of silently returning text.
+    if json_out && extract.is_empty() && logs.is_empty() && find.is_empty() {
         return Err(ObuError::Other(
-            "format=json applies to extract= (auto/json/links/forms) and artifact= reads - this mode returns text; drop format or use an extract read".into(),
+            "format=json applies to extract= (auto/json/links/forms), artifact=, changes=true, find= and logs= (console/network/xhr) reads - this mode returns text; drop format or use a structured read".into(),
         ));
     }
 
@@ -213,14 +221,18 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
         return Ok(out);
     }
 
-    // V8: logs — console (injection hook) or network (tracker ring).
+    // V8: logs — console (injection hook), network (completed ring), or xhr (deduplicated API ring).
     if !logs.is_empty() {
-        let out = handle_logs(page, logs).await?;
+        let out = if json_out {
+            handle_logs_json(page, logs).await?
+        } else {
+            handle_logs(page, logs).await?
+        };
         if args.get("clear").and_then(Value::as_bool).unwrap_or(false) {
-            if logs == "network" {
-                page.clear_network_log();
-            } else {
-                page.clear_console_log().await?;
+            match logs {
+                "network" => page.clear_network_log(),
+                "xhr" => page.clear_xhr_log(),
+                _ => page.clear_console_log().await?,
             }
         }
         return Ok(out);
@@ -266,18 +278,36 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
             // control is not there" and "it is there but not visible from
             // here" - one flat "not found" sent an agent hunting through
             // raw eval for a desktop-hidden trigger.
-            let diag_note = miss_diag_note(
-                crate::action::find_miss_diag(page.cdp_ref(), find)
-                    .await
-                    .ok(),
-            );
+            let diag = crate::action::find_miss_diag(page.cdp_ref(), find)
+                .await
+                .ok();
+            let diag_note = miss_diag_note(diag);
             // M11 contract is full-page search: when no ACTIONABLE element
             // matches, locate the text itself - the deepest containing
             // element with its container chain plus the actionables inside
             // it. "Leftover body text" then explains WHERE it lives (the
             // header pill, a draft editor, a closed confirm row) instead of
             // costing the agent an ancestor-walk to find out.
-            if let Some(loc) = crate::action::locate_text(page.cdp_ref(), find).await {
+            let loc = crate::action::locate_text(page.cdp_ref(), find).await;
+            if json_out {
+                let mut payload = json!({
+                    "query": find,
+                    "count": 0,
+                    "matches": [],
+                });
+                if !diag_note.is_empty() {
+                    payload["diag"] = json!(diag_note.trim());
+                }
+                if let Some(loc) = loc {
+                    payload["text_match"] = json!({
+                        "snippet": loc.snippet,
+                        "container": loc.desc,
+                        "nearby_actionables": loc.near,
+                    });
+                }
+                return super::bounded_json(&payload);
+            }
+            if let Some(loc) = loc {
                 let near = if loc.near.is_empty() {
                     String::new()
                 } else {
@@ -294,6 +324,26 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
                 ));
             }
             return Ok(format!("no elements matching \"{find}\" found{diag_note}"));
+        }
+        if json_out {
+            let rows: Vec<Value> = matches
+                .iter()
+                .map(|m| {
+                    let ref_id = page.model_mut().adopt(&m.sig, &m.role, &m.name, &m.frame);
+                    json!({
+                        "ref": ref_id,
+                        "role": m.role,
+                        "name": m.name,
+                        "ctx": m.ctx,
+                        "score": m.score,
+                    })
+                })
+                .collect();
+            return super::bounded_json(&json!({
+                "query": find,
+                "count": rows.len(),
+                "matches": rows,
+            }));
         }
         let mut out = format!(
             "find \"{}\": {} match{}\n",
@@ -423,12 +473,92 @@ pub async fn handle_see(args: &Value, page: &mut Page) -> Result<String> {
     Ok(out)
 }
 
+/// Structured JSON form of `see logs=console|network|xhr format=json`.
+/// Offloads payloads past 12 KB into a JSON artifact envelope so responses stay
+/// bounded and strictly parseable.
+async fn handle_logs_json(page: &mut Page, kind: &str) -> Result<String> {
+    let value = match kind {
+        "xhr" => {
+            let entries = page.xhr_log();
+            serde_json::to_string(&xhr_entries_json(&entries))?
+        }
+        "network" => {
+            let entries = page.network_log();
+            let mut bad = Vec::new();
+            let mut good = Vec::new();
+            for e in &entries {
+                let row = json!({
+                    "method": e.method,
+                    "url": e.url,
+                    "status": e.status,
+                    "error": e.error,
+                });
+                if e.error.is_some() || e.status >= 400 {
+                    bad.push(row);
+                } else {
+                    good.push(row);
+                }
+            }
+            bad.extend(good);
+            serde_json::to_string(&bad)?
+        }
+        "console" => {
+            if crate::realbrowser::real_lane() {
+                json!({
+                    "data": [],
+                    "note": "console: unavailable on the real-browser lane (page injection is off)"
+                })
+                .to_string()
+            } else {
+                let entries = page.console_log().await?;
+                let arr = entries.as_array().cloned().unwrap_or_default();
+                let mut errors = Vec::new();
+                let mut warnings = Vec::new();
+                let mut rest = Vec::new();
+                for e in arr {
+                    let level = e.get("l").and_then(Value::as_str).unwrap_or("");
+                    let row = json!({
+                        "level": level,
+                        "message": e.get("m").and_then(Value::as_str).unwrap_or(""),
+                        "timestamp": e.get("t").cloned().unwrap_or(Value::Null),
+                    });
+                    match level {
+                        "error" | "exception" | "unhandledrejection" => errors.push(row),
+                        "warn" => warnings.push(row),
+                        _ => rest.push(row),
+                    }
+                }
+                errors.extend(warnings);
+                errors.extend(rest);
+                serde_json::to_string(&errors)?
+            }
+        }
+        _ => {
+            return Err(ObuError::Other(format!(
+                "unknown logs kind: {kind} (use 'console', 'network', or 'xhr')"
+            )))
+        }
+    };
+    if value.len() > 12000 {
+        let path = crate::artifacts::write_artifact(&value, "json")?;
+        Ok(json!({"artifact":path,"bytes":value.len(),"next_offset":0}).to_string())
+    } else {
+        Ok(value)
+    }
+}
+
 /// V8: `see logs=console|network` — introspection for agent
 /// self-diagnosis. Errors/warnings first. Artifact-offloaded
 /// when the log is long.
 pub async fn handle_logs(page: &mut Page, kind: &str) -> Result<String> {
     match kind {
         "console" => {
+            if crate::realbrowser::real_lane() {
+                return Ok(
+                    "console: unavailable on the real-browser lane (page injection is off)"
+                        .to_string(),
+                );
+            }
             let entries = page.console_log().await?;
             let arr = entries.as_array().cloned().unwrap_or_default();
             if arr.is_empty() {
@@ -502,9 +632,176 @@ pub async fn handle_logs(page: &mut Page, kind: &str) -> Result<String> {
             }
             Ok(out)
         }
+        "xhr" => {
+            let entries = page.xhr_log();
+            format_xhr_log(&entries)
+        }
         _ => Err(ObuError::Other(format!(
-            "unknown logs kind: {kind} (use 'console' or 'network')"
+            "unknown logs kind: {kind} (use 'console', 'network', or 'xhr')"
         ))),
+    }
+}
+
+fn redacted_header_names(headers: &[(String, String)]) -> Vec<String> {
+    let mut names: Vec<String> = headers
+        .iter()
+        .map(|(k, _)| k.to_ascii_lowercase())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn xhr_entries_json(entries: &[crate::page::XhrEntry]) -> Vec<Value> {
+    entries
+        .iter()
+        .map(|e| {
+            json!({
+                "method": e.method,
+                "url": e.url,
+                "status": e.status,
+                "done": e.done,
+                "error": e.error,
+                "header_names": redacted_header_names(&e.headers),
+            })
+        })
+        .collect()
+}
+
+fn format_xhr_log(entries: &[crate::page::XhrEntry]) -> Result<String> {
+    if entries.is_empty() {
+        return Ok("xhr: (no XHR/fetch requests observed)".to_string());
+    }
+    let mut bad = Vec::new();
+    let mut good = Vec::new();
+    let mut pending = Vec::new();
+    for e in entries {
+        let status_str = if !e.done {
+            "PENDING".to_string()
+        } else if e.status > 0 {
+            e.status.to_string()
+        } else {
+            e.error.clone().unwrap_or_else(|| "ERR".into())
+        };
+        let names = redacted_header_names(&e.headers);
+        let hdr_note = if names.is_empty() {
+            String::new()
+        } else {
+            format!(" [headers: {}]", names.join(", "))
+        };
+        // Keep full URLs untruncated: GraphQL operations, cursors, and query
+        // filters are the exact state an agent inspects logs=xhr to read.
+        let line = format!("{} {} {}{}", e.method, status_str, e.url, hdr_note);
+        if !e.done {
+            pending.push(line);
+        } else if e.error.is_some() || e.status >= 400 {
+            bad.push(line);
+        } else {
+            good.push(line);
+        }
+    }
+    let mut out = format!("xhr ({} endpoints):\n", entries.len());
+    for l in bad.iter().chain(good.iter()).chain(pending.iter()).take(30) {
+        out.push_str(l);
+        out.push('\n');
+    }
+    if entries.len() > 30 {
+        let json_str = serde_json::to_string_pretty(&xhr_entries_json(entries))?;
+        let path = crate::artifacts::write_artifact(&json_str, "json")?;
+        out.push_str(&format!("…and {} more → {path}\n", entries.len() - 30));
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod xhr_log_tests {
+    use super::*;
+    use crate::page::XhrEntry;
+
+    #[test]
+    fn xhr_log_orders_failures_preserves_full_query_and_redacts_secret_values() {
+        let long_url = "https://api.example.com/graphql?operationName=ListItems&variables=%7B%22cursor%22%3A%22abc1234567890def%22%2C%22limit%22%3A50%7D";
+        let entries = vec![
+            XhrEntry {
+                id: "1".into(),
+                method: "GET".into(),
+                url: long_url.into(),
+                status: 200,
+                done: true,
+                error: None,
+                headers: vec![
+                    (
+                        "Authorization".into(),
+                        "Bearer SECRET_TOKEN_DO_NOT_LEAK".into(),
+                    ),
+                    ("X-CSRF-Token".into(), "csrf_secret_999".into()),
+                ],
+            },
+            XhrEntry {
+                id: "2".into(),
+                method: "POST".into(),
+                url: "https://api.example.com/v1/submit".into(),
+                status: 429,
+                done: true,
+                error: None,
+                headers: vec![],
+            },
+            XhrEntry {
+                id: "3".into(),
+                method: "GET".into(),
+                url: "https://api.example.com/v1/poll".into(),
+                status: 0,
+                done: false,
+                error: None,
+                headers: vec![],
+            },
+        ];
+        let text = format_xhr_log(&entries).unwrap();
+        assert!(
+            text.contains(long_url),
+            "full query string must not be truncated: {text}"
+        );
+        assert!(text.contains("[headers: authorization, x-csrf-token]"));
+        assert!(
+            !text.contains("SECRET_TOKEN_DO_NOT_LEAK"),
+            "header values must never leak"
+        );
+        assert!(
+            !text.contains("csrf_secret_999"),
+            "csrf values must never leak"
+        );
+        let pos_429 = text.find("POST 429").unwrap();
+        let pos_200 = text.find("GET 200").unwrap();
+        let pos_pending = text.find("GET PENDING").unwrap();
+        assert!(pos_429 < pos_200 && pos_200 < pos_pending);
+
+        let json_rows = serde_json::to_string(&xhr_entries_json(&entries)).unwrap();
+        assert!(!json_rows.contains("SECRET_TOKEN_DO_NOT_LEAK"));
+        assert!(json_rows.contains("\"header_names\":[\"authorization\",\"x-csrf-token\"]"));
+    }
+
+    #[test]
+    fn validate_accepts_structured_json_reads_and_rejects_text_only_modes() {
+        for ok in [
+            json!({"logs": "xhr"}),
+            json!({"logs": "xhr", "format": "json"}),
+            json!({"logs": "network", "format": "json"}),
+            json!({"logs": "console", "format": "json"}),
+            json!({"find": "Submit", "format": "json"}),
+            json!({"url": "https://example.com", "block": "images,fonts", "mode": "content"}),
+        ] {
+            crate::mcp::server::validate::see(&ok).unwrap_or_else(|e| panic!("{ok}: {e}"));
+        }
+        for bad in [
+            json!({"mode": "content", "format": "json"}),
+            json!({"mode": "outline", "format": "json"}),
+            json!({"mode": "model", "format": "json"}),
+        ] {
+            assert!(
+                crate::mcp::server::validate::see(&bad).is_err(),
+                "expected error for {bad}"
+            );
+        }
     }
 }
 

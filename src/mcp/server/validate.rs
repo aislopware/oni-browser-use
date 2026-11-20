@@ -14,7 +14,7 @@ pub(super) fn fields(args: &Value, tool: &str) -> Result<()> {
     let strings: &[&str] = match tool {
         "see" => &[
             "mode", "filter", "find", "extract", "logs", "scope", "artifact", "format", "sort",
-            "url",
+            "url", "block",
         ],
         _ => &[
             "action",
@@ -367,10 +367,12 @@ pub(super) fn see(args: &Value) -> Result<()> {
     if args.get("format").and_then(Value::as_str) == Some("json")
         && !nonempty(args, "extract")
         && !nonempty(args, "artifact")
+        && !nonempty(args, "logs")
+        && !nonempty(args, "find")
         && args.get("changes").and_then(Value::as_bool) != Some(true)
     {
         return Err(ObuError::Usage(
-            "format=json applies to extract=, artifact= or changes=true; this mode returns text"
+            "format=json applies to extract=, artifact=, changes=true, find= or logs=; this mode returns text"
                 .into(),
         ));
     }
@@ -392,7 +394,7 @@ pub(super) fn see(args: &Value) -> Result<()> {
     for (key, choices) in [
         ("mode", "model|content|outline"),
         ("extract", "auto|json|links|forms"),
-        ("logs", "console|network"),
+        ("logs", "console|network|xhr"),
         ("format", "text|json"),
     ] {
         if let Some(value) = args
@@ -781,6 +783,11 @@ mod tests {
         assert!(act(&json!({"action":"type","ref":"e1","text":""})).is_ok());
         assert!(act(&json!({"action":"click","x":1.5,"y":2})).is_ok());
         assert!(act(&json!({"action":"fill","fields":[{"label":"Agree","check":false}]})).is_ok());
+        assert!(act(&json!({"action":"fill","fields":[{"label":"Email","role":"textbox","nth":2,"text":"a@b.test"}],"submit":"selector=button[type=submit]"})).is_ok());
+        assert!(act(
+            &json!({"action":"fill","fields":[{"label":"Email","nth":0,"text":"a@b.test"}]})
+        )
+        .is_err());
         assert!(see(&json!({"mode":"content","budget":10})).is_ok());
         assert!(see(&json!({"mode":"extract","extract":"auto"})).is_ok());
         assert!(see(&json!({"mode":"extract"})).is_err());

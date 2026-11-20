@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-11-20
+
+### Added
+- **Exact HTTP status codes on navigation errors and 4xx/5xx pages** (#97): empty-body HTTP failures (`net::ERR_HTTP_RESPONSE_CODE_FAILURE`) now report the exact status code, reason phrase (including HTTP/2+3 fallback when `statusText` is empty), `Retry-After` header when present, and actionable guidance (e.g. `HTTP 429 Too Many Requests (retry-after: 45s) — rate limited; wait/back off before retrying`). Landed 4xx/5xx pages with a body surface an `http:` notice automatically.
+- **One-call open + read/extract in MCP `see`**: `see` now exposes `url` and `block` in its MCP schema (and `--block` on CLI `see`), cutting read-only navigate-and-read workflows from two tool calls to one.
+- **Structured JSON output for `see logs=network`, `see logs=console`, and `see find`**: `format="json"` now returns parseable JSON (offloaded past 12 KB) for all three log kinds and element search, alongside `extract`, `artifact`, and `changes`.
+- **Upgraded `act fill` addressing**: per-field `nth` and `role` disambiguate repeated form labels without dropping out of `fill`, and `submit` accepts `selector=`/`ref=`/`text=`/`label=` prefixes.
+- **Overhauled MCP tool definitions, server instructions, and CLI help**: reorganized all five tool descriptions, server `INSTRUCTIONS`, and `help --json` within the existing context-token budget so agents master round-trip collapsing, addressing, and error contracts on turn one.
+
+### Fixed
+- **Live-DOM ambiguity recovery**: Phase 3 live-DOM ties in text/label addressing now return the full list of adopted candidate refs (`ref role "name" [ctx]`), eliminating the extra `see` call previously forced after dynamic renders.
+- **Truthful restart notes on navigating calls**: when Chrome reconnects before a call that itself navigates (`act navigate`, `act` with `url=`, `see` with `url=`), the note no longer falsely claims the page is reset to `about:blank`.
+- **CLI `--format json` and error parity**: CLI notices (dialogs, consent, `http:` status) now wrap JSON outputs as `{data,note}` instead of appending raw text, and CLI errors attach `--- current page state ---` and drain ambient notices like MCP.
+- **`act press` window focus**: targeted `press` now uses `activate_if_needed()` so `OBU_NO_ACTIVATE=1` and no-window-raise behavior hold consistently.
+- **CLI parser & help parity**: added `--slim` to CLI `state` tab ops, `--block` to CLI `see`, `xhr` to `help see --json`, `selector`/`network` to `act wait` usage hints, and explicit target rejection for non-ref `act upload` positionals.
+
+### Stealth
+- **Isolated-world perception and mutation watcher**: DOM capture, load/settle waits, block detection, and the post-action mutation watcher now run in a cached CDP isolated world, eliminating `window[Symbol.for('m')]`/`window[Symbol.for('n')]` and `MutationObserver` leaks from main-world `window` on both the agent and real-browser lanes.
+
+### Performance
+- **Faster quiet navigations and `url=` batch/run read steps**: skipped the redundant post-drain `re_settle` when no network requests were in flight during settle (~120–160 ms saved per quiet navigation) and removed the duplicate 1.2 s settle wait after `page.navigate` in `act batch` and `run` `see`/`extract` steps.
+
+## [4.6.10] - 2026-11-19
+
+### Added
+- `see logs=xhr` reports the deduplicated XHR/fetch API ring: method, status (or `PENDING`/the error), the full URL with its query and GraphQL variables intact, and the request's header *names* only — failures first, `format=json` for rows, `clear=true` to reset, and an artifact offload past 30 endpoints. Header values (`Authorization`, CSRF tokens) never leave the page.
+
+### Fixed
+- Body downloads (`body: true`) go direct when `OBU_PROXY` is unset: an ambient `HTTP_PROXY`/`ALL_PROXY` no longer carries the request, and proxy scheme detection is case-insensitive (`SOCKS5:`, `QUIC:` are refused with the credential redacted).
+- `act download` validates the URL before any work: `javascript:`, `chrome:`, `devtools:`, `about:` and other unfetchable schemes are refused up front, a bare host gets its scheme, and a relative path resolves against the current page for the tab fallback while the in-page fetch keeps the page's own spelling.
+- A real-browser profile lock held by a sandbox pid (Flatpak's `steamdeck-2` colliding with host `[kthreadd]`, pid 1, a recycled pid) no longer reports the profile as in use: the lock must name a live Chromium process, a live host browser holding files inside the profile root, or a live `SingletonSocket`.
+- A CDP child session ends when Chrome detaches its target: `wait_for` returns `Closed` immediately instead of waiting out its deadline, so a closed tab or worker cannot stall the pipe lane.
+
+### Stealth
+- The console ring buffer lives only inside the injection closure — no window property, no window symbol (`Object.getOwnPropertySymbols(window)` is empty and `Symbol.for('q')` is gone) — read and cleared through a per-process secret `console.debug` receiver token; an ordinary `console.debug` call, foreign receiver included, logs normally and never returns it.
+- WebGL `getParameter` passes a native `null` straight through, so a lost context and extension-gated enums (`MAX_SAMPLES` on WebGL1, `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` before `WEBGL_debug_renderer_info`) answer exactly as stock instead of a fabricated cap; the differential oracle keys `winSyms`, `gl1UnenabledRenderer` and `gl1MaxSamples` to hold that line.
+- Xvfb runs at 96 DPI so Chromium derives `devicePixelRatio` 1 and a CSS screen that matches display pixels, instead of the 67/64 ratio its 100 DPI default produced (`innerWidth` above `screen.width`, `outerWidth` off by 25 px).
+
+### Build
+- The differential oracle resolves the stock baseline to a real browser binary and falls back candidate by candidate, so a distro's `/usr/bin/chromium` snap stub can no longer fail the nightly probe before Chrome starts; a launch failure quotes Chrome's own stderr instead of only "did not come up".
+- `actions/download-artifact` v7 → v8.
+
 ## [4.6.9] - 2026-11-13
 
 ### Added
@@ -2205,7 +2247,9 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.6.9...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.7.0...HEAD
+[4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0
+[4.6.10]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.10
 [4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9
 [4.6.8]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.8
 [4.6.7]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.7
