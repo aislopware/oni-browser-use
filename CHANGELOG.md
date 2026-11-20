@@ -19,6 +19,7 @@ Upstream 4.6.10 and 4.7.0, merged.
 
 ### Changed
 - The tool descriptions, the MCP instructions and `help --json` are rewritten within the same token budget: the instructions now lead with the one-call patterns (read a URL in one `see`, `fill` with `submit`, `batch`, arming `dialog` before the click) and say that navigation errors carry the HTTP status.
+- Built on the Rust 2024 edition with refreshed dependencies; building from source needs Rust 1.88 or newer.
 
 ### Fixed
 - Text or label addressing that matches several live elements lists the candidate refs (`ref role "name" [ctx]`), so no extra `see` is needed to pick one.
@@ -29,10 +30,13 @@ Upstream 4.6.10 and 4.7.0, merged.
 - `act download` checks the URL first: `javascript:`, `chrome:`, `devtools:`, `about:` and other schemes it cannot fetch are refused, a bare host gets a scheme, and a relative path resolves against the current page.
 - A real-browser profile whose lock names a pid from another namespace (a Flatpak sandbox, pid 1, a recycled pid) is no longer reported as in use.
 - A CDP session ends when Chrome detaches its target, so waiting on a closed tab or worker returns at once instead of at its deadline.
+- `act scroll` with a delta far past the page (`scroll 0 999999`) stops at the room the wheel can travel and waits for the scroll to settle. Chrome kept animating the overshoot after the call returned, so the reported delta was short and the page moved again under the next action.
 
 ### Stealth
 - WebGL `getParameter` passes a native `null` through: a lost context and enums gated on an extension answer as stock Chrome does instead of with a made-up limit.
 - Xvfb runs at 96 DPI, so `devicePixelRatio` is 1 and the screen matches the display's pixels.
+- In a headless browser the `HeadlessChrome` UA override carries the browser's own client hints, so `navigator.userAgentData` and the `Sec-CH-UA` headers stay filled in instead of going empty.
+- The fallback user agent, used only when the browser's own cannot be read, names Chrome 158.
 
 ### Performance
 - A navigation with no requests in flight skips the second settle (about 120–160 ms), and `url=` read steps in `act batch` and `run` no longer wait 1.2 s twice.
