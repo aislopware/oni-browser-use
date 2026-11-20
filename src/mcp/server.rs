@@ -83,7 +83,7 @@ const INSTRUCTIONS: &str = "Stealth Chromium driver with 5 tools: act (interact)
 /// Added for a session attached to the user's own running browser. The tab
 /// list it reads holds their tabs next to its own, and nothing else on the
 /// surface says which is which before the first `switch-tab` lands on one.
-const ATTACHED_NOTE: &str = " ATTACHED: this is the user's own running browser, signed in as them. You work in your own background tab; every other tab is theirs - do not switch to, navigate or close one unless asked.";
+const ATTACHED_NOTE: &str = "\nATTACHED: this is the user's own running browser, signed in as them. You work in your own background tab; every other tab is theirs - do not switch to, navigate or close one unless asked.";
 
 /// The instructions for this process's lane, read when a client asks: `rb`
 /// settings can change under a long-lived server.
@@ -103,7 +103,7 @@ fn instructions_for(attached: bool, host_note: Option<&str>) -> String {
     let mut text = INSTRUCTIONS.to_string();
     match host_note {
         Some(note) => {
-            text.push_str(" HOST: ");
+            text.push_str("\nHOST: ");
             text.push_str(note);
         }
         None if attached => text.push_str(ATTACHED_NOTE),
@@ -213,7 +213,7 @@ mod retry_tests {
         let note = "These tools drive the editor's browser panel.";
         let told = instructions_for(false, Some(note));
         assert!(told.starts_with(INSTRUCTIONS));
-        assert!(told.ends_with(" HOST: These tools drive the editor's browser panel."));
+        assert!(told.ends_with("\nHOST: These tools drive the editor's browser panel."));
         assert_eq!(instructions_for(true, Some(note)), told);
         assert_eq!(
             first_reach_note(true, Some(note)).as_deref(),
