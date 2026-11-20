@@ -110,32 +110,18 @@ impl Page {
                 .as_ref()
                 .and_then(|v| v.get("ua").and_then(|u| u.as_str()))
                 .unwrap_or(fallback_ua());
-            let fixed_ua = real_ua.replace("HeadlessChrome", "Chrome");
             let real_platform = ua_info
                 .as_ref()
                 .and_then(|v| v.get("plt").and_then(|p| p.as_str()))
                 .unwrap_or(fallback_platform());
-
-            // Override ONLY userAgent + platform. The previous version also
-            // sent a hand-built userAgentMetadata with a hardcoded GREASE
-            // brand ("Not:A-Brand"/99) that matched no real Chrome build —
-            // the real Sec-CH-UA headers would never equal it. Chrome keeps
-            // generating coherent metadata (brands, GREASE, full versions)
-            // from its true version, which matches the fixed UA string
-            // (only "HeadlessChrome" → "Chrome" differs).
-            if let Err(e) = cdp
-                .send(
-                    "Network.setUserAgentOverride",
-                    Some(serde_json::json!({
-                        "userAgent": fixed_ua,
-                        "platform": real_platform,
-                    })),
-                )
-                .await
-            {
-                crate::browser::set_ua_override_failed();
-                eprintln!("[obu] WARNING: UA override failed: {e}");
-            }
+            super::ua::override_headless_ua(
+                &cdp,
+                base,
+                browser_client.as_ref(),
+                real_ua,
+                real_platform,
+            )
+            .await;
         }
         // S6: geo-consistent identity — timezone and locale must match the
         // proxy's geographic location. Without a proxy, the system timezone

@@ -27,6 +27,7 @@ pub mod tabs;
 mod gl;
 mod ref_store;
 mod route;
+mod ua;
 
 pub use self::agent_tab::{close_own_tabs, session_target};
 pub use self::logs::{DocResponse, NetEntry, XhrEntry, http_status_reason};

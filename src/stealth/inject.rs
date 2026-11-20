@@ -9,7 +9,8 @@
 //! 2. Launch: navigator.webdriver is false by Chrome's own default without
 //!    --enable-automation; the old blink-flag workaround was removed in
 //!    v3.9.12 (it triggered the unsupported-flag infobar — a visible tell).
-//! 3. UA: Network.setUserAgentOverride with full Client Hints — in Page::attach.
+//! 3. UA: Network.setUserAgentOverride with the browser's own client hints —
+//!    headless only, in `page/ua.rs`.
 //! 4. Injection (this file): native-lie toString masking (S9), cdc_ removal,
 //!    outer dims, WebGL1+2, screen geometry, Web API polyfills
 //!    (WebShare, ContentIndex, ContactsManager, downlinkMax),
