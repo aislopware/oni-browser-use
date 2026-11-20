@@ -6,17 +6,24 @@ use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Fixture(PathBuf);
 
 impl Fixture {
     fn new() -> Self {
+        // The tests of this file run as threads of one process, and two of
+        // them can read the same clock value: a counter keeps the roots apart.
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("obu-rb-discovery-{}-{nanos}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "obu-rb-discovery-{}-{nanos}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         for dir in [
             "home",
             "config",
