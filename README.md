@@ -34,7 +34,7 @@ cargo install --locked --git https://github.com/aislopware/oni-browser-use obu
 obu doctor
 ```
 
-Prebuilt binaries for Linux x86_64 and macOS Apple Silicon, each with a `.sha256`, are on [Releases](https://github.com/aislopware/oni-browser-use/releases). `obu -u` updates a downloaded binary.
+Prebuilt binaries for Linux x86_64, Windows x86_64 and macOS Apple Silicon, each with a `.sha256`, are on [Releases](https://github.com/aislopware/oni-browser-use/releases). `obu -u` updates a downloaded binary.
 
 ## Use
 

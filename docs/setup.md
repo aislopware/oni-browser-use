@@ -6,7 +6,7 @@ Obu needs a Chromium-family browser on the host running the process.
 
 ## Prebuilt binaries
 
-Linux x86_64 and macOS Apple Silicon binaries, each with a SHA-256 checksum, are on [GitHub Releases](https://github.com/aislopware/oni-browser-use/releases). On any other platform, build [from source](#from-source) or install with Cargo:
+Linux x86_64, Windows x86_64 and macOS Apple Silicon binaries, each with a SHA-256 checksum, are on [GitHub Releases](https://github.com/aislopware/oni-browser-use/releases). On any other platform, build [from source](#from-source) or install with Cargo:
 
 ```sh
 cargo install --locked --git https://github.com/aislopware/oni-browser-use obu

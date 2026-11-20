@@ -6,9 +6,9 @@ name: Release
 # order is fixed — assets first, then npm (platforms before launcher), then
 # Latest last. Nothing is built on the developer machine.
 #
-# The fork ships GitHub release binaries only, for Linux x86_64 and macOS
-# Apple Silicon: the npm job runs just where the repository variable
-# PUBLISH_NPM is "true", and is skipped here.
+# The fork ships GitHub release binaries only, for Linux x86_64, Windows
+# x86_64 and macOS Apple Silicon: the npm job runs just where the repository
+# variable PUBLISH_NPM is "true", and is skipped here.
 #
 # macOS work runs on the organisation's own Mac, which accepts this workflow
 # on main, started by hand, and nothing else. That is why a tag push does not
@@ -79,6 +79,13 @@ jobs:
             legacy: linux-x86_64
             bin: target/x86_64-unknown-linux-gnu/release/obu
             zig: true
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            zig_target: x86_64-pc-windows-gnu
+            asset: windows-x64
+            legacy: windows-x86_64
+            bin: target/x86_64-pc-windows-gnu/release/obu.exe
+            zig: true
           # The organisation's own Mac, by its runner label.
           - os: onicode-ios
             target: aarch64-apple-darwin
@@ -129,8 +136,33 @@ jobs:
           path: dist/*
           retention-days: 7
 
+  # The Windows binary is cross-built on Linux; this runs the shipped bytes on
+  # Windows, against the runner's own Chrome, before anything is published.
+  smoke-windows:
+    needs: [plan, build]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: assets-windows-x64
+          path: dist
+      - name: Version and stealth vectors
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          out=$(./dist/obu-windows-x64.exe --version)
+          echo "$out"
+          [[ "$out" == *"$VERSION"* ]] || { echo "ERROR: want $VERSION" >&2; exit 1; }
+          OBU_HOME=$(mktemp -d) ./dist/obu-windows-x64.exe audit
+
   publish:
-    needs: [plan, gate, build]
+    needs: [plan, gate, build, smoke-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -148,7 +180,7 @@ jobs:
           set -euo pipefail
           bins=$(ls dist | grep -v '\.sha256$' | wc -l)
           sums=$(ls dist | grep -c '\.sha256$' || true)
-          [[ "$bins" == "4" && "$sums" == "4" ]] || { echo "ERROR: $bins binaries, $sums checksums (want 4/4)" >&2; ls -l dist; exit 1; }
+          [[ "$bins" == "6" && "$sums" == "6" ]] || { echo "ERROR: $bins binaries, $sums checksums (want 6/6)" >&2; ls -l dist; exit 1; }
           ( cd dist && sha256sum -c --quiet ./*.sha256 )
           python3 tools/reliability_probe/linux-abi.py dist/obu-linux-x64
       - name: Smoke the Linux artifact
@@ -165,7 +197,7 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --draft --generate-notes
           gh release upload "$TAG" dist/* --clobber
           count=$(gh release view "$TAG" --json assets --jq '.assets | length')
-          [[ "$count" == "8" ]] || { echo "ERROR: release has $count assets, want 8" >&2; exit 1; }
+          [[ "$count" == "12" ]] || { echo "ERROR: release has $count assets, want 12" >&2; exit 1; }
 
   # npm needs no GitHub release asset: the same binaries are re-downloaded
   # here from the build artifacts, so the launcher and the platform packages

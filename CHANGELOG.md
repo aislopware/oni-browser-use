@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A Windows x86_64 binary, `obu-windows-x64.exe`, is published again. It is cross-built on Linux with zig and run on a Windows runner (version, stealth vectors against the runner's Chrome) before the release goes out.
+
 ## [4.9.0] - 2026-11-19
 
 ### Added
