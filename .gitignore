@@ -23,3 +23,5 @@ npm/obu-linux-arm64/obu
 bench/stealthbench_run/
 speed/
 __pycache__/
+# Probe receipts and runtimes under tools/ (POLISH_OUT, DSH_RUNTIME defaults)
+/work/
