@@ -8,6 +8,9 @@ import unittest
 
 from oracle import chrome_candidates, parse_obu_eval
 
+# Any real executable: /bin/true is Linux-only (macOS ships /usr/bin/true).
+TRUE = shutil.which("true")
+
 
 class EvalParsing(unittest.TestCase):
     @staticmethod
@@ -44,7 +47,7 @@ class StockBrowserResolution(unittest.TestCase):
     def test_wrapper_stub_is_demoted_below_a_real_binary(self):
         with tempfile.TemporaryDirectory() as d:
             real = os.path.join(d, "google-chrome-stable")
-            shutil.copy("/bin/true", real)
+            shutil.copy(TRUE, real)
             stub = os.path.join(d, "chromium")
             with open(stub, "w", encoding="utf-8") as f:
                 f.write("#!/bin/sh\nexit 1\n")
@@ -62,7 +65,7 @@ class StockBrowserResolution(unittest.TestCase):
     def test_explicit_path_stays_first_among_real_binaries(self):
         with tempfile.TemporaryDirectory() as d:
             explicit = os.path.join(d, "custom-chromium")
-            shutil.copy("/bin/true", explicit)
+            shutil.copy(TRUE, explicit)
             previous = os.environ["PATH"]
             os.environ["PATH"] = d
             os.environ.pop("CHROME_PATH", None)
