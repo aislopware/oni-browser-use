@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.9.1] - 2026-11-20
+
 ### Added
 - A Windows x86_64 binary, `obu-windows-x64.exe`, is published again. It is cross-built on Linux with zig and run on a Windows runner (version, stealth vectors against the runner's Chrome) before the release goes out.
 
@@ -2240,7 +2242,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.9.0...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.9.1...HEAD
+[4.9.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.1
 [4.9.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.0
 [4.8.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.1
 [4.8.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.0
