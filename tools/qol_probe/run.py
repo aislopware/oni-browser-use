@@ -201,9 +201,11 @@ def main():
               'value="via wrapper"' in verdict and norm(editor) == "via wrapper", f"{verdict} | {editor!r}")
         check("heal is disclosed", "healed" in verdict, verdict)
 
-        # S7: keyboard chords (the report's manual-clear recipe).
-        out = cli("act", "press", "Control+a")
-        check("press accepts Control+a", "outcome: pressed Control+a" in out, first_line(out))
+        # S7: keyboard chords (the report's manual-clear recipe). Select-all
+        # is Meta+a on macOS, where Control+a moves to the line start.
+        select_all = "Meta+a" if sys.platform == "darwin" else "Control+a"
+        out = cli("act", "press", select_all)
+        check(f"press accepts {select_all}", f"outcome: pressed {select_all}" in out, first_line(out))
         out = cli("act", "press", "Backspace")
         check("press Backspace", "outcome: pressed Backspace" in out, first_line(out))
         editor = ev('(document.getElementById("editor")||{innerText:""}).innerText')
