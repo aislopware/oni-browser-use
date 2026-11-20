@@ -7,6 +7,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    ignore:
+      # reqwest 0.13 cannot drop rustls-platform-verifier, which costs every
+      # macOS launch ~1 ms and ~4 MiB; see the reqwest line in Cargo.toml.
+      - dependency-name: "reqwest"
+        versions: [">=0.13"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

@@ -28,7 +28,12 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# HTTP discovery of CDP targets (rustls — no system OpenSSL, portable binary)
+# HTTP discovery of CDP targets (rustls — no system OpenSSL, portable binary).
+# Held at 0.12: every rustls feature of 0.13 pulls in rustls-platform-verifier,
+# which links Security.framework + CoreFoundation on macOS whether or not it
+# is used (measured 2026-11-20, M4 Pro: `obu --version` 2.2 -> 3.2 ms, RSS
+# 3.6 -> 7.4 MiB), panics on Android unless a JVM initialises it, and fails
+# client builds on Linux hosts without a CA store (reqwest #2948/#2966/#2988).
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # Errors + logging
 thiserror = "2"
