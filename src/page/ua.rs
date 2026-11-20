@@ -24,8 +24,10 @@ const HINTS_JS: &str = "navigator.userAgentData.getHighEntropyValues([\
     'architecture','bitness','brands','formFactors','fullVersionList','mobile',\
     'model','platform','platformVersion','uaFullVersion','wow64'])";
 
-/// Hints already read, keyed by browser endpoint and its UA.
-static HINTS: Mutex<Vec<(String, Value)>> = Mutex::new(Vec::new());
+/// The hints of each browser asked, keyed by its endpoint and UA. A failed
+/// read is kept as `None`: every page of a browser gets the same override,
+/// and none waits on a read that fails again.
+static HINTS: Mutex<Vec<(String, Option<Value>)>> = Mutex::new(Vec::new());
 
 /// Rewrite a headless browser's `HeadlessChrome` UA on this page session.
 pub(super) async fn override_headless_ua(
@@ -39,12 +41,8 @@ pub(super) async fn override_headless_ua(
         "userAgent": real_ua.replace("HeadlessChrome", "Chrome"),
         "platform": platform,
     });
-    match client_hints(base, browser_client, real_ua).await {
-        Some(metadata) => params["userAgentMetadata"] = metadata,
-        None => eprintln!(
-            "[obu] WARNING: could not read the browser's UA client hints; \
-             navigator.userAgentData stays empty under the headless UA override"
-        ),
+    if let Some(metadata) = client_hints(base, browser_client, real_ua).await {
+        params["userAgentMetadata"] = metadata;
     }
     if let Err(e) = cdp.send("Network.setUserAgentOverride", Some(params)).await {
         crate::browser::set_ua_override_failed();
@@ -55,8 +53,22 @@ pub(super) async fn override_headless_ua(
 async fn client_hints(base: &str, browser_client: Option<&CdpClient>, ua: &str) -> Option<Value> {
     let key = format!("{base} {ua}");
     if let Some((_, hints)) = HINTS.lock().ok()?.iter().find(|(k, _)| *k == key) {
-        return Some(hints.clone());
+        return hints.clone();
     }
+    let hints = read_client_hints(base, browser_client).await;
+    if hints.is_none() {
+        eprintln!(
+            "[obu] WARNING: could not read the browser's UA client hints; \
+             navigator.userAgentData stays empty under the headless UA override"
+        );
+    }
+    if let Ok(mut cache) = HINTS.lock() {
+        cache.push((key, hints.clone()));
+    }
+    hints
+}
+
+async fn read_client_hints(base: &str, browser_client: Option<&CdpClient>) -> Option<Value> {
     let browser = match browser_client {
         Some(client) => client.clone(),
         None => {
@@ -85,11 +97,7 @@ async fn client_hints(base: &str, browser_client: Option<&CdpClient>, ua: &str) 
             Some(json!({"browserContextId": context})),
         )
         .await;
-    let hints = ua_metadata(&hints?)?;
-    if let Ok(mut cache) = HINTS.lock() {
-        cache.push((key, hints.clone()));
-    }
-    Some(hints)
+    ua_metadata(&hints?)
 }
 
 async fn read_hints(browser: &CdpClient, context: &str) -> Option<Value> {
@@ -312,24 +320,31 @@ mod tests {
     async fn unreadable_hints_still_override_the_ua_and_drop_the_context() {
         let (browser, seen) = fake_browser(Some("Page.navigate")).await;
         let page = CdpSession::child(browser.clone(), "page");
-        override_headless_ua(
-            &page,
-            "hints-fail-test",
-            Some(&browser),
-            HEADLESS_UA,
-            "MacIntel",
-        )
-        .await;
+        for _ in 0..2 {
+            override_headless_ua(
+                &page,
+                "hints-fail-test",
+                Some(&browser),
+                HEADLESS_UA,
+                "MacIntel",
+            )
+            .await;
+        }
 
         let overrides = sent(&seen, "Network.setUserAgentOverride");
-        assert_eq!(overrides.len(), 1);
-        assert_eq!(
-            overrides[0].1,
-            json!({
-                "userAgent": HEADLESS_UA.replace("HeadlessChrome", "Chrome"),
-                "platform": "MacIntel",
-            })
-        );
+        assert_eq!(overrides.len(), 2);
+        for (_, params) in &overrides {
+            assert_eq!(
+                *params,
+                json!({
+                    "userAgent": HEADLESS_UA.replace("HeadlessChrome", "Chrome"),
+                    "platform": "MacIntel",
+                })
+            );
+        }
+        // The failed read is not repeated: every page of the browser gets the
+        // same override, and none waits on a read that fails again.
+        assert_eq!(sent(&seen, "Target.createBrowserContext").len(), 1);
         assert_eq!(sent(&seen, "Target.disposeBrowserContext").len(), 1);
     }
 }
