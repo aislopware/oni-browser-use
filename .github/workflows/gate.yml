@@ -51,7 +51,7 @@ jobs:
       - name: Tests
         run: cargo test --profile gate
 
-  # Compile + lint the four non-host targets on one Linux runner. `check`
+  # Compile + lint the four non-host targets on one Linux runner. Clippy
   # needs no linker, so this is the cheap net for cfg-only breakage — the
   # class that green local clippy misses (macOS/Windows clippy caught it in
   # CI, two releases in a row) — without waiting on a native runner.
@@ -78,6 +78,7 @@ jobs:
         with:
           toolchain: "1.100.0"
           targets: ${{ matrix.target }}
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           key: cross-${{ matrix.target }}
@@ -101,8 +102,10 @@ jobs:
           name=$(echo "${{ matrix.target }}" | tr '-' '_')
           echo "CC_${name}=$RUNNER_TEMP/zigcc ${{ matrix.zig }}" >> "$GITHUB_ENV"
           echo "AR_${name}=zig ar" >> "$GITHUB_ENV"
-      - name: Check the target
-        run: cargo check --locked --all-targets --target ${{ matrix.target }}
+      - name: Lint the target
+        # clippy costs about what check does, and some lints only fire on
+        # one target (`c_char` is unsigned on aarch64 Linux).
+        run: cargo clippy --locked --all-targets --target ${{ matrix.target }} -- -D warnings
 
   # Native compile, unit tests and a link of the shipped profile. The browser
   # probes are NOT here: they are parallel jobs in probes.yml, so a slow or

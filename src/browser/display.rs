@@ -413,17 +413,11 @@ fn write_xvfb_auth_file(display_num: u16) -> Option<std::path::PathBuf> {
     std::fs::File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut cookie))
         .ok()?;
-    let mut host_buf = [0 as libc::c_char; 256];
-    let host = match unsafe { libc::gethostname(host_buf.as_mut_ptr(), host_buf.len()) } {
-        0 => {
-            #[cfg_attr(target_os = "android", allow(clippy::unnecessary_cast))]
-            let bytes: Vec<u8> = host_buf
-                .iter()
-                .take_while(|c| **c != 0)
-                .map(|c| *c as u8)
-                .collect();
-            String::from_utf8_lossy(&bytes).into_owned()
-        }
+    let mut host_buf = [0u8; 256];
+    let host = match unsafe { libc::gethostname(host_buf.as_mut_ptr().cast(), host_buf.len()) } {
+        0 => std::ffi::CStr::from_bytes_until_nul(&host_buf)
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| String::from_utf8_lossy(&host_buf).into_owned()),
         _ => "localhost".into(),
     };
     let disp = display_num.to_string();
