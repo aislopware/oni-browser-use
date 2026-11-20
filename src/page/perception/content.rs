@@ -144,8 +144,7 @@ pub async fn capture_outline(cdp: &CdpSession) -> Result<String> {
 /// Heading outlines traverse the visible shadow/iframe tree; hidden frames
 /// and script text must never become headings in the agent's page summary.
 pub(super) fn outline_expr() -> String {
-    "(()=>{const d=document;"
-        .to_string()
+    "(()=>{const d=document;".to_string()
         + &JS_PREAMBLE
         + JS_READ_TREE
         + "var title=document.title||'';var out='';if(title)out+=title+'\\n';const hs=[];walkReadTree(d.body,n=>{if(n.nodeType===1&&/^H[1-6]$/.test(n.tagName))hs.push(n);});if(!hs.length)return out+'(no headings — use see mode=content to read)';for(let i=0;i<hs.length;i++){const h=hs[i];const lvl=parseInt(h.tagName.charAt(1));const txt=(h.innerText||'').trim();if(!txt)continue;for(let j=0;j<lvl-1;j++)out+='  ';out+=txt+'\\n';}return out.trim();})()"

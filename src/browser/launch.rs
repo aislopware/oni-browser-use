@@ -3,9 +3,9 @@
 
 use super::discover::{endpoint_owned_by_pid, find_chrome, free_port};
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use super::display::{apply_xvfb_env, VirtualDisplay};
+use super::display::{VirtualDisplay, apply_xvfb_env};
 use super::flags::{
-    classify_gl, gl_stages, launch_args, launch_args_real, stage_label, LaunchCfg, RealLaunchCfg,
+    LaunchCfg, RealLaunchCfg, classify_gl, gl_stages, launch_args, launch_args_real, stage_label,
 };
 use super::probe::probe_gl_ws;
 use super::*;

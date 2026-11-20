@@ -79,7 +79,7 @@ fn claim_name(dir: &std::path::Path, ext: &str) -> Result<std::path::PathBuf> {
             Err(e) => {
                 return Err(crate::error::ObuError::Other(format!(
                     "artifact write: {e}"
-                )))
+                )));
             }
         }
     }

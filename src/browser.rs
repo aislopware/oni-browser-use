@@ -49,13 +49,13 @@ pub(crate) use self::discover::find_chrome;
 pub use self::display::VirtualDisplay;
 pub(crate) use self::flags::env_chrome_flags;
 pub use self::flags::{
-    attached_browser, gl_mid_session_loss, gpu_state, is_software_renderer, launched_headless,
-    launched_no_sandbox, launched_pipe, mark_gl_mid_session_loss, reconcile_gl,
-    set_attached_browser, set_gpu_state, set_launched_headless, set_launched_no_sandbox,
-    set_launched_pipe, GlReconcile, GlStage, GpuState, Transport,
+    GlReconcile, GlStage, GpuState, Transport, attached_browser, gl_mid_session_loss, gpu_state,
+    is_software_renderer, launched_headless, launched_no_sandbox, launched_pipe,
+    mark_gl_mid_session_loss, reconcile_gl, set_attached_browser, set_gpu_state,
+    set_launched_headless, set_launched_no_sandbox, set_launched_pipe,
 };
 pub use self::launch::launch_lane;
-pub use self::probe::{probe_gl_live, GlLive, WorkerEvidence};
+pub use self::probe::{GlLive, WorkerEvidence, probe_gl_live};
 // Chromium appends a singleton socket name under TMPDIR. Hermes and other
 // harnesses may supply a long workspace path, exceeding even macOS's 104-byte
 // sockaddr_un limit and fatally aborting Chrome. Only the browser child uses
@@ -241,7 +241,9 @@ impl Browser {
             }
         }
         if !self.close_requested {
-            eprintln!("[obu] graceful close of the owned browser was unavailable; using process cleanup, recent storage flush is unverified");
+            eprintln!(
+                "[obu] graceful close of the owned browser was unavailable; using process cleanup, recent storage flush is unverified"
+            );
         }
         let _ = tokio::task::spawn_blocking(move || self.shutdown()).await;
     }
@@ -252,8 +254,8 @@ impl Browser {
     pub fn shutdown(self) {
         let profile = self.profile.clone();
         drop(self); // kills Chrome + Xvfb
-                    // Retain ownership metadata: a path under /tmp is not proof that
-                    // an adopted user profile belongs to Obu.
+        // Retain ownership metadata: a path under /tmp is not proof that
+        // an adopted user profile belongs to Obu.
         profile.cleanup();
     }
 }

@@ -185,7 +185,9 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
                             crate::action::read_checked(page.cdp_ref(), page.model(), &resolved)
                                 .await?;
                         if role == "radio" && is_checked && !want_checked {
-                            return Err(ObuError::Usage(format!("fill {resolved}: a checked radio cannot be unchecked by clicking it; select another option in its group")));
+                            return Err(ObuError::Usage(format!(
+                                "fill {resolved}: a checked radio cannot be unchecked by clicking it; select another option in its group"
+                            )));
                         }
                         is_checked != want_checked
                     }
@@ -215,7 +217,9 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
         let (_, verdict) = page.act(action).await?;
         if let Some(want) = f_check {
             if crate::action::read_checked(page.cdp_ref(), page.model(), &resolved).await? != want {
-                return Err(ObuError::Other(format!("fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying")));
+                return Err(ObuError::Other(format!(
+                    "fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying"
+                )));
             }
         }
         last_verdict = verdict;
@@ -803,7 +807,9 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                 page.delta_view(&final_delta, 8000)
             };
             let summary = if let Some(halt) = halted {
-                format!("batch stopped at step {halt} ({ok_count} ok); completed effects remain applied; verify the failed step before retrying")
+                format!(
+                    "batch stopped at step {halt} ({ok_count} ok); completed effects remain applied; verify the failed step before retrying"
+                )
             } else {
                 format!("batch ({} steps, {} ok)", steps.len(), ok_count)
             };
@@ -877,7 +883,7 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
         _ => {
             return Err(crate::error::ObuError::Other(
                 crate::action::unknown_action_message(action_str),
-            ))
+            ));
         }
     };
 
@@ -938,7 +944,9 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                     "none"
                 };
                 if expect != observed && expect != "any" {
-                    format!("\n\u{26a0} expected {expect}, got {observed} \u{2014} may have hit wrong target")
+                    format!(
+                        "\n\u{26a0} expected {expect}, got {observed} \u{2014} may have hit wrong target"
+                    )
                 } else {
                     String::new()
                 }

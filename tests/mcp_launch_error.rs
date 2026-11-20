@@ -1,5 +1,5 @@
 //! Launch failures must remain valid tool results in both MCP dialects.
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 
 #[tokio::test]
@@ -54,10 +54,12 @@ async fn launch_errors_preserve_dialect_and_notification_silence() {
             .collect();
         let result = &responses[0]["result"];
         assert_eq!(result["isError"], true);
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("CHROME_PATH"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("CHROME_PATH")
+        );
         if version.is_some() {
             assert_eq!(result["resultType"], "complete", "{responses:?}");
             assert_eq!(

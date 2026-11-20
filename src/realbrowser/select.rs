@@ -91,11 +91,7 @@ pub fn sole_root_id() -> Option<String> {
         .map(|e| e.file_name().to_string_lossy().to_string())
         .collect();
     ids.sort();
-    if ids.len() == 1 {
-        ids.pop()
-    } else {
-        None
-    }
+    if ids.len() == 1 { ids.pop() } else { None }
 }
 
 /// Resolve the configured (or best) browser + profile.

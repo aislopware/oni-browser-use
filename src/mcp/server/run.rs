@@ -183,7 +183,9 @@ pub(super) fn resolve_condition_fields(
         cond,
         "element" | "selector" | "title" | "url" | "text" | "settle" | "network" | "network-idle"
     ) {
-        return Err(ObuError::Usage(format!("unknown wait condition '{cond}' - use element, selector, text, title, url, js, settle or network")));
+        return Err(ObuError::Usage(format!(
+            "unknown wait condition '{cond}' - use element, selector, text, title, url, js, settle or network"
+        )));
     }
     if !js.is_empty() {
         return Err(crate::error::ObuError::Usage(format!(

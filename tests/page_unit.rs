@@ -417,8 +417,10 @@ fn re_render_immunity_does_not_cross_match_different_elements() {
             .find(|e| e.ref_id == *ref_id)
             .map(|e| e.raw.fingerprint)
             .unwrap_or(0);
-        assert_eq!(original_fp, current,
-            "ref {ref_id}: original fingerprint {original_fp:#x} != current {current:#x} (cross-match!)");
+        assert_eq!(
+            original_fp, current,
+            "ref {ref_id}: original fingerprint {original_fp:#x} != current {current:#x} (cross-match!)"
+        );
     }
 }
 

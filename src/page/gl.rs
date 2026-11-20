@@ -40,8 +40,8 @@ impl Page {
     /// can strip stealth from documents loaded after it (observed live).
     pub async fn gl_health_refresh(&mut self) {
         use crate::browser::{
-            gpu_state, probe_gl_live, reconcile_gl, set_gpu_state, GlLive, GlReconcile, GpuState,
-            WorkerEvidence,
+            GlLive, GlReconcile, GpuState, WorkerEvidence, gpu_state, probe_gl_live, reconcile_gl,
+            set_gpu_state,
         };
         if crate::realbrowser::real_lane() {
             return;

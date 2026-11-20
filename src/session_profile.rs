@@ -901,7 +901,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn owned_profile_refuses_symlinks_and_public_write_permissions() {
-        use std::os::unix::fs::{symlink, PermissionsExt};
+        use std::os::unix::fs::{PermissionsExt, symlink};
         let root = std::env::temp_dir().join(format!("obu-profile-refusal-{}", std::process::id()));
         let target = root.join("target");
         std::fs::create_dir_all(&target).unwrap();

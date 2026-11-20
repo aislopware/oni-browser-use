@@ -9,7 +9,7 @@
 //! sessions (a browser that switches IP/timezone between visits is suspicious).
 
 use crate::platform;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn path() -> std::path::PathBuf {
     platform::obu_dir().join(".fingerprint.json")

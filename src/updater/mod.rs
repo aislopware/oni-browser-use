@@ -183,25 +183,25 @@ async fn show_version() -> Result<()> {
     }
 
     match version::fetch_latest_tag().await {
-        Ok(latest_tag) => {
-            match version::compare_versions(&latest_tag, CURRENT_VERSION) {
-                std::cmp::Ordering::Greater => {
-                    println!("  update available: {latest_tag}");
-                    if cfg!(target_os = "android") {
-                        println!("  (no Android builds are published — update from your package manager)");
-                    } else {
-                        println!("  run: obu -u");
-                    }
-                }
-                std::cmp::Ordering::Equal => {
-                    println!("  on the latest release");
-                }
-                std::cmp::Ordering::Less => {
-                    println!("  ahead of the latest release ({latest_tag})");
-                    println!("  (local build is newer — dev build or pending release)");
+        Ok(latest_tag) => match version::compare_versions(&latest_tag, CURRENT_VERSION) {
+            std::cmp::Ordering::Greater => {
+                println!("  update available: {latest_tag}");
+                if cfg!(target_os = "android") {
+                    println!(
+                        "  (no Android builds are published — update from your package manager)"
+                    );
+                } else {
+                    println!("  run: obu -u");
                 }
             }
-        }
+            std::cmp::Ordering::Equal => {
+                println!("  on the latest release");
+            }
+            std::cmp::Ordering::Less => {
+                println!("  ahead of the latest release ({latest_tag})");
+                println!("  (local build is newer — dev build or pending release)");
+            }
+        },
         Err(_) => {
             println!("  (could not check for updates)");
         }

@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use futures_util::{SinkExt, StreamExt};
 use obu::cdp::{CdpClient, CdpSession};
-use obu::page::intercept::{run_interception, InterceptState, BLOCK_IMAGES, BLOCK_TRACKERS};
-use serde_json::{json, Value};
+use obu::page::intercept::{BLOCK_IMAGES, BLOCK_TRACKERS, InterceptState, run_interception};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;

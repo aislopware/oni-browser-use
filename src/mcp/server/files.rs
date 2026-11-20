@@ -4,7 +4,7 @@
 //! a completed earlier transfer can never be reported for a later request —
 //! the `download_correlation_tests` at the bottom pin that contract.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::page::{DownloadInfo, Page};
@@ -799,8 +799,8 @@ mod body_proxy_tests {
     #[tokio::test]
     async fn body_client_without_obu_proxy_ignores_ambient_http_proxy_env() {
         use std::sync::{
-            atomic::{AtomicBool, Ordering},
             Arc,
+            atomic::{AtomicBool, Ordering},
         };
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();

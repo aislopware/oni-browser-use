@@ -655,10 +655,10 @@ mod tests {
         ] {
             assert!(run(&json!({"steps":[effect,bad]})).is_err(), "{bad}");
         }
-        assert!(act(
-            &json!({"action":"batch","steps":[effect,{"action":"batch","steps":[effect]}]})
-        )
-        .is_err());
+        assert!(
+            act(&json!({"action":"batch","steps":[effect,{"action":"batch","steps":[effect]}]}))
+                .is_err()
+        );
         assert!(run(&json!({"steps":[{"action":"batch","steps":[effect]}]})).is_ok());
     }
 
@@ -668,15 +668,19 @@ mod tests {
         for _ in 0..34 {
             step = json!({"action":"if","js":"true","then":[step]});
         }
-        assert!(run(&json!({"steps":[step]}))
-            .unwrap_err()
-            .to_string()
-            .contains("nesting"));
+        assert!(
+            run(&json!({"steps":[step]}))
+                .unwrap_err()
+                .to_string()
+                .contains("nesting")
+        );
         let steps = vec![json!({"action":"eval","js":"1"}); 1001];
-        assert!(run(&json!({"steps":steps}))
-            .unwrap_err()
-            .to_string()
-            .contains("1000"));
+        assert!(
+            run(&json!({"steps":steps}))
+                .unwrap_err()
+                .to_string()
+                .contains("1000")
+        );
         assert!(
             run(&json!({"steps":[{"action":"while","js":"false","max":100,"steps":[]}]})).is_ok()
         );
@@ -712,10 +716,12 @@ mod tests {
         ] {
             assert!(vision(&bad).is_err(), "{bad}");
         }
-        assert!(vision(&json!({
-            "url":"file:///tmp/deck.html","path":"shots/a.PNG","size":"1920x1080@2","full":true
-        }))
-        .is_ok());
+        assert!(
+            vision(&json!({
+                "url":"file:///tmp/deck.html","path":"shots/a.PNG","size":"1920x1080@2","full":true
+            }))
+            .is_ok()
+        );
         // A run step saves a capture; a batch step cannot.
         let shot = json!({"action":"vision","path":"/tmp/a.png"});
         assert!(run(&json!({"steps":[shot]})).is_ok());
@@ -820,10 +826,10 @@ mod tests {
         assert!(act(&json!({"action":"click","x":1.5,"y":2})).is_ok());
         assert!(act(&json!({"action":"fill","fields":[{"label":"Agree","check":false}]})).is_ok());
         assert!(act(&json!({"action":"fill","fields":[{"label":"Email","role":"textbox","nth":2,"text":"a@b.test"}],"submit":"selector=button[type=submit]"})).is_ok());
-        assert!(act(
-            &json!({"action":"fill","fields":[{"label":"Email","nth":0,"text":"a@b.test"}]})
-        )
-        .is_err());
+        assert!(
+            act(&json!({"action":"fill","fields":[{"label":"Email","nth":0,"text":"a@b.test"}]}))
+                .is_err()
+        );
         assert!(see(&json!({"mode":"content","budget":10})).is_ok());
         assert!(see(&json!({"mode":"extract","extract":"auto"})).is_ok());
         assert!(see(&json!({"mode":"extract"})).is_err());

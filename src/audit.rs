@@ -310,7 +310,7 @@ fn file_url_from_str(s: &str, windows: bool) -> String {
 
 #[cfg(test)]
 mod embedded_suite_tests {
-    use super::{vectors_page, VECTORS_HTML};
+    use super::{VECTORS_HTML, vectors_page};
 
     fn scratch(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("obu-audit-{tag}-{}", std::process::id()));

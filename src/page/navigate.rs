@@ -108,7 +108,9 @@ impl Page {
             Duration::from_secs(10)
         };
         if nav_res.get("isDownload").and_then(Value::as_bool) == Some(true) {
-            return Err(ObuError::Other(format!("navigation to {target} started a download — use act download url=... to retrieve the file")));
+            return Err(ObuError::Other(format!(
+                "navigation to {target} started a download — use act download url=... to retrieve the file"
+            )));
         }
         // CDP omits loaderId for same-document navigations; those emit
         // navigatedWithinDocument, never frameNavigated. Waiting for the
@@ -1156,8 +1158,8 @@ fn normalize_url(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        already_here, error_page_failure, extract_domain, landed, nav_params_note, normalize_url,
-        query_params, validate_nav_url, DomainProfile, Emulation,
+        DomainProfile, Emulation, already_here, error_page_failure, extract_domain, landed,
+        nav_params_note, normalize_url, query_params, validate_nav_url,
     };
     use serde_json::json;
 
@@ -1374,11 +1376,13 @@ mod tests {
         assert!(note.contains("rh"), "{note}");
         assert!(note.contains("dropped"), "{note}");
         // Surviving params stay quiet — no news is the normal case.
-        assert!(nav_params_note(
-            "https://example.com/s?q=x&page=2",
-            "https://example.com/s?q=x&page=2"
-        )
-        .is_none());
+        assert!(
+            nav_params_note(
+                "https://example.com/s?q=x&page=2",
+                "https://example.com/s?q=x&page=2"
+            )
+            .is_none()
+        );
         // A rewritten value is named as such, not as a drop.
         let note = nav_params_note("https://e.com/s?page=2", "https://e.com/s?page=1")
             .expect("rewritten value must be reported");
@@ -1388,11 +1392,13 @@ mod tests {
         );
         // Attribution-only params never fire (that noise trains callers to
         // ignore the real signal).
-        assert!(nav_params_note(
-            "https://e.com/s?q=x&utm_source=nl&gclid=1",
-            "https://e.com/s?q=x"
-        )
-        .is_none());
+        assert!(
+            nav_params_note(
+                "https://e.com/s?q=x&utm_source=nl&gclid=1",
+                "https://e.com/s?q=x"
+            )
+            .is_none()
+        );
         // No query at all → nothing to compare.
         assert!(nav_params_note("https://e.com/", "https://e.com/").is_none());
     }

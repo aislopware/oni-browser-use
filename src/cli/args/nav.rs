@@ -2,7 +2,7 @@
 
 use super::take_value;
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `nav` args: <url> [--block <classes>]
 pub(crate) fn parse_nav_args(args: &[String]) -> Result<Value> {
@@ -18,7 +18,7 @@ pub(crate) fn parse_nav_args(args: &[String]) -> Result<Value> {
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for nav — see 'obu help nav'"
-                    )))
+                    )));
                 }
             }
         } else if url.is_none() {

@@ -29,17 +29,17 @@ mod ref_store;
 mod route;
 
 pub use self::agent_tab::{close_own_tabs, session_target};
-pub use self::logs::{http_status_reason, DocResponse, NetEntry, XhrEntry};
+pub use self::logs::{DocResponse, NetEntry, XhrEntry, http_status_reason};
 pub(crate) use self::navigate::{validate_nav_url, with_scheme};
-pub use self::route::{RouteEpoch, RouteSettle, ROUTE_BUDGET};
+pub use self::route::{ROUTE_BUDGET, RouteEpoch, RouteSettle};
 
 use std::time::Duration;
 
 pub use model::{LivePageModel, PageDelta, PageElement, RefSnapshot};
 pub use perception::{
-    capture, capture_content, detect_block, dismiss_consent, dismiss_consent_with_stored,
-    re_settle, wait_for_load, wait_for_settle, wait_for_settle_with_network, PageCapture,
-    RawElement,
+    PageCapture, RawElement, capture, capture_content, detect_block, dismiss_consent,
+    dismiss_consent_with_stored, re_settle, wait_for_load, wait_for_settle,
+    wait_for_settle_with_network,
 };
 pub use refs::{RefEntry, StateChange, StateProbe};
 
@@ -48,7 +48,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::cdp::{CdpClient, CdpSession};
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Information about a JavaScript dialog (alert/confirm/prompt/beforeunload)
 /// that was auto-dismissed by the dialog handler task.
@@ -723,11 +723,11 @@ impl Drop for Page {
 
 #[cfg(test)]
 mod tests {
-    use super::navigate::with_scheme;
     use super::BusyGuard;
+    use super::navigate::with_scheme;
     use crate::error::ObuError;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 
     fn stale_ref() -> crate::error::Result<()> {
         Err(ObuError::StaleRef("e4 gone from the current page".into()))
@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(with_scheme("blob:https://x/abcd"), "blob:https://x/abcd");
     }
 
-    use super::{match_dialog_expect, origin_of, DialogExpect};
+    use super::{DialogExpect, match_dialog_expect, origin_of};
 
     fn exp(kind: &str) -> DialogExpect {
         DialogExpect {
@@ -820,13 +820,15 @@ mod tests {
     fn dialog_expect_matching_matrix() {
         // Kind gate: wrong kind keeps the expectation armed (Err), right
         // kind passes; "any" matches everything.
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "Delete?",
-            Some("https://shop.example/cart")
-        )
-        .is_ok());
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "Delete?",
+                Some("https://shop.example/cart")
+            )
+            .is_ok()
+        );
         assert!(match_dialog_expect(&exp("confirm"), "prompt", "x", None).is_err());
         assert!(match_dialog_expect(&exp("any"), "prompt", "x", None).is_ok());
         // Message matcher: case-insensitive substring; a miss is a mismatch.
@@ -835,20 +837,24 @@ mod tests {
         assert!(match_dialog_expect(&e, "confirm", "Really DELETE this?", None).is_ok());
         assert!(match_dialog_expect(&e, "confirm", "Save changes?", None).is_err());
         // Origin gate: same origin ok, foreign origin refuses, unknown url ok.
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "x",
-            Some("https://shop.example/cart")
-        )
-        .is_ok());
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "x",
-            Some("https://evil.example/")
-        )
-        .is_err());
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "x",
+                Some("https://shop.example/cart")
+            )
+            .is_ok()
+        );
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "x",
+                Some("https://evil.example/")
+            )
+            .is_err()
+        );
         assert!(match_dialog_expect(&exp("confirm"), "confirm", "x", None).is_ok());
         // prompt_text passes only when accepting.
         let mut p = exp("prompt");

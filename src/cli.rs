@@ -29,7 +29,7 @@
 //! suggestions). This file is the shared core: dispatch, the daemon client,
 //! and the daemon/one-shot run paths.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::mcp::server;
@@ -46,7 +46,7 @@ use self::args::{
     parse_state_args, parse_vision_args,
 };
 #[cfg(unix)]
-use self::daemon::{daemon_request, MAX_REQUEST_BYTES};
+use self::daemon::{MAX_REQUEST_BYTES, daemon_request};
 use self::daemon::{run_daemon, stop_daemon};
 pub use self::help::{command_help_text, help_json, help_text, suggest_command};
 use self::rb::run_rb;
@@ -618,7 +618,7 @@ async fn run_cli_inner(
                         return Err(ObuError::Usage(format!(
                             "unknown command '{}' — run 'obu help' for the command list",
                             rest[0]
-                        )))
+                        )));
                     }
                 }
             }

@@ -55,7 +55,7 @@
 
 use crate::cdp::CdpSession;
 use crate::error::Result;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod gpu;
@@ -236,8 +236,8 @@ fn is_software_gl(renderer: &str) -> bool {
 /// (fail-safe spoof).
 async fn adaptive_gl_spoof(env: &EnvProbe, cdp: &CdpSession) -> bool {
     use crate::browser::{
-        gpu_state, mark_gl_mid_session_loss, probe_gl_live, reconcile_gl, set_gpu_state, GlLive,
-        GlReconcile, GpuState,
+        GlLive, GlReconcile, GpuState, gpu_state, mark_gl_mid_session_loss, probe_gl_live,
+        reconcile_gl, set_gpu_state,
     };
     let state = gpu_state();
     let live: Option<String>;
@@ -495,7 +495,9 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
         .filter(|s| !s.is_empty());
     let locale = raw_locale.as_deref().and_then(normalize_locale);
     if raw_locale.is_some() && locale.is_none() {
-        eprintln!("[stealth] WARNING: locale rejected (OBU_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped");
+        eprintln!(
+            "[stealth] WARNING: locale rejected (OBU_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped"
+        );
     }
     if let Some(ref l) = locale {
         eprintln!("[stealth] registering locale override: {l}");

@@ -2,7 +2,7 @@
 
 use super::{looks_like_url, resolve_payload, take_num, take_value};
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `see` args: [mode] [url] [extract <type>] [flags].
 pub(crate) fn parse_see_args(args: &[String]) -> Result<Value> {
@@ -64,7 +64,7 @@ pub(crate) fn parse_see_args(args: &[String]) -> Result<Value> {
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for see — see 'obu help see'"
-                    )))
+                    )));
                 }
             }
         } else if a == "extract" {

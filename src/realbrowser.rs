@@ -55,26 +55,25 @@ mod select;
 mod template;
 
 pub use self::browsers::{
-    brand_from_version, discover, find_browser, requires_non_default_dir, Brand, BrowserSpec,
+    Brand, BrowserSpec, brand_from_version, discover, find_browser, requires_non_default_dir,
 };
 pub use self::config::{
-    config, config_from, config_path, save_config, save_config_to, Config, Mode,
+    Config, Mode, config, config_from, config_path, save_config, save_config_to,
 };
 pub use self::controls::{
     hum_enabled, input_paused, pause_path, paused_error, set_paused, should_idle_shutdown,
 };
 pub use self::profiles::{
-    devtools_listening, devtools_port, list_profiles, loopback_listening,
+    ProfileInfo, devtools_listening, devtools_port, list_profiles, loopback_listening,
     parse_devtools_active_port, parse_singleton_owner, profile_in_use, profile_owner_pid, same_dir,
-    ProfileInfo,
 };
 pub use self::select::{
     effective_mode, ensure_current_import, ensure_import, fixed_attach_port, resolve_selection,
     session_drifted, sole_root_id, validate_binary_override,
 };
 pub use self::template::{
-    forget, has_template, human_bytes, import_template, live_clone_sessions, root_for,
-    source_meta_path, template_dir, template_matches, template_source, template_stats, ImportStats,
+    ImportStats, forget, has_template, human_bytes, import_template, live_clone_sessions, root_for,
+    source_meta_path, template_dir, template_matches, template_source, template_stats,
 };
 
 // ── Lane switch ─────────────────────────────────────────────────────────

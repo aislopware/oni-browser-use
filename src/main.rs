@@ -7,9 +7,9 @@
 //! hub in [`obu::updater`], the MCP server in [`obu::mcp`]. The
 //! legacy debug commands kept here (`targets`, `probe`) drive raw CDP.
 
+use obu::Result;
 use obu::cdp;
 use obu::ui;
-use obu::Result;
 
 fn main() {
     // argv as the OS hands it over: std::env::args() panics on an argument

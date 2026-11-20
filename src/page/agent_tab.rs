@@ -9,7 +9,7 @@
 //! commands land on the same tab instead of opening a window each.
 
 use super::*;
-use crate::cdp::{list_page_targets, TargetInfo};
+use crate::cdp::{TargetInfo, list_page_targets};
 use std::path::{Path, PathBuf};
 
 /// The page target a fresh session starts on, and the process-wide record of
@@ -581,9 +581,11 @@ mod tests {
         assert_eq!(agent_target(&base, &record).await.unwrap().id, "AGENT-B");
         // It is one of the agent's own all the same (never the user's).
         remember_opened(&record, &base, "HELPER-2").unwrap();
-        assert!(read_record(&record)[&base]
-            .own
-            .contains(&"HELPER-2".to_string()));
+        assert!(
+            read_record(&record)[&base]
+                .own
+                .contains(&"HELPER-2".to_string())
+        );
         let _ = std::fs::remove_dir_all(record.parent().unwrap());
     }
 

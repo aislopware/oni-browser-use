@@ -6,7 +6,7 @@ use std::io::Write;
 
 use tokio::io::BufReader;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::page::Page;
@@ -14,7 +14,7 @@ use crate::platform::ShutdownSignals;
 
 use super::boot::{idle_timeout_secs, launch_browser, shutdown_browser, warm_profile};
 use super::proto::{handle_discover, handle_initialize, handle_tools_call, handle_tools_list};
-use super::{request_version, shape_result, SUPPORTED_VERSIONS};
+use super::{SUPPORTED_VERSIONS, request_version, shape_result};
 
 /// The stdio JSON-RPC loop, shared by both transports.
 ///

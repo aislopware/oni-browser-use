@@ -6,7 +6,7 @@
 //! token serves the agent's decision of which tool to call and how to
 //! parameterize it. No redundancy between description and schema.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// One tool definition as exposed to the MCP client.
 pub struct ToolDef {

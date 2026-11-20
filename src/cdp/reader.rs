@@ -23,11 +23,11 @@
 //! No `Runtime.enable` anywhere here: it is the one CDP side effect pages can
 //! detect, and this driver never sends it.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::session::CdpSession;
 use crate::error::{ObuError, Result};

@@ -273,7 +273,7 @@ async fn check_chrome_version() -> Check {
                 status: Status::Fail,
                 detail: "Chrome not found".into(),
                 fix: None,
-            }
+            };
         }
     };
 
@@ -397,10 +397,9 @@ fn wm_check(found: Option<String>) -> Check {
         None => Check {
             name: "Window manager (headful geometry)",
             status: Status::Warn,
-            detail:
-                "xfwm4 not found — Xvfb runs headful with no decorations or frame extents \
+            detail: "xfwm4 not found — Xvfb runs headful with no decorations or frame extents \
                      (outerWidth == innerWidth, availHeight == height); pages see an Xvfb signature"
-                    .into(),
+                .into(),
             fix: Some(
                 "Install xfwm4: sudo pacman -S xfwm4 (Arch) / sudo apt install xfwm4 (Debian)"
                     .into(),
@@ -719,7 +718,7 @@ fn check_binary() -> Check {
                 status: Status::Warn,
                 detail: format!("cannot check: {e}"),
                 fix: None,
-            }
+            };
         }
     };
 
@@ -764,7 +763,7 @@ fn check_disk_space() -> Check {
                 status: Status::Warn,
                 detail: "cannot check".into(),
                 fix: None,
-            }
+            };
         }
     };
     // Suppress unused warning on non-Unix (exe only used in cfg(unix) block).
@@ -918,10 +917,12 @@ mod tests {
             "{}",
             missing.detail
         );
-        assert!(missing
-            .fix
-            .unwrap_or_default()
-            .contains("sudo pacman -S xfwm4"));
+        assert!(
+            missing
+                .fix
+                .unwrap_or_default()
+                .contains("sudo pacman -S xfwm4")
+        );
         let found = wm_check(Some("/usr/bin/xfwm4".into()));
         assert!(matches!(found.status, Status::Pass));
         assert!(found.detail.contains("/usr/bin/xfwm4"));

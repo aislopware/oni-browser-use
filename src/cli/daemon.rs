@@ -16,7 +16,7 @@ use super::{
 #[cfg(unix)]
 use crate::page::Page;
 #[cfg(unix)]
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Best-effort daemon restart so a lane switch takes effect immediately:
 /// a running daemon holds the OLD lane's browser. Unix only (daemon mode is).
@@ -607,11 +607,7 @@ const DAEMON_SCOPED_ENV: &[&str] = &[
 
 #[cfg(unix)]
 fn lane_name(real: bool) -> &'static str {
-    if real {
-        "real"
-    } else {
-        "agent"
-    }
+    if real { "real" } else { "agent" }
 }
 
 /// The request for one tool call: this command's resolved lane and the
@@ -832,7 +828,9 @@ pub async fn stop_daemon() -> Result<String> {
             let _ = std::fs::remove_file(pid_path());
             let _ = std::fs::remove_file(&path);
             if unanswered {
-                return Ok(format!("daemon (pid {pid}) did not answer within {STOP_ANSWER_SECS}s (busy or wedged) — terminated; any command it was running was cancelled, outcome unknown"));
+                return Ok(format!(
+                    "daemon (pid {pid}) did not answer within {STOP_ANSWER_SECS}s (busy or wedged) — terminated; any command it was running was cancelled, outcome unknown"
+                ));
             }
             return Ok(format!("daemon (pid {pid}) was unresponsive — terminated"));
         }

@@ -382,7 +382,10 @@ mod tests {
         assert_eq!(first.score, Some(3), "exact score, not a fuzzed one");
         assert_eq!(first.comments, Some(21));
         assert_eq!(first.date.as_deref(), Some("2026-09-17 00:16 UTC"));
-        assert_eq!(first.url, "https://www.reddit.com/r/Monitors/comments/1wiegex/which_is_the_best_monitor_for_programming_worth/");
+        assert_eq!(
+            first.url,
+            "https://www.reddit.com/r/Monitors/comments/1wiegex/which_is_the_best_monitor_for_programming_worth/"
+        );
         assert!(
             first.text.as_deref().is_some_and(|t| !t.is_empty()),
             "self-post excerpt present"

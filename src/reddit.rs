@@ -46,7 +46,7 @@ mod tree;
 pub use self::net::is_security_block;
 use self::net::{ensure_loid, fetch_json, fetch_json_many, is_rate_limit};
 pub use self::search::{
-    fetch_search, search_target, SearchItem, SearchPayload, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_PAGE,
+    DEFAULT_SEARCH_LIMIT, MAX_SEARCH_PAGE, SearchItem, SearchPayload, fetch_search, search_target,
 };
 use self::tree::{
     attach_info_things, cut_chars, merge_subtree, parse_discussion, parse_subtree, render_items,

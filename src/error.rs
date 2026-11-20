@@ -18,14 +18,18 @@ pub enum ObuError {
     /// not reject anything. `degraded:true` is the machine-readable tag
     /// agents branch on (S3) — a client-side failure must not read as a
     /// page verdict.
-    #[error("CDP transport closed: {0} - degraded:true (client-side connection failure; the page itself did not fail)")]
+    #[error(
+        "CDP transport closed: {0} - degraded:true (client-side connection failure; the page itself did not fail)"
+    )]
     Transport(String),
 
     /// A CDP command did not receive a response within the timeout.
     /// `degraded:true` tag (S3): an unanswered command is a browser-health
     /// signal (GPU/renderer stall, overloaded main thread, wedged
     /// process) - not a page-side error an agent should retry blindly.
-    #[error("CDP command timed out after {0:?} - degraded:true (client-side: this command did not answer within the deadline; outcome unknown - observe before retrying input)")]
+    #[error(
+        "CDP command timed out after {0:?} - degraded:true (client-side: this command did not answer within the deadline; outcome unknown - observe before retrying input)"
+    )]
     Timeout(std::time::Duration),
 
     /// The browser connection is no longer usable (process gone / dropped).

@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::cdp::CdpSession;
 use crate::error::{ObuError, Result};
@@ -40,7 +40,7 @@ mod fetch;
 mod gql;
 mod parse;
 
-pub use self::gql::{build_url, capture_templates, fetch_api, GqlTemplate};
+pub use self::gql::{GqlTemplate, build_url, capture_templates, fetch_api};
 
 use self::dom::{dom_collect, is_flaky_render};
 use self::fetch::{fetch_thread, fetch_timeline};
@@ -66,8 +66,7 @@ const POST_TEXT_CAP: usize = 8000;
 /// The public web-client bearer embedded in every X bundle. Not a secret:
 /// it identifies the web app, not a user. If it ever rotates, replays fail
 /// with 401 and the adapter falls back to the DOM path with a note.
-const WEB_BEARER: &str =
-    "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+const WEB_BEARER: &str = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
 #[derive(Serialize)]
 pub struct XPost {
@@ -179,13 +178,13 @@ pub async fn extract(page: &Page, kind: &str, cap: usize) -> Result<XPayload> {
 mod tests {
     use super::*;
 
-    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
     use super::dom::dom_items_from_json;
     use super::fetch::{depth_of, thread_walk, timeline_walk};
     use super::gql::parse_gql_url;
-    use super::parse::{collect_page, format_x_date, parse_thread_page, parse_timeline_page, T};
+    use super::parse::{T, collect_page, format_x_date, parse_thread_page, parse_timeline_page};
 
     fn fixture() -> Value {
         serde_json::from_str(include_str!("../tests/fixtures/x_tweet_detail.json"))
@@ -404,15 +403,17 @@ mod tests {
 
         // A first-page failure still errors, so the caller can fall back.
         let (cdp, _) = fake_cdp(vec![Ok((200, "not json".into()))]).await;
-        assert!(thread_walk(
-            &cdp,
-            &template("TweetDetail"),
-            FOCAL,
-            100,
-            &mut Budget::new()
-        )
-        .await
-        .is_err());
+        assert!(
+            thread_walk(
+                &cdp,
+                &template("TweetDetail"),
+                FOCAL,
+                100,
+                &mut Budget::new()
+            )
+            .await
+            .is_err()
+        );
     }
 
     fn replace_cursor(kind: &str, value: &str) -> Value {

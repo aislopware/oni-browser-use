@@ -6,7 +6,7 @@
 //! script text itself lives in `js/auto_extract.js` (`include_str!`, with
 //! `__LIMIT__`/`__POST_MARKER__` substituted at call time).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::page::Page;

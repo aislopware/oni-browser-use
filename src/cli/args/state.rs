@@ -2,7 +2,7 @@
 
 use super::take_value;
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `state` args: <op> [args] [flags]. Same op names as MCP (plus
 /// rm-ss), and unknown ops/flags are loud errors.
@@ -81,7 +81,7 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for state — see 'obu help state'"
-                    )))
+                    )));
                 }
             }
         } else {

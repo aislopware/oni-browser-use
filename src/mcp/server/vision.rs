@@ -1,7 +1,7 @@
 //! `vision` handler: screenshot (+ optional Set-of-Marks overlay), inline or
 //! written to a file, of the viewport, a sized viewport or the whole page.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::ObuError;
@@ -713,10 +713,12 @@ mod tests {
         assert_eq!(v["id"], 7);
         let content = v["result"]["content"].as_array().unwrap();
         assert_eq!(content.len(), 1, "no inline image for an offloaded capture");
-        assert!(content[0]["text"]
-            .as_str()
-            .unwrap()
-            .starts_with("screenshot (732 KB — too large to inline, saved to "));
+        assert!(
+            content[0]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("screenshot (732 KB — too large to inline, saved to ")
+        );
         assert!(v["result"].get("isError").is_none());
         let _ = std::fs::remove_file(&path);
     }

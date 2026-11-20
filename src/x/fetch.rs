@@ -4,8 +4,8 @@
 
 use std::collections::HashSet;
 
-use super::gql::{build_url, fetch_api, Budget};
-use super::parse::{cut_chars, no_timeline_reason, parse_thread_page, parse_timeline_page, T};
+use super::gql::{Budget, build_url, fetch_api};
+use super::parse::{T, cut_chars, no_timeline_reason, parse_thread_page, parse_timeline_page};
 use super::*;
 
 fn focal_id_from_url(url: &str) -> Option<String> {

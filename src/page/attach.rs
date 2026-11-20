@@ -158,7 +158,9 @@ impl Page {
                     }
                 }
             } else if std::env::var("OBU_PROXY").is_ok() {
-                eprintln!("[obu] WARNING: OBU_PROXY set but OBU_TZ not set — timezone/IP mismatch will be detected");
+                eprintln!(
+                    "[obu] WARNING: OBU_PROXY set but OBU_TZ not set — timezone/IP mismatch will be detected"
+                );
             }
             // The same BCP-47 normalization as the injection (`en_US` →
             // `en-US`): Intl, navigator.language and Accept-Language must
@@ -1211,8 +1213,8 @@ mod auto_attach_tests {
     use super::*;
     use futures_util::{SinkExt, StreamExt};
     use tokio::sync::mpsc;
-    use tokio_tungstenite::tungstenite::{protocol::Role, Message};
     use tokio_tungstenite::WebSocketStream;
+    use tokio_tungstenite::tungstenite::{Message, protocol::Role};
 
     type Seen = mpsc::UnboundedReceiver<(String, String)>;
 

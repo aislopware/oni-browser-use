@@ -5,7 +5,7 @@
 //! state), and manage tabs (multi-page workflows). One tool, three domains.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::cdp::CdpSession;
 use crate::error::{ObuError, Result};
@@ -194,7 +194,9 @@ pub async fn perform(cdp: &CdpSession, op: &StateOp) -> Result<String> {
 
             let res = cdp.send("Network.setCookie", Some(params)).await?;
             if res.get("success").and_then(Value::as_bool) == Some(false) {
-                return Err(ObuError::Other(format!("Chrome rejected cookie {name:?}; check its URL, domain and security attributes")));
+                return Err(ObuError::Other(format!(
+                    "Chrome rejected cookie {name:?}; check its URL, domain and security attributes"
+                )));
             }
             let stored = cdp.cookie_store().await?;
             let expected_domain = if let Some(u) = url {
@@ -659,7 +661,10 @@ fn bounded_state_read(text: String, data: &impl Serialize) -> Result<String> {
     }
     let payload = serde_json::to_string(data)?;
     let path = crate::artifacts::write_artifact(&payload, "json")?;
-    Ok(format!("state read offloaded ({} bytes); full payload: {path} — read with see artifact=\"{path}\" format=json items=true", payload.len()))
+    Ok(format!(
+        "state read offloaded ({} bytes); full payload: {path} — read with see artifact=\"{path}\" format=json items=true",
+        payload.len()
+    ))
 }
 
 async fn set_storage(cdp: &CdpSession, storage: &str, key: &str, value: &str) -> Result<String> {
@@ -800,10 +805,12 @@ mod reliability_tests {
     #[test]
     fn page_exceptions_never_count_as_storage_success() {
         let value = json!({"result":{"value":true},"exceptionDetails":{"text":"SecurityError"}});
-        assert!(extract_eval_value(&value)
-            .unwrap_err()
-            .to_string()
-            .contains("SecurityError"));
+        assert!(
+            extract_eval_value(&value)
+                .unwrap_err()
+                .to_string()
+                .contains("SecurityError")
+        );
         assert!(extract_eval_value(&json!({"result":{}})).is_err());
     }
 }

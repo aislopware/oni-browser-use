@@ -116,11 +116,13 @@ git show main:scripts/fork-rename.py > /tmp/fork-rename.py
 prev=$(git log main -1 --format=%H --grep='^chore: upstream, renamed')
 git switch -C upstream-renamed "$prev"
 git rm -rqf . && git checkout upstream/main -- .
-python3 /tmp/fork-rename.py && cargo fmt && git add -A
+python3 /tmp/fork-rename.py && cargo fmt -- --style-edition 2024 && git add -A
 git reset --soft "$(git commit-tree "$(git write-tree)" -p "$prev" -p upstream/main \
   -m 'chore: upstream, renamed by scripts/fork-rename.py')"
 git switch main && git merge upstream-renamed
 ```
+
+The fork is on the 2024 edition and upstream is not; `--style-edition 2024` formats the renamed tree the way main is, so formatting never conflicts. Upstream code that the 2024 edition rejects (an `std::env::set_var` outside `unsafe`, say) is fixed in the merge commit.
 
 When the script stops with "fixup no longer applies", upstream moved that text: fix the entry in `FIXUPS` on main first.
 

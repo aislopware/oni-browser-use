@@ -3,7 +3,7 @@
 //! Tab lifecycle ops live here (not in the page layer) because they
 //! re-attach the session — they need `&mut Page`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::Result;
 use crate::page::Page;
@@ -248,7 +248,7 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
         _ => {
             return Err(crate::error::ObuError::Other(format!(
                 "unknown state op: {op_str}"
-            )))
+            )));
         }
     };
 

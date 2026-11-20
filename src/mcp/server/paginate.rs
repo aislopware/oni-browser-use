@@ -3,7 +3,7 @@ use crate::{
     error::{ObuError, Result},
     page::Page,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub(super) async fn handle_paginate(args: &Value, page: &mut Page) -> Result<String> {
     let next = args

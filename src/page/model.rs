@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use crate::page::perception::{PageCapture, RawElement};
 use crate::page::refs::PrevState;
-use crate::page::refs::{stabilize, StateChange, StateProbe};
+use crate::page::refs::{StateChange, StateProbe, stabilize};
 
 /// One actionable element with its stable ref attached.
 #[derive(Debug, Clone)]

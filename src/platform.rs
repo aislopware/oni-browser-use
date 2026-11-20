@@ -1405,7 +1405,7 @@ impl TerminationSignal {
     pub fn listen() -> Self {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
             Self {
                 streams: [libc::SIGTERM, libc::SIGINT, libc::SIGHUP]
                     .into_iter()

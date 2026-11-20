@@ -1,7 +1,7 @@
 //! The `vision` command parser — `[url] [--marks] [--full] [--size WxH[@scale]] [--out file.png]`.
 
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `vision` args into the tool's arguments.
 pub(crate) fn parse_vision_args(args: &[String]) -> Result<Value> {
@@ -21,13 +21,13 @@ pub(crate) fn parse_vision_args(args: &[String]) -> Result<Value> {
             s if s.starts_with("--") => {
                 return Err(ObuError::Usage(format!(
                     "unknown flag {s} for vision — see 'obu help vision'"
-                )))
+                )));
             }
             s if parsed.get("url").is_none() => parsed["url"] = json!(s),
             s => {
                 return Err(ObuError::Usage(format!(
                     "unexpected argument '{s}' for vision — obu vision [url] [--marks] [--full] [--size WxH[@scale]] [--out file.png]"
-                )))
+                )));
             }
         }
     }

@@ -4,7 +4,7 @@
 //! `help --json` is generated from the same `tools_to_json()` the MCP server
 //! serves, so the two surfaces cannot drift.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 

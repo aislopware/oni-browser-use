@@ -18,8 +18,8 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::model::{LivePageModel, RefSnapshot};
 use super::Page;
+use super::model::{LivePageModel, RefSnapshot};
 use crate::cdp::CdpSession;
 
 /// Tabs come and go; a table nobody resumed for a week belongs to a tab that

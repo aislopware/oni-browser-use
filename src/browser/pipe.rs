@@ -4,9 +4,9 @@
 #[cfg(unix)]
 use super::discover::find_chrome;
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use super::display::{apply_xvfb_env, VirtualDisplay};
+use super::display::{VirtualDisplay, apply_xvfb_env};
 #[cfg(unix)]
-use super::flags::{classify_gl, gl_stages, launch_args, stage_label, LaunchCfg};
+use super::flags::{LaunchCfg, classify_gl, gl_stages, launch_args, stage_label};
 #[cfg(unix)]
 use super::launch::font_audit;
 #[cfg(unix)]

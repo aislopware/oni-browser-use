@@ -14,10 +14,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use obu::action::{perform, Action};
+use obu::action::{Action, perform};
 use obu::cdp::{CdpClient, CdpSession};
 use obu::page::LivePageModel;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;

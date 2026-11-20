@@ -155,7 +155,7 @@ async fn verify_sha256(binary_path: &std::path::Path, asset_url: &str, tag: &str
             return Err(fetch_failed(&format!(
                 "checksum file unreachable after {ATTEMPTS} attempts ({})",
                 last_transport.as_deref().unwrap_or("transport error")
-            )))
+            )));
         }
         None => {
             eprintln!(
@@ -484,7 +484,7 @@ async fn download_once(url: &str, tmp: &std::path::Path, expected_size: u64) -> 
             _ => {
                 return Err(ObuError::Other(
                     "download returned an invalid content range (Content-Range)".into(),
-                ))
+                ));
             }
         }
     }
@@ -986,23 +986,29 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\nabcdefghijk".into(),
             "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nb\r\nabcdefghijk\r\n0\r\n\r\n".into(),
         ]).await;
-        assert!(download_once(&url, &tmp, 10)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("range"));
+        assert!(
+            download_once(&url, &tmp, 10)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("range")
+        );
         assert_eq!(std::fs::read(&tmp).unwrap(), b"abc");
-        assert!(download_once(&url, &tmp, 10)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("size"));
+        assert!(
+            download_once(&url, &tmp, 10)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("size")
+        );
         assert_eq!(std::fs::read(&tmp).unwrap(), b"abc");
-        assert!(download_once(&url, &tmp, 10)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("size"));
+        assert!(
+            download_once(&url, &tmp, 10)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("size")
+        );
         assert!(std::fs::metadata(&tmp).unwrap().len() <= 10);
         assert_eq!(server.await.unwrap().len(), 3);
         std::fs::remove_file(tmp).unwrap();
@@ -1031,9 +1037,11 @@ mod tests {
         .await;
         assert_eq!(download_once(&url, &tmp, 4).await.unwrap(), 4);
         assert_eq!(std::fs::read(&tmp).unwrap(), b"new!");
-        assert!(server.await.unwrap()[0]
-            .to_lowercase()
-            .contains("range: bytes=3-"));
+        assert!(
+            server.await.unwrap()[0]
+                .to_lowercase()
+                .contains("range: bytes=3-")
+        );
         std::fs::remove_file(tmp).unwrap();
     }
 

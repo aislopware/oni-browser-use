@@ -115,10 +115,17 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             println!();
             match sel {
                 Ok((spec, profile)) => {
-                    let auto = if cfg.browser.is_none() { " · auto (most recently used)" } else { "" };
+                    let auto = if cfg.browser.is_none() {
+                        " · auto (most recently used)"
+                    } else {
+                        ""
+                    };
                     println!(
                         "{}",
-                        rb_row("browser", &format!("{} ({}){auto}", spec.name, spec.brand.as_str()))
+                        rb_row(
+                            "browser",
+                            &format!("{} ({}){auto}", spec.name, spec.brand.as_str())
+                        )
                     );
                     let bin = if spec.binary.as_os_str().is_empty() {
                         ui::yellow("none found — install it or set `rb use --binary <path>`")
@@ -135,7 +142,11 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                         "{}",
                         rb_row(
                             "profile",
-                            &format!("\"{}\" · {}", profile.name, ui::dim(&profile.path.display().to_string()))
+                            &format!(
+                                "\"{}\" · {}",
+                                profile.name,
+                                ui::dim(&profile.path.display().to_string())
+                            )
                         )
                     );
                     println!(
@@ -149,15 +160,28 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                             )
                         )
                     );
-                    if let Some(port) = rb::devtools_port(&profile.root).filter(|_| cfg.port.is_none()) {
+                    if let Some(port) =
+                        rb::devtools_port(&profile.root).filter(|_| cfg.port.is_none())
+                    {
                         println!(
                             "{}",
-                            rb_row("attach", &format!("live debug endpoint on 127.0.0.1:{port} — auto would attach"))
+                            rb_row(
+                                "attach",
+                                &format!(
+                                    "live debug endpoint on 127.0.0.1:{port} — auto would attach"
+                                )
+                            )
                         );
                     }
                     match rb::template_stats(&spec.id) {
                         Some((files, bytes)) => {
-                            println!("{}", rb_row("clone", &format!("{files} files ({})", rb::human_bytes(bytes))));
+                            println!(
+                                "{}",
+                                rb_row(
+                                    "clone",
+                                    &format!("{files} files ({})", rb::human_bytes(bytes))
+                                )
+                            );
                             if let Some(src) = rb::template_source(&spec.id) {
                                 println!("{}", rb_row("source", &ui::dim(&src)));
                             }
@@ -171,7 +195,10 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 // Not an error under a fixed attach port: the port alone
                 // names the endpoint.
                 Err(_) if fixed.is_some() => {
-                    println!("{}", rb_row("mode", &format!("{} → attach (now)", cfg.mode.as_str())));
+                    println!(
+                        "{}",
+                        rb_row("mode", &format!("{} → attach (now)", cfg.mode.as_str()))
+                    );
                 }
                 Err(e) => println!("{}", rb_row("selection", &ui::red(&e.to_string()))),
             }
@@ -181,13 +208,20 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             if paused {
                 println!(
                     "{}",
-                    rb_row("paused", &ui::yellow("yes — input, navigation, downloads, collecting and tab ops refuse until `rb resume`"))
+                    rb_row(
+                        "paused",
+                        &ui::yellow(
+                            "yes — input, navigation, downloads, collecting and tab ops refuse until `rb resume`"
+                        )
+                    )
                 );
             }
             println!();
             println!(
                 "{}",
-                ui::dim("hint: `obu rb on|off` switches the lane · `obu help rb` for the full story")
+                ui::dim(
+                    "hint: `obu rb on|off` switches the lane · `obu help rb` for the full story"
+                )
             );
             Ok(())
         }
@@ -203,9 +237,16 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     }
                 }
                 if json_mode {
-                    println!("{}", serde_json::json!({"ok": true, "enabled": true, "note": "already on"}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"ok": true, "enabled": true, "note": "already on"})
+                    );
                 } else {
-                    println!("{} {}", ui::bold("Real-browser lane:"), ui::bold(&ui::green("already ON")) + " — `obu rb status` for details");
+                    println!(
+                        "{} {}",
+                        ui::bold("Real-browser lane:"),
+                        ui::bold(&ui::green("already ON")) + " — `obu rb status` for details"
+                    );
                 }
                 return Ok(());
             }
@@ -213,7 +254,11 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             // switch on without a discovered browser (nothing is launched).
             let fixed = rb::fixed_attach_port(&cfg);
             let sel = rb::resolve_selection(&cfg);
-            let sel = if fixed.is_some() { sel.ok() } else { Some(sel?) };
+            let sel = if fixed.is_some() {
+                sel.ok()
+            } else {
+                Some(sel?)
+            };
             let mode = sel
                 .as_ref()
                 .map(|(_, p)| rb::effective_mode(&cfg, &p.root))
@@ -254,17 +299,36 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             );
             println!();
             if let Some((spec, profile)) = &sel {
-                println!("{}", rb_row("browser", &format!("{} ({})", spec.name, spec.brand.as_str())));
                 println!(
                     "{}",
-                    rb_row("profile", &format!("\"{}\" · {}", profile.name, ui::dim(&profile.path.display().to_string())))
+                    rb_row(
+                        "browser",
+                        &format!("{} ({})", spec.name, spec.brand.as_str())
+                    )
+                );
+                println!(
+                    "{}",
+                    rb_row(
+                        "profile",
+                        &format!(
+                            "\"{}\" · {}",
+                            profile.name,
+                            ui::dim(&profile.path.display().to_string())
+                        )
+                    )
                 );
             }
             println!("{}", rb_row("mechanism", mode.as_str()));
             if let Some(port) = cfg.port {
                 println!("{}", rb_row("port", &port_line(port, cfg.mode)));
             }
-            println!("{}", rb_row("lane", "zero page patches — your real environment IS the stealth"));
+            println!(
+                "{}",
+                rb_row(
+                    "lane",
+                    "zero page patches — your real environment IS the stealth"
+                )
+            );
             println!();
             println!(
                 "  {} the agent browses AS YOU — anything it does is attributable to your",
@@ -279,18 +343,43 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             println!("    endpoint any local user of this machine can reach — avoid shared/");
             println!("    multi-user hosts (headless sessions idle-close automatically).");
             println!();
-            println!("{}", rb_row("revert", "`obu rb off` · wipe the imported copy: `rb forget`"));
-            println!("{}", rb_row("control", "`rb pause` / `rb resume` hand the browser to you"));
-            println!("{}", rb_row("note", "running surfaces (daemon, MCP) switch at their next action — an owned browser relaunches; an attached browser is left running"));
+            println!(
+                "{}",
+                rb_row(
+                    "revert",
+                    "`obu rb off` · wipe the imported copy: `rb forget`"
+                )
+            );
+            println!(
+                "{}",
+                rb_row(
+                    "control",
+                    "`rb pause` / `rb resume` hand the browser to you"
+                )
+            );
+            println!(
+                "{}",
+                rb_row(
+                    "note",
+                    "running surfaces (daemon, MCP) switch at their next action — an owned browser relaunches; an attached browser is left running"
+                )
+            );
             Ok(())
         }
 
         "off" => {
             if !cfg.enabled {
                 if json_mode {
-                    println!("{}", serde_json::json!({"ok": true, "enabled": false, "note": "already off"}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"ok": true, "enabled": false, "note": "already off"})
+                    );
                 } else {
-                    println!("{} {}", ui::bold("Real-browser lane:"), ui::dim("already off"));
+                    println!(
+                        "{} {}",
+                        ui::bold("Real-browser lane:"),
+                        ui::dim("already off")
+                    );
                 }
                 return Ok(());
             }
@@ -308,7 +397,10 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 );
                 println!(
                     "{}",
-                    rb_row("note", "a running browser is switched at its next use — relaunched if owned, left running if attached; no restart needed")
+                    rb_row(
+                        "note",
+                        "a running browser is switched at its next use — relaunched if owned, left running if attached; no restart needed"
+                    )
                 );
             }
             Ok(())
@@ -316,9 +408,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
 
         "mode" => {
             let m = rest.first().ok_or_else(|| {
-                crate::error::ObuError::Usage(
-                    "obu rb mode <auto|clone|profile|attach>".into(),
-                )
+                crate::error::ObuError::Usage("obu rb mode <auto|clone|profile|attach>".into())
             })?;
             let mode = match m.as_str() {
                 "auto" => rb::Mode::Auto,
@@ -328,7 +418,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 other => {
                     return Err(crate::error::ObuError::Usage(format!(
                         "unknown mode `{other}` — use auto|clone|profile|attach"
-                    )))
+                    )));
                 }
             };
             cfg.mode = mode;
@@ -338,7 +428,12 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             } else {
                 println!("mechanism set to {}", ui::bold(mode.as_str()));
                 if cfg.enabled {
-                    println!("  {}", ui::dim("applies at the running session's next action — owned browsers relaunch; attach sessions detach"));
+                    println!(
+                        "  {}",
+                        ui::dim(
+                            "applies at the running session's next action — owned browsers relaunch; attach sessions detach"
+                        )
+                    );
                 }
             }
             Ok(())
@@ -390,7 +485,7 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 _ => {
                     return Err(crate::error::ObuError::Usage(format!(
                         "obu rb {sub} <on|off>"
-                    )))
+                    )));
                 }
             };
             match sub {
@@ -400,14 +495,23 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             }
             rb::save_config(&cfg)?;
             if json_mode {
-                println!("{}", serde_json::json!({"ok": true, "setting": sub, "value": on}));
+                println!(
+                    "{}",
+                    serde_json::json!({"ok": true, "setting": sub, "value": on})
+                );
             } else {
                 match sub {
                     "visible" => {
                         let (head, tail) = if on {
-                            (ui::green("visible"), "the browser opens as a real window (the point of the lane)")
+                            (
+                                ui::green("visible"),
+                                "the browser opens as a real window (the point of the lane)",
+                            )
                         } else {
-                            (ui::dim("invisible"), "--headless=new; honest, but a degraded environment (servers/CI)")
+                            (
+                                ui::dim("invisible"),
+                                "--headless=new; honest, but a degraded environment (servers/CI)",
+                            )
                         };
                         println!("{head} — {tail}");
                     }
@@ -421,9 +525,15 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     }
                     _ => {
                         let (head, tail) = if on {
-                            (ui::yellow("idle shutdown on"), " — the idle timeout may close a real-lane browser")
+                            (
+                                ui::yellow("idle shutdown on"),
+                                " — the idle timeout may close a real-lane browser",
+                            )
                         } else {
-                            (ui::dim("idle shutdown off"), " — a real-lane browser is never closed by the idle timeout (default)")
+                            (
+                                ui::dim("idle shutdown off"),
+                                " — a real-lane browser is never closed by the idle timeout (default)",
+                            )
                         };
                         println!("{head}{tail}");
                     }
@@ -471,21 +581,32 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 None => {
                     let browsers = rb::discover();
                     if json_mode {
-                        println!("{}", serde_json::json!({
-                            "ok": true, "browser": cfg.browser, "binary": cfg.binary,
-                            "browsers": browsers.iter().map(|b| serde_json::json!({
-                                "id": b.id, "name": b.name, "binary": b.binary,
-                                "profile_root": b.profile_root,
-                            })).collect::<Vec<_>>()
-                        }));
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "ok": true, "browser": cfg.browser, "binary": cfg.binary,
+                                "browsers": browsers.iter().map(|b| serde_json::json!({
+                                    "id": b.id, "name": b.name, "binary": b.binary,
+                                    "profile_root": b.profile_root,
+                                })).collect::<Vec<_>>()
+                            })
+                        );
                         return Ok(());
                     }
                     if browsers.is_empty() {
                         println!("{}", ui::yellow("no Chromium-family browsers found"));
                     }
                     let selected = rb::resolve_selection(&cfg).ok().map(|(s, _)| s.id);
-                    let id_w = browsers.iter().map(|b| b.id.chars().count()).max().unwrap_or(2);
-                    let name_w = browsers.iter().map(|b| b.name.chars().count()).max().unwrap_or(4);
+                    let id_w = browsers
+                        .iter()
+                        .map(|b| b.id.chars().count())
+                        .max()
+                        .unwrap_or(2);
+                    let name_w = browsers
+                        .iter()
+                        .map(|b| b.name.chars().count())
+                        .max()
+                        .unwrap_or(4);
                     for b in browsers {
                         let sel = selected.as_deref() == Some(b.id.as_str());
                         let star = if sel { ui::green("*") } else { " ".to_string() };
@@ -515,7 +636,8 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 }
                 Some(id) => {
                     let spec = rb::find_browser(id).ok_or_else(|| {
-                        let avail: Vec<String> = rb::discover().iter().map(|b| b.id.clone()).collect();
+                        let avail: Vec<String> =
+                            rb::discover().iter().map(|b| b.id.clone()).collect();
                         crate::error::ObuError::Other(format!(
                             "browser `{id}` not found. Available: {}",
                             avail.join(", ")
@@ -526,21 +648,35 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     cfg.binary = None; // an explicit browser switch resets a custom binary
                     rb::save_config(&cfg)?;
                     if !json_mode {
-                        println!("browser set to {} ({})", ui::bold(&spec.name), ui::dim(&spec.binary.display().to_string()));
+                        println!(
+                            "browser set to {} ({})",
+                            ui::bold(&spec.name),
+                            ui::dim(&spec.binary.display().to_string())
+                        );
                         if cleared {
                             println!(
                                 "  {}",
-                                ui::dim("binary override cleared (re-apply with `rb use --binary` if wanted)")
+                                ui::dim(
+                                    "binary override cleared (re-apply with `rb use --binary` if wanted)"
+                                )
                             );
                         }
                         if !rb::has_template(&spec.id) && cfg.enabled {
-                            println!("  {}", ui::dim(&format!("note: no clone for `{id}` yet — the first launch imports it")));
+                            println!(
+                                "  {}",
+                                ui::dim(&format!(
+                                    "note: no clone for `{id}` yet — the first launch imports it"
+                                ))
+                            );
                         }
                     }
                 }
             }
             if json_mode {
-                println!("{}", serde_json::json!({"ok": true, "browser": cfg.browser}));
+                println!(
+                    "{}",
+                    serde_json::json!({"ok": true, "browser": cfg.browser})
+                );
             }
             Ok(())
         }
@@ -554,21 +690,32 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                     })?;
                     let profiles = rb::list_profiles(&spec.profile_root);
                     if json_mode {
-                        println!("{}", serde_json::json!({
-                            "ok": true, "profile": cfg.profile,
-                            "profiles": profiles.iter().map(|p| serde_json::json!({
-                                "key": p.key, "name": p.name, "path": p.path,
-                            })).collect::<Vec<_>>()
-                        }));
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "ok": true, "profile": cfg.profile,
+                                "profiles": profiles.iter().map(|p| serde_json::json!({
+                                    "key": p.key, "name": p.name, "path": p.path,
+                                })).collect::<Vec<_>>()
+                            })
+                        );
                         return Ok(());
                     }
-                    let key_w = profiles.iter().map(|p| p.key.chars().count()).max().unwrap_or(4);
+                    let key_w = profiles
+                        .iter()
+                        .map(|p| p.key.chars().count())
+                        .max()
+                        .unwrap_or(4);
                     for p in &profiles {
                         let sel = cfg.profile.as_deref() == Some(p.key.as_str());
                         let star = if sel { ui::green("*") } else { " ".to_string() };
                         let kp = format!("{:<key_w$}", p.key);
                         let key = if sel { ui::bold(&kp) } else { kp };
-                        println!("  {star} {key}  \"{}\"  {}", p.name, ui::dim(&p.path.display().to_string()));
+                        println!(
+                            "  {star} {key}  \"{}\"  {}",
+                            p.name,
+                            ui::dim(&p.path.display().to_string())
+                        );
                     }
                     println!();
                     println!(
@@ -608,7 +755,11 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                             return Err(crate::error::ObuError::Other(format!(
                                 "profile `{key}` not found in {}. Available: {}",
                                 spec.profile_root.display(),
-                                if avail.is_empty() { "(none)".to_string() } else { avail.join(", ") }
+                                if avail.is_empty() {
+                                    "(none)".to_string()
+                                } else {
+                                    avail.join(", ")
+                                }
                             )));
                         }
                     }
@@ -620,7 +771,10 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 }
             }
             if json_mode {
-                println!("{}", serde_json::json!({"ok": true, "profile": cfg.profile}));
+                println!(
+                    "{}",
+                    serde_json::json!({"ok": true, "profile": cfg.profile})
+                );
             }
             Ok(())
         }
@@ -641,9 +795,15 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
             refuse_under_live_clone_sessions(&spec.id, "refresh")?;
             rb::ensure_import(&spec, &profile)?;
             if json_mode {
-                println!("{}", serde_json::json!({"ok": true, "refreshed_from": profile.path.display().to_string()}));
+                println!(
+                    "{}",
+                    serde_json::json!({"ok": true, "refreshed_from": profile.path.display().to_string()})
+                );
             } else {
-                println!("clone refreshed from {}", ui::dim(&profile.path.display().to_string()));
+                println!(
+                    "clone refreshed from {}",
+                    ui::dim(&profile.path.display().to_string())
+                );
             }
             Ok(())
         }

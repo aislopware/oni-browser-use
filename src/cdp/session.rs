@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
 use crate::cdp::client::CdpClient;
@@ -232,7 +232,7 @@ impl CdpSession {
                         Ok(_) => continue,
                         Err(broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(broadcast::error::RecvError::Closed) => {
-                            return Err(crate::error::ObuError::Closed)
+                            return Err(crate::error::ObuError::Closed);
                         }
                     }
                 }
