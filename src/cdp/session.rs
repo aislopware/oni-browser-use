@@ -176,10 +176,10 @@ impl CdpSession {
         params: Option<Value>,
         deadline: Duration,
     ) -> Result<Value> {
-        if method == "Runtime.evaluate" {
-            if let Some(reader) = &self.reader {
-                return reader::evaluate(self, reader, params, deadline).await;
-            }
+        if method == "Runtime.evaluate"
+            && let Some(reader) = &self.reader
+        {
+            return reader::evaluate(self, reader, params, deadline).await;
         }
         self.raw(method, params, deadline).await
     }
@@ -221,7 +221,7 @@ impl CdpSession {
         &self,
         method: &str,
         deadline: Duration,
-    ) -> impl std::future::Future<Output = Result<CdpEvent>> {
+    ) -> impl std::future::Future<Output = Result<CdpEvent>> + use<> {
         let mut sub = self.subscribe();
         let method = method.to_string();
         async move {

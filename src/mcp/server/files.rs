@@ -202,15 +202,14 @@ fn pick_candidate<'a>(
     if cands.is_empty() {
         return None;
     }
-    if let Some(exp) = expected {
-        if let Some(m) = cands
+    if let Some(exp) = expected
+        && let Some(m) = cands
             .iter()
             .rev()
             .copied()
             .find(|d| download_name_matches(&d.filename, exp))
-        {
-            return Some(m);
-        }
+    {
+        return Some(m);
     }
     cands.last().copied()
 }

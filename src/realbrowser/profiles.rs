@@ -29,22 +29,20 @@ pub fn list_profiles(root: &Path) -> Vec<ProfileInfo> {
     use std::collections::BTreeMap;
 
     let mut names: BTreeMap<String, String> = BTreeMap::new();
-    if let Ok(txt) = std::fs::read_to_string(root.join("Local State")) {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
-            if let Some(cache) = v
-                .get("profile")
-                .and_then(|p| p.get("info_cache"))
-                .and_then(|c| c.as_object())
-            {
-                for (key, entry) in cache {
-                    let name = entry
-                        .get("name")
-                        .and_then(|n| n.as_str())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or(key.as_str());
-                    names.insert(key.clone(), name.to_string());
-                }
-            }
+    if let Ok(txt) = std::fs::read_to_string(root.join("Local State"))
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt)
+        && let Some(cache) = v
+            .get("profile")
+            .and_then(|p| p.get("info_cache"))
+            .and_then(|c| c.as_object())
+    {
+        for (key, entry) in cache {
+            let name = entry
+                .get("name")
+                .and_then(|n| n.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(key.as_str());
+            names.insert(key.clone(), name.to_string());
         }
     }
     if let Ok(entries) = std::fs::read_dir(root) {
@@ -252,17 +250,17 @@ fn proc_fds_touch_root(
     };
     for fd in fds.flatten() {
         let fd_path = fd.path();
-        if let Ok(link) = std::fs::read_link(&fd_path) {
-            if link.starts_with(root) || canon.is_some_and(|c| link.starts_with(c)) {
-                return true;
-            }
+        if let Ok(link) = std::fs::read_link(&fd_path)
+            && (link.starts_with(root) || canon.is_some_and(|c| link.starts_with(c)))
+        {
+            return true;
         }
-        if let Some((rdev, rino)) = root_dev_ino {
-            if let Ok(meta) = std::fs::metadata(&fd_path) {
-                if meta.dev() == rdev && meta.ino() == rino {
-                    return true;
-                }
-            }
+        if let Some((rdev, rino)) = root_dev_ino
+            && let Ok(meta) = std::fs::metadata(&fd_path)
+            && meta.dev() == rdev
+            && meta.ino() == rino
+        {
+            return true;
         }
     }
     false

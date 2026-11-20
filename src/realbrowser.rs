@@ -738,7 +738,8 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         let key = "OBU_HOME";
         let prev = std::env::var(key).ok();
-        std::env::set_var(key, &home);
+        // SAFETY: test-only; this test owns OBU_HOME (see above).
+        unsafe { std::env::set_var(key, &home) };
         assert!(!input_paused());
         // The agent lane hums by default...
         assert!(hum_enabled(), "agent lane hums when not paused");
@@ -753,9 +754,10 @@ mod tests {
         set_paused(false).expect("resume");
         assert!(!input_paused());
         assert!(hum_enabled(), "resume restores the hum");
+        // SAFETY: as above, restoring the value this test replaced.
         match prev {
-            Some(v) => std::env::set_var(key, v),
-            None => std::env::remove_var(key),
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
         }
         let _ = std::fs::remove_dir_all(&home);
     }

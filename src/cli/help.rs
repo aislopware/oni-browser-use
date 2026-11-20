@@ -451,13 +451,12 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
             ))
         })?;
         let mut out = json!({ "command": norm, "detail": detail });
-        if let Some(t) = command_tool(norm) {
-            if let Some(def) = tools
+        if let Some(t) = command_tool(norm)
+            && let Some(def) = tools
                 .iter()
                 .find(|v| v.get("name").and_then(|n| n.as_str()) == Some(t))
-            {
-                out["tool_definition"] = def.clone();
-            }
+        {
+            out["tool_definition"] = def.clone();
         }
         return Ok(format!("{out}"));
     }

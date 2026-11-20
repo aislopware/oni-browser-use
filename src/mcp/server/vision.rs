@@ -235,10 +235,10 @@ pub async fn capture_vision(
     } else {
         1.0
     };
-    if let Some(size) = size {
-        if !viewport_reached(page, size, zoom).await {
-            note.push_str(" (the viewport did not reach the requested size)");
-        }
+    if let Some(size) = size
+        && !viewport_reached(page, size, zoom).await
+    {
+        note.push_str(" (the viewport did not reach the requested size)");
     }
 
     if marks {
@@ -380,11 +380,11 @@ pub async fn capture_vision(
         .send("Page.captureScreenshot", Some(capture))
         .await;
     let mut stuck = String::new();
-    if size.is_some() {
-        if let Err(e) = hand_back(page).await {
-            stuck = still_sized(&e);
-            note.push_str(&stuck);
-        }
+    if size.is_some()
+        && let Err(e) = hand_back(page).await
+    {
+        stuck = still_sized(&e);
+        note.push_str(&stuck);
     }
 
     // Remove the overlay BEFORE processing the result —
@@ -668,20 +668,19 @@ fn shot_from_capture(data: &str, note: &str) -> VisionShot {
     // server (stdin unread, signals unhandled, idle timer frozen)
     // on a slow client. Offload big ones to a PNG artifact and
     // return the path; vision-capable agents read the file.
-    if data.len() > INLINE_LIMIT {
-        if let Some(bytes) = crate::cli::base64_decode(data) {
-            if let Ok(path) = crate::artifacts::write_artifact_bytes(&bytes, "png") {
-                return VisionShot {
-                    text: format!(
-                        "screenshot{note} ({} KB — too large to inline, saved to {path})",
-                        bytes.len() / 1024
-                    ),
-                    image: None,
-                    image_path: Some(path),
-                    is_error: false,
-                };
-            }
-        }
+    if data.len() > INLINE_LIMIT
+        && let Some(bytes) = crate::cli::base64_decode(data)
+        && let Ok(path) = crate::artifacts::write_artifact_bytes(&bytes, "png")
+    {
+        return VisionShot {
+            text: format!(
+                "screenshot{note} ({} KB — too large to inline, saved to {path})",
+                bytes.len() / 1024
+            ),
+            image: None,
+            image_path: Some(path),
+            is_error: false,
+        };
     }
     VisionShot {
         text: format!("screenshot{note}"),

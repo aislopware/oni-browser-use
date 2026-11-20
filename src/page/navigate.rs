@@ -63,12 +63,11 @@ impl Page {
                 )
             })
             .unwrap_or((None, None));
-        if let Some(spec) = stored_block.filter(|s| !s.is_empty()) {
-            if self.block_rules() == 0 {
-                if let Err(e) = self.set_block_classes(&spec).await {
-                    eprintln!("[obu] stored block config failed to apply: {e}");
-                }
-            }
+        if let Some(spec) = stored_block.filter(|s| !s.is_empty())
+            && self.block_rules() == 0
+            && let Err(e) = self.set_block_classes(&spec).await
+        {
+            eprintln!("[obu] stored block config failed to apply: {e}");
         }
         let settle_cap = crate::knowledge::nav_settle_cap_ms(learned_settle);
         let _nav_t = std::time::Instant::now();
@@ -122,17 +121,17 @@ impl Page {
             Some(tokio::time::timeout(grace, wait).await)
         };
         _t("frameNavigated");
-        if matches!(nav_event, Some(result) if !matches!(result, Ok(Ok(_)))) {
-            if let Some(err) = nav_error.as_deref() {
-                let hint = if err.contains("ERR_ABORTED") {
-                    " (the URL may be a file download - try act download url=...)"
-                } else {
-                    ""
-                };
-                return Err(crate::error::ObuError::Other(format!(
-                    "navigation to {target} failed: {err}{hint}"
-                )));
-            }
+        if matches!(nav_event, Some(result) if !matches!(result, Ok(Ok(_))))
+            && let Some(err) = nav_error.as_deref()
+        {
+            let hint = if err.contains("ERR_ABORTED") {
+                " (the URL may be a file download - try act download url=...)"
+            } else {
+                ""
+            };
+            return Err(crate::error::ObuError::Other(format!(
+                "navigation to {target} failed: {err}{hint}"
+            )));
         }
         // L7: an unreachable target (refused connection, DNS, TLS, unsafe
         // port, dead proxy) is not refused - Chrome COMMITS its own error
@@ -193,12 +192,11 @@ impl Page {
         // finished early — a cap timeout is not a settle sample).
         if !domain.is_empty() {
             let elapsed = _settle_t.elapsed().as_millis() as u64;
-            if elapsed + 150 < settle_cap {
-                if let Some(kb) = self.knowledge.as_ref() {
-                    if let Ok(mut kb) = kb.lock() {
-                        kb.update_timing(&domain, elapsed);
-                    }
-                }
+            if elapsed + 150 < settle_cap
+                && let Some(kb) = self.knowledge.as_ref()
+                && let Ok(mut kb) = kb.lock()
+            {
+                kb.update_timing(&domain, elapsed);
             }
         }
         // M4+M6: Check for consent banners and block pages after navigation.
@@ -396,27 +394,27 @@ impl Page {
         // Knowledge: persist what this domain does to us — a real block wall
         // counts in stats and raises the domain's risk level; a solved JS
         // challenge marks the domain as challenge-serving (medium).
-        if !domain.is_empty() {
-            if let Some(kb) = self.knowledge.as_ref() {
-                if let Ok(mut kb) = kb.lock() {
-                    if let Some(ref bt) = blocked {
-                        kb.record_block_detected();
-                        kb.raise_bot_risk(&domain, crate::knowledge::vendor_risk(bt));
-                    } else if challenge_seen {
-                        kb.raise_bot_risk(&domain, crate::knowledge::BotRiskLevel::Medium);
-                    }
-                }
+        if !domain.is_empty()
+            && let Some(kb) = self.knowledge.as_ref()
+            && let Ok(mut kb) = kb.lock()
+        {
+            if let Some(ref bt) = blocked {
+                kb.record_block_detected();
+                kb.raise_bot_risk(&domain, crate::knowledge::vendor_risk(bt));
+            } else if challenge_seen {
+                kb.raise_bot_risk(&domain, crate::knowledge::BotRiskLevel::Medium);
             }
         }
         // Learn from successful consent dismissal (only specific selectors, not "generic").
         if let Some(ref result) = consent {
-            if result != "generic" && !result.is_empty() && !domain.is_empty() {
-                if let Some(kb) = self.knowledge.as_ref() {
-                    if let Ok(mut kb) = kb.lock() {
-                        kb.learn_consent_result(&domain, result);
-                        kb.record_consent_dismissed();
-                    }
-                }
+            if result != "generic"
+                && !result.is_empty()
+                && !domain.is_empty()
+                && let Some(kb) = self.knowledge.as_ref()
+                && let Ok(mut kb) = kb.lock()
+            {
+                kb.learn_consent_result(&domain, result);
+                kb.record_consent_dismissed();
             }
             if let Ok(mut a) = self.ambient.lock() {
                 a.push(format!(
@@ -431,22 +429,21 @@ impl Page {
                 ));
             }
         }
-        if let Some(ref bt) = blocked {
-            if let Ok(mut a) = self.ambient.lock() {
-                a.push(format!("blocked: {}", bt));
-                for step in crate::page::perception::remediation_ladder(bt) {
-                    a.push(format!("  remediation: {}", step));
-                }
+        if let Some(ref bt) = blocked
+            && let Ok(mut a) = self.ambient.lock()
+        {
+            a.push(format!("blocked: {}", bt));
+            for step in crate::page::perception::remediation_ladder(bt) {
+                a.push(format!("  remediation: {}", step));
             }
         }
         // Record visit + navigation for this domain.
-        if !domain.is_empty() {
-            if let Some(kb) = self.knowledge.as_ref() {
-                if let Ok(mut kb) = kb.lock() {
-                    kb.record_visit(&domain);
-                    kb.record_navigation();
-                }
-            }
+        if !domain.is_empty()
+            && let Some(kb) = self.knowledge.as_ref()
+            && let Ok(mut kb) = kb.lock()
+        {
+            kb.record_visit(&domain);
+            kb.record_navigation();
         }
         _t("consent/block");
         let r = self.recapture().await.map(|d| landed(d, from_unanswered));
@@ -456,18 +453,18 @@ impl Page {
         // search engines strip filters); the page then renders happily and the
         // agent trusts results that never had the filter applied. Observation
         // only — it names what is missing, never why.
-        if let Ok(delta) = &r {
-            if delta.navigated {
-                if let Some(doc) = self.doc_response().filter(|d| d.status >= 400) {
-                    if let Ok(mut a) = self.ambient.lock() {
-                        a.push(doc.ambient_note(self.lpm.url().starts_with("chrome-error://")));
-                    }
-                }
-                if let Some(note) = nav_params_note(url, self.lpm.url()) {
-                    if let Ok(mut a) = self.ambient.lock() {
-                        a.push(note);
-                    }
-                }
+        if let Ok(delta) = &r
+            && delta.navigated
+        {
+            if let Some(doc) = self.doc_response().filter(|d| d.status >= 400)
+                && let Ok(mut a) = self.ambient.lock()
+            {
+                a.push(doc.ambient_note(self.lpm.url().starts_with("chrome-error://")));
+            }
+            if let Some(note) = nav_params_note(url, self.lpm.url())
+                && let Ok(mut a) = self.ambient.lock()
+            {
+                a.push(note);
             }
         }
         r
@@ -480,10 +477,11 @@ impl Page {
         if doc.status <= 0 {
             return None;
         }
-        if let Some(lid) = loader_id {
-            if !doc.request_id.is_empty() && doc.request_id != lid {
-                return None;
-            }
+        if let Some(lid) = loader_id
+            && !doc.request_id.is_empty()
+            && doc.request_id != lid
+        {
+            return None;
         }
         Some(doc)
     }
@@ -692,18 +690,18 @@ fn error_page_failure(
     if !(unreachable || error_doc) {
         return None;
     }
-    if err.contains("ERR_HTTP_RESPONSE_CODE_FAILURE") {
-        if let Some(doc) = doc_resp.filter(|d| d.status >= 400) {
-            let guidance = doc
-                .guidance()
-                .map(|g| format!(" — {g}"))
-                .unwrap_or_default();
-            return Some(format!(
-                "navigation to {target} failed: HTTP {}{} [{err}]{guidance} (the tab shows Chrome's error page, not the site; the server answered with an HTTP error status and an empty body)",
-                doc.label(),
-                doc.retry_suffix(),
-            ));
-        }
+    if err.contains("ERR_HTTP_RESPONSE_CODE_FAILURE")
+        && let Some(doc) = doc_resp.filter(|d| d.status >= 400)
+    {
+        let guidance = doc
+            .guidance()
+            .map(|g| format!(" — {g}"))
+            .unwrap_or_default();
+        return Some(format!(
+            "navigation to {target} failed: HTTP {}{} [{err}]{guidance} (the tab shows Chrome's error page, not the site; the server answered with an HTTP error status and an empty body)",
+            doc.label(),
+            doc.retry_suffix(),
+        ));
     }
     let hint = if err.contains("PROXY") || err.contains("TUNNEL") {
         if obu_proxy {

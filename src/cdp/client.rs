@@ -376,7 +376,7 @@ impl CdpClient {
         &self,
         method: &str,
         deadline: Duration,
-    ) -> impl std::future::Future<Output = Result<CdpEvent>> {
+    ) -> impl std::future::Future<Output = Result<CdpEvent>> + use<> {
         // Subscribe NOW, before the caller dispatches the triggering command.
         // An async fn subscribes only when polled, losing events that precede
         // the command's response (cached navigation, downloads, fast pages).

@@ -48,12 +48,10 @@ async fn probe_gl_ws_once(base: &str) -> Option<String> {
                 Duration::from_secs(5),
             )
             .await
+            && let Some(s) = v.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str())
+            && !s.is_empty()
         {
-            if let Some(s) = v.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str()) {
-                if !s.is_empty() {
-                    return Some(s.to_string());
-                }
-            }
+            return Some(s.to_string());
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
@@ -234,13 +232,11 @@ async fn probe_gl_pipe_once(client: &crate::cdp::CdpClient) -> Option<String> {
                 Duration::from_secs(5),
             )
             .await
+            && let Some(s) = v.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str())
+            && !s.is_empty()
         {
-            if let Some(s) = v.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str()) {
-                if !s.is_empty() {
-                    found = Some(s.to_string());
-                    break;
-                }
-            }
+            found = Some(s.to_string());
+            break;
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
     }

@@ -262,15 +262,15 @@ pub async fn download_binary(release: &version::Release) -> Result<DownloadedBin
     sweep_leftover_tmps(dir, &dl.path);
 
     // Pre-flight: check available disk space if we know the asset size.
-    if asset.size > 0 {
-        if let Err(e) = check_disk_space(dir, asset.size) {
-            return Err(ObuError::Other(format!(
-                "insufficient disk space for download (~{} MB needed): {e}\n\
+    if asset.size > 0
+        && let Err(e) = check_disk_space(dir, asset.size)
+    {
+        return Err(ObuError::Other(format!(
+            "insufficient disk space for download (~{} MB needed): {e}\n\
                  Free space in {} and try again.",
-                asset.size / 1_000_000,
-                dir.display(),
-            )));
-        }
+            asset.size / 1_000_000,
+            dir.display(),
+        )));
     }
 
     let mut last_err = String::new();
@@ -545,15 +545,15 @@ fn check_disk_space(dir: &std::path::Path, needed: u64) -> Result<()> {
                 // Strategy: the field before the Use% field (contains %).
                 let use_idx = fields.iter().position(|f| f.ends_with('%'));
                 let avail_idx = use_idx.and_then(|i| if i > 0 { Some(i - 1) } else { None });
-                if let Some(idx) = avail_idx {
-                    if let Ok(avail_kb) = fields[idx].parse::<u64>() {
-                        let avail = avail_kb * 1024;
-                        if avail < needed + 10_000_000 {
-                            return Err(ObuError::Other(format!(
-                                "only {:.1} MB available on disk",
-                                avail as f64 / 1_000_000.0
-                            )));
-                        }
+                if let Some(idx) = avail_idx
+                    && let Ok(avail_kb) = fields[idx].parse::<u64>()
+                {
+                    let avail = avail_kb * 1024;
+                    if avail < needed + 10_000_000 {
+                        return Err(ObuError::Other(format!(
+                            "only {:.1} MB available on disk",
+                            avail as f64 / 1_000_000.0
+                        )));
                     }
                 }
             }

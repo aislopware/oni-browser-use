@@ -390,35 +390,31 @@ pub async fn perform_with_network(
                     .element(ref_id)
                     .map(|e| e.raw.tag == "textarea" && e.raw.shadow && e.raw.role == "textbox")
                     .unwrap_or(false);
-                if is_strip {
-                    if let Ok(f) = find_by_sig(cdp, sig, frame, "box", None).await {
-                        if let Some(bx) = f.box_ {
-                            let _ = dispatch_mouse_click(
-                                cdp,
-                                bx[0] + bx[2] / 2.0,
-                                bx[1] + bx[3] / 2.0,
-                                last_mouse,
-                            )
-                            .await;
-                            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-                            if let Ok(v) = cdp
-                                .send(
-                                    "Runtime.evaluate",
-                                    Some(json!({"expression": editor_sig_expr(), "returnByValue": true})),
-                                )
-                                .await
-                            {
-                                if let Some(s2) = v
-                                    .get("result")
-                                    .and_then(|r| r.get("value"))
-                                    .and_then(|s| s.as_str())
-                                {
-                                    if !s2.is_empty() {
-                                        hook_sig = Some(s2.to_string());
-                                    }
-                                }
-                            }
-                        }
+                if is_strip
+                    && let Ok(f) = find_by_sig(cdp, sig, frame, "box", None).await
+                    && let Some(bx) = f.box_
+                {
+                    let _ = dispatch_mouse_click(
+                        cdp,
+                        bx[0] + bx[2] / 2.0,
+                        bx[1] + bx[3] / 2.0,
+                        last_mouse,
+                    )
+                    .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                    if let Ok(v) = cdp
+                        .send(
+                            "Runtime.evaluate",
+                            Some(json!({"expression": editor_sig_expr(), "returnByValue": true})),
+                        )
+                        .await
+                        && let Some(s2) = v
+                            .get("result")
+                            .and_then(|r| r.get("value"))
+                            .and_then(|s| s.as_str())
+                        && !s2.is_empty()
+                    {
+                        hook_sig = Some(s2.to_string());
                     }
                 }
             }

@@ -125,17 +125,16 @@ pub fn match_dialog_expect(
             exp.kind
         ));
     }
-    if let Some(needle) = &exp.message {
-        if !message.to_lowercase().contains(&needle.to_lowercase()) {
-            return Err("message does not contain the armed text".to_string());
-        }
+    if let Some(needle) = &exp.message
+        && !message.to_lowercase().contains(&needle.to_lowercase())
+    {
+        return Err("message does not contain the armed text".to_string());
     }
-    if let (Some(armed), Some(now_url)) = (exp.origin.as_deref(), url_now) {
-        if let (Some(a), Some(b)) = (origin_of(armed), origin_of(now_url)) {
-            if a != b {
-                return Err(format!("origin changed ({b}; armed on {a})"));
-            }
-        }
+    if let (Some(armed), Some(now_url)) = (exp.origin.as_deref(), url_now)
+        && let (Some(a), Some(b)) = (origin_of(armed), origin_of(now_url))
+        && a != b
+    {
+        return Err(format!("origin changed ({b}; armed on {a})"));
     }
     let prompt = if exp.accept {
         exp.prompt_text.clone()
@@ -415,10 +414,10 @@ impl Page {
         } else {
             return;
         };
-        if let Some(kb) = self.knowledge.as_ref() {
-            if let Ok(mut kb) = kb.lock() {
-                kb.learn_block_config(&domain, &stored);
-            }
+        if let Some(kb) = self.knowledge.as_ref()
+            && let Ok(mut kb) = kb.lock()
+        {
+            kb.learn_block_config(&domain, &stored);
         }
     }
 
@@ -570,8 +569,7 @@ impl Page {
             crate::action::Action::Click { .. } | crate::action::Action::ClickCoord { .. }
         );
         let before = if is_click {
-            let r = self.list_page_targets().await;
-            r
+            self.list_page_targets().await
         } else {
             Vec::new()
         };
@@ -617,12 +615,11 @@ impl Page {
             Some(note) => format!("{verdict} [{note}]"),
             None => verdict,
         };
-        if delta.navigated {
-            if let Some(doc) = self.doc_response().filter(|d| d.status >= 400) {
-                if let Ok(mut a) = self.ambient.lock() {
-                    a.push(doc.ambient_note(delta.url.starts_with("chrome-error://")));
-                }
-            }
+        if delta.navigated
+            && let Some(doc) = self.doc_response().filter(|d| d.status >= 400)
+            && let Ok(mut a) = self.ambient.lock()
+        {
+            a.push(doc.ambient_note(delta.url.starts_with("chrome-error://")));
         }
         if is_click {
             let after = self.list_page_targets().await;

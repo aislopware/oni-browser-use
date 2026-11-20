@@ -178,10 +178,10 @@ async fn anchor(cdp: &CdpSession, budget: Budget) -> Result<String> {
         // navigation committing in between could have made it name another
         // context (see the module note); the loader id says whether one did.
         let after = cdp.raw("Page.getFrameTree", None, budget.left()?).await?;
-        if let (Some(object), Some((_, now))) = (object, frame(&after)) {
-            if now == loader {
-                return Ok(object);
-            }
+        if let (Some(object), Some((_, now))) = (object, frame(&after))
+            && now == loader
+        {
+            return Ok(object);
         }
     }
     Err(ObuError::Other(

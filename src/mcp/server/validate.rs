@@ -524,10 +524,10 @@ pub(super) fn vision(args: &Value) -> Result<()> {
         Some(Value::String(_)) | None => {}
         Some(_) => return Err(ObuError::Usage("vision size must be a string".into())),
     }
-    if let Some(path) = args.get("path").and_then(Value::as_str) {
-        if !path.is_empty() {
-            super::vision::output_path(path)?;
-        }
+    if let Some(path) = args.get("path").and_then(Value::as_str)
+        && !path.is_empty()
+    {
+        super::vision::output_path(path)?;
     }
     Ok(())
 }

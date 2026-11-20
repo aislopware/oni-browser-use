@@ -77,8 +77,8 @@ async fn hum_loop(
         }
 
         cycle = cycle.wrapping_add(1);
-        if cycle == 1 || cycle.is_multiple_of(12) {
-            if let Some(dims) = cdp
+        if (cycle == 1 || cycle.is_multiple_of(12))
+            && let Some(dims) = cdp
                 .send(
                     "Runtime.evaluate",
                     Some(json!({
@@ -92,10 +92,9 @@ async fn hum_loop(
                     let arr = r.get("result")?.get("value")?.as_array()?;
                     Some((arr[0].as_f64()?, arr[1].as_f64()?))
                 })
-            {
-                vw = dims.0;
-                vh = dims.1;
-            }
+        {
+            vw = dims.0;
+            vh = dims.1;
         }
 
         // The walk continues from where the last action left the pointer.

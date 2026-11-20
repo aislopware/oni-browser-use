@@ -175,10 +175,10 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
         }
         "cookies" => {
             // Optional positional URL filters the list to that domain.
-            if j.get("url").is_none() {
-                if let Some(u) = pos.first() {
-                    j["url"] = json!(u);
-                }
+            if j.get("url").is_none()
+                && let Some(u) = pos.first()
+            {
+                j["url"] = json!(u);
             }
         }
         "open-tab" => {
@@ -231,13 +231,13 @@ pub(crate) fn parse_state_args(args: &[String]) -> Result<Value> {
             j["mode"] = json!(mode);
         }
         "block" => {
-            if j.get("classes").is_none() {
-                if let Some(c) = pos.first() {
-                    if c == "clear" {
-                        j["clear"] = json!(true);
-                    } else {
-                        j["classes"] = json!(c);
-                    }
+            if j.get("classes").is_none()
+                && let Some(c) = pos.first()
+            {
+                if c == "clear" {
+                    j["clear"] = json!(true);
+                } else {
+                    j["classes"] = json!(c);
                 }
             }
         }

@@ -538,31 +538,29 @@ impl LivePageModel {
 
         let mut folded_done: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for (idx, el) in self.elements.iter().enumerate() {
-            if has_content_landmark {
-                if let Some(lm) = el.raw.landmark.as_deref() {
-                    if FOLD_LANDMARKS.contains(&lm) {
-                        if folded_done.contains(lm) {
-                            continue; // already folded into a one-liner
-                        }
-                        let count = self
-                            .elements
-                            .iter()
-                            .filter(|e| e.raw.landmark.as_deref() == Some(lm))
-                            .count();
-                        if count >= 3 {
-                            let fold_line = format!(
-                                "{lm} \u{25b8} {count} items folded (filter={lm} to expand)\n"
-                            );
-                            if out.len() + fold_line.len() > budget {
-                                break;
-                            }
-                            out.push_str(&fold_line);
-                            folded_done.insert(lm);
-                            continue;
-                        }
-                        // <3 items in this landmark: render inline.
-                    }
+            if has_content_landmark
+                && let Some(lm) = el.raw.landmark.as_deref()
+                && FOLD_LANDMARKS.contains(&lm)
+            {
+                if folded_done.contains(lm) {
+                    continue; // already folded into a one-liner
                 }
+                let count = self
+                    .elements
+                    .iter()
+                    .filter(|e| e.raw.landmark.as_deref() == Some(lm))
+                    .count();
+                if count >= 3 {
+                    let fold_line =
+                        format!("{lm} \u{25b8} {count} items folded (filter={lm} to expand)\n");
+                    if out.len() + fold_line.len() > budget {
+                        break;
+                    }
+                    out.push_str(&fold_line);
+                    folded_done.insert(lm);
+                    continue;
+                }
+                // <3 items in this landmark: render inline.
             }
             let line = format_element(el);
             if out.len() + line.len() > budget {
@@ -819,10 +817,11 @@ fn format_element(el: &PageElement) -> String {
         format!("\"{}\"", truncate(&el.raw.name, 60))
     };
     let mut s = format!("{} {} {}", el.ref_id, el.raw.role, name);
-    if let Some(t) = &el.raw.element_type {
-        if !t.is_empty() && el.raw.role == "textbox" {
-            s.push_str(&format!(" [{t}]"));
-        }
+    if let Some(t) = &el.raw.element_type
+        && !t.is_empty()
+        && el.raw.role == "textbox"
+    {
+        s.push_str(&format!(" [{t}]"));
     }
     // #21: a select's options — the visible choices, their submitted values
     // (never visible as page text), and which one is active. Without this
@@ -838,10 +837,10 @@ fn format_element(el: &PageElement) -> String {
             s.push_str(&format!(" [{} options: {}]", opts.total, list));
         }
     }
-    if let Some(h) = &el.raw.href {
-        if !h.is_empty() {
-            s.push_str(&format!(" → {}", truncate(h, 60)));
-        }
+    if let Some(h) = &el.raw.href
+        && !h.is_empty()
+    {
+        s.push_str(&format!(" → {}", truncate(h, 60)));
     }
     if el.raw.disabled {
         s.push_str(" (disabled)");
@@ -857,10 +856,11 @@ fn format_element(el: &PageElement) -> String {
     } else if let Some(false) = el.raw.checked {
         s.push_str(" ☐");
     }
-    if let Some(p) = &el.raw.placeholder {
-        if !p.is_empty() && el.raw.name.is_empty() {
-            s.push_str(&format!(" ph=\"{}\"", truncate(p, 40)));
-        }
+    if let Some(p) = &el.raw.placeholder
+        && !p.is_empty()
+        && el.raw.name.is_empty()
+    {
+        s.push_str(&format!(" ph=\"{}\"", truncate(p, 40)));
     }
     if let Some(lm) = &el.raw.landmark {
         // Skip if the same marker was already shown as the

@@ -91,10 +91,10 @@ fn stamp(dir: &Path, target: &str) {
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.elapsed().ok());
-    if age.is_some_and(|age| age > STAMP_EVERY) {
-        if let Ok(f) = std::fs::File::options().write(true).open(&path) {
-            let _ = f.set_modified(std::time::SystemTime::now());
-        }
+    if age.is_some_and(|age| age > STAMP_EVERY)
+        && let Ok(f) = std::fs::File::options().write(true).open(&path)
+    {
+        let _ = f.set_modified(std::time::SystemTime::now());
     }
 }
 

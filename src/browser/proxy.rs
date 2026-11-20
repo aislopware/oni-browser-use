@@ -91,10 +91,10 @@ pub fn parse_obu_proxy(raw: &str) -> Result<ProxySpec, String> {
         Some((u, h)) => (Some(u.to_string()), h.to_string()),
         None => (None, rest),
     };
-    if let Some(u) = &userinfo {
-        if u.is_empty() {
-            return Err("empty credentials section".to_string());
-        }
+    if let Some(u) = &userinfo
+        && u.is_empty()
+    {
+        return Err("empty credentials section".to_string());
     }
     // host[:port]; a bracketed [v6] literal may contain colons of its own.
     let (host, port) = if let Some(hp) = hostport.strip_prefix('[') {

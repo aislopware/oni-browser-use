@@ -112,16 +112,16 @@ pub fn stabilize(
 
     // Pass 1: exact signature match — the element survived unchanged.
     for (i, el) in next.iter().enumerate() {
-        if let Some(&ref_id) = prev_by_sig.get(el.sig.as_str()) {
-            if used_prev.insert(ref_id.to_string()) {
-                result.live.insert(el.sig.clone(), ref_id.to_string());
-                if let Some(change) =
-                    diff_state_opt(prev.get(ref_id).and_then(|p| p.probe.as_ref()), el)
-                {
-                    result.changed.push((ref_id.to_string(), change));
-                }
-                continue;
+        if let Some(&ref_id) = prev_by_sig.get(el.sig.as_str())
+            && used_prev.insert(ref_id.to_string())
+        {
+            result.live.insert(el.sig.clone(), ref_id.to_string());
+            if let Some(change) =
+                diff_state_opt(prev.get(ref_id).and_then(|p| p.probe.as_ref()), el)
+            {
+                result.changed.push((ref_id.to_string(), change));
             }
+            continue;
         }
         fresh.insert(i);
         fresh_vec.push(i);

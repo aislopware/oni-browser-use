@@ -47,7 +47,7 @@ impl Hermes {
             .take()
             .ok_or_else(|| ObuError::other("Hermes stderr unavailable"))?;
         let read = async move { tokio::try_join!(bounded(stdout), bounded(stderr)) };
-        let result = tokio::time::timeout(std::time::Duration::from_secs(180), async {
+        tokio::time::timeout(std::time::Duration::from_secs(180), async {
             let ((out, err), status) = tokio::try_join!(read, async { child.wait().await.map_err(ObuError::from) })?;
             // Config reads may return defaults after a malformed YAML warning.
             // Never turn that fallback into a successful installation.
@@ -61,8 +61,7 @@ impl Hermes {
                 return Err(ObuError::other("Hermes reported a diagnostic; run `hermes config check` and resolve it before switching browsers"));
             }
             Ok((status.success(), String::from_utf8(out).map_err(ObuError::other)?))
-        }).await.map_err(|_| ObuError::other("Hermes did not finish within 180s; setup state was retained — retry the command"))?;
-        result
+        }).await.map_err(|_| ObuError::other("Hermes did not finish within 180s; setup state was retained — retry the command"))?
     }
 
     async fn get(&self, key: &str) -> Result<Option<Value>> {
@@ -351,19 +350,19 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                     }
                 };
                 for key in ["OBU_HOME", "CHROME_PATH"] {
-                    if !env.contains_key(key) {
-                        if let Some(value) = std::env::var_os(key) {
-                            let value = value
-                                .to_str()
-                                .ok_or_else(|| ObuError::Other(format!("{key} must be UTF-8")))?;
-                            let path = PathBuf::from(value);
-                            let path = if value.is_empty() || path.is_absolute() {
-                                path
-                            } else {
-                                std::env::current_dir()?.join(path)
-                            };
-                            env.insert(key.into(), serde_json::to_value(path)?);
-                        }
+                    if !env.contains_key(key)
+                        && let Some(value) = std::env::var_os(key)
+                    {
+                        let value = value
+                            .to_str()
+                            .ok_or_else(|| ObuError::Other(format!("{key} must be UTF-8")))?;
+                        let path = PathBuf::from(value);
+                        let path = if value.is_empty() || path.is_absolute() {
+                            path
+                        } else {
+                            std::env::current_dir()?.join(path)
+                        };
+                        env.insert(key.into(), serde_json::to_value(path)?);
                     }
                 }
                 let mut installed = json!({"command":exe,"args":["mcp"],"enabled":true});

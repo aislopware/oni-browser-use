@@ -298,10 +298,9 @@ pub async fn run_daemon() -> Result<()> {
                             // user's own browser to seed sites.
                             if !crate::realbrowser::real_lane()
                                 && crate::session_profile::SessionProfile::claim_warming()
+                                && let Some(ref mut p) = page
                             {
-                                if let Some(ref mut p) = page {
-                                    warm_profile(p).await;
-                                }
+                                warm_profile(p).await;
                             }
                         }
                         Err(e) => {
@@ -430,10 +429,11 @@ pub async fn run_daemon() -> Result<()> {
                 {
                     eprintln!("[obu] idle timeout ({idle_secs}s), shutting down Chrome");
                     if let Some(b) = browser.take() {
-                        if let Some(ref p) = page {
-                            if !crate::realbrowser::real_lane() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
-                            }
+                        if let Some(ref p) = page
+                            && !crate::realbrowser::real_lane()
+                            && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+                        {
+                            eprintln!("[obu] login snapshot failed: {e}");
                         }
                         b.shutdown_gracefully().await;
                     }
@@ -445,12 +445,12 @@ pub async fn run_daemon() -> Result<()> {
                     last_sync = std::time::Instant::now();
                     // Never snapshot on the real lane: the user's live cookie
                     // store is not ours to hoard into the data dir.
-                    if !crate::realbrowser::real_lane() {
-                        if let Some(ref p) = page {
-                            if !p.cdp_ref().is_closed() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
-                            }
-                        }
+                    if !crate::realbrowser::real_lane()
+                        && let Some(ref p) = page
+                        && !p.cdp_ref().is_closed()
+                        && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+                    {
+                        eprintln!("[obu] login snapshot failed: {e}");
                     }
                     // Sync the knowledge base to disk (prune + write) —
                     // consent/visits/timing/block-risk compound across sessions.
@@ -468,12 +468,11 @@ pub async fn run_daemon() -> Result<()> {
 
     // Cleanup: persist live logins, then kill Chrome gracefully.
     // (Never on the real lane — not our cookie store.)
-    if let Some(ref p) = page {
-        if !crate::realbrowser::real_lane() {
-            if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await {
-                eprintln!("[obu] login snapshot failed: {e}");
-            }
-        }
+    if let Some(ref p) = page
+        && !crate::realbrowser::real_lane()
+        && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+    {
+        eprintln!("[obu] login snapshot failed: {e}");
     }
     if let Some(b) = browser {
         b.shutdown_gracefully().await;
@@ -655,10 +654,10 @@ fn settings_mismatch(
         // Only the listed names: a request cannot make the daemon compare
         // or name anything else from its environment.
         for &k in DAEMON_SCOPED_ENV {
-            if let Some(v) = env.get(k).and_then(Value::as_str) {
-                if daemon_env(k).as_deref() != Some(v) {
-                    differ.push(k.to_string());
-                }
+            if let Some(v) = env.get(k).and_then(Value::as_str)
+                && daemon_env(k).as_deref() != Some(v)
+            {
+                differ.push(k.to_string());
             }
         }
     }

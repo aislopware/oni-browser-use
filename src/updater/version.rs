@@ -302,10 +302,10 @@ pub fn find_asset(release: &Release) -> Option<&Asset> {
 
     // 2. Exact match with legacy naming (pre-v3.0.3).
     let legacy = legacy_platform_asset_name();
-    if legacy != name {
-        if let Some(a) = release.assets.iter().find(|a| a.name == legacy) {
-            return Some(a);
-        }
+    if legacy != name
+        && let Some(a) = release.assets.iter().find(|a| a.name == legacy)
+    {
+        return Some(a);
     }
 
     // 3. Fuzzy: asset name contains both an OS and arch keyword.

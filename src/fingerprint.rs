@@ -22,15 +22,14 @@ pub fn load_or_create_seed() -> u32 {
     let p = path();
 
     // Try loading existing fingerprint.
-    if let Ok(content) = std::fs::read_to_string(&p) {
-        if let Ok(v) = serde_json::from_str::<Value>(&content) {
-            if let Some(seed) = v.get("seed").and_then(|s| s.as_u64()) {
-                check_config_consistency(&v);
-                // Update stored config with current env values (for next launch's check).
-                update_config(&p, &v, seed as u32);
-                return seed as u32;
-            }
-        }
+    if let Ok(content) = std::fs::read_to_string(&p)
+        && let Ok(v) = serde_json::from_str::<Value>(&content)
+        && let Some(seed) = v.get("seed").and_then(|s| s.as_u64())
+    {
+        check_config_consistency(&v);
+        // Update stored config with current env values (for next launch's check).
+        update_config(&p, &v, seed as u32);
+        return seed as u32;
     }
 
     // Generate new seed and persist.
@@ -44,20 +43,20 @@ pub fn load_or_create_seed() -> u32 {
 
 fn build_fingerprint(seed: u32) -> Value {
     let mut fp = json!({"seed": seed});
-    if let Ok(proxy) = std::env::var("OBU_PROXY") {
-        if !proxy.is_empty() {
-            fp["proxy"] = json!(proxy);
-        }
+    if let Ok(proxy) = std::env::var("OBU_PROXY")
+        && !proxy.is_empty()
+    {
+        fp["proxy"] = json!(proxy);
     }
-    if let Ok(tz) = std::env::var("OBU_TZ") {
-        if !tz.is_empty() {
-            fp["timezone"] = json!(tz);
-        }
+    if let Ok(tz) = std::env::var("OBU_TZ")
+        && !tz.is_empty()
+    {
+        fp["timezone"] = json!(tz);
     }
-    if let Ok(locale) = std::env::var("OBU_LOCALE") {
-        if !locale.is_empty() {
-            fp["locale"] = json!(locale);
-        }
+    if let Ok(locale) = std::env::var("OBU_LOCALE")
+        && !locale.is_empty()
+    {
+        fp["locale"] = json!(locale);
     }
     fp
 }

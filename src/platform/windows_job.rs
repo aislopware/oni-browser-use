@@ -33,7 +33,7 @@ struct ExtendedLimits {
 }
 
 #[link(name = "kernel32")]
-extern "system" {
+unsafe extern "system" {
     fn CreateJobObjectW(attributes: *const c_void, name: *const u16) -> *mut c_void;
     fn SetInformationJobObject(job: *mut c_void, class: i32, info: *const c_void, size: u32)
     -> i32;

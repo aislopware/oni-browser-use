@@ -133,19 +133,16 @@ pub async fn handle_eval(
             // compileScript requires Runtime.enable, which leaks automation.
             if exc.pointer("/exception/className").and_then(|v| v.as_str()) == Some("SyntaxError")
                 && i + 1 < expressions.len()
-            {
-                if let Ok(parsed) = page.cdp_ref().main_world().send_with_timeout(
+                && let Ok(parsed) = page.cdp_ref().main_world().send_with_timeout(
                     "Runtime.evaluate",
                     Some(json!({"expression": format!("void function(){{return ({expression});}}"), "returnByValue": true})),
                     std::time::Duration::from_secs(3),
-                ).await {
-                    if parsed.pointer("/exceptionDetails/exception/className").and_then(|v| v.as_str())
+                ).await
+                    && parsed.pointer("/exceptionDetails/exception/className").and_then(|v| v.as_str())
                         == Some("SyntaxError")
                     {
                         continue;
                     }
-                }
-            }
             if msg.contains("EvalError") && msg.contains("unsafe-eval") {
                 return Err(ObuError::Other(
                     "eval failed: page CSP blocks eval(). Use a plain expression instead of statements on this page.".into(),
@@ -182,38 +179,37 @@ pub async fn handle_eval(
 
         // Bug 3: Detect window.open popups. After eval, if the expression
         // contained window.open, check for new page targets and report them.
-        if wants_popups {
-            if let Ok(targets) = page.cdp_ref().send("Target.getTargets", None).await {
-                if let Some(infos) = targets.get("targetInfos").and_then(|t| t.as_array()) {
-                    let new_tabs: Vec<String> = infos
-                        .iter()
-                        .filter(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
-                        .filter_map(|t| {
-                            let id = t.get("targetId").and_then(|v| v.as_str())?.to_string();
-                            if before_tabs.contains(&id) {
-                                return None;
-                            }
-                            let url = t.get("url").and_then(|v| v.as_str()).unwrap_or("");
-                            if !url.is_empty() && url != "about:blank" {
-                                Some(format!(
-                                    "{} → {}",
-                                    id,
-                                    crate::platform::truncate_utf8(url, 60)
-                                ))
-                            } else {
-                                Some(id)
-                            }
-                        })
-                        .collect();
-                    if !new_tabs.is_empty() {
-                        let notice = format!(
-                            "✓ {} popup tab(s) created:\n  {}\n  use state tabs to inspect, switch-tab to move",
-                            new_tabs.len(),
-                            new_tabs.join("\n  ")
-                        );
-                        return Ok(super::proto::append_notices(result, &notice, json_out));
+        if wants_popups
+            && let Ok(targets) = page.cdp_ref().send("Target.getTargets", None).await
+            && let Some(infos) = targets.get("targetInfos").and_then(|t| t.as_array())
+        {
+            let new_tabs: Vec<String> = infos
+                .iter()
+                .filter(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
+                .filter_map(|t| {
+                    let id = t.get("targetId").and_then(|v| v.as_str())?.to_string();
+                    if before_tabs.contains(&id) {
+                        return None;
                     }
-                }
+                    let url = t.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                    if !url.is_empty() && url != "about:blank" {
+                        Some(format!(
+                            "{} → {}",
+                            id,
+                            crate::platform::truncate_utf8(url, 60)
+                        ))
+                    } else {
+                        Some(id)
+                    }
+                })
+                .collect();
+            if !new_tabs.is_empty() {
+                let notice = format!(
+                    "✓ {} popup tab(s) created:\n  {}\n  use state tabs to inspect, switch-tab to move",
+                    new_tabs.len(),
+                    new_tabs.join("\n  ")
+                );
+                return Ok(super::proto::append_notices(result, &notice, json_out));
             }
         }
         return Ok(result);
@@ -294,13 +290,13 @@ fn eval_note(value: &serde_json::Value) -> String {
         return "the script returned a DOM node/Window, which cannot be serialized - return a property instead (el.href, el.innerText, Object.keys(el))".to_string();
     }
     let t = s.trim_start();
-    if t.starts_with('{') || t.starts_with('[') {
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(t) {
-            return format!(
-                "the script returned a STRING containing JSON (parses as {}) - parse the value once more, or return the object directly from the script",
-                shape_of(&parsed)
-            );
-        }
+    if (t.starts_with('{') || t.starts_with('['))
+        && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(t)
+    {
+        return format!(
+            "the script returned a STRING containing JSON (parses as {}) - parse the value once more, or return the object directly from the script",
+            shape_of(&parsed)
+        );
     }
     String::new()
 }

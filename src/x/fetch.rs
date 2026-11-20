@@ -279,10 +279,10 @@ async fn walk(
             break;
         }
         let mut vars = base.clone();
-        if let Some(c) = &cursor {
-            if let Some(o) = vars.as_object_mut() {
-                o.insert("cursor".into(), json!(c));
-            }
+        if let Some(c) = &cursor
+            && let Some(o) = vars.as_object_mut()
+        {
+            o.insert("cursor".into(), json!(c));
         }
         let url = build_url(tpl, &vars);
         // Past the first page a failed read (the page navigated away, a

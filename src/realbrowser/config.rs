@@ -123,10 +123,10 @@ pub fn config() -> Config {
         Ok(g) => g,
         Err(p) => p.into_inner(),
     };
-    if let Some((cached_key, cfg)) = guard.as_ref() {
-        if *cached_key == key {
-            return cfg.clone();
-        }
+    if let Some((cached_key, cfg)) = guard.as_ref()
+        && *cached_key == key
+    {
+        return cfg.clone();
     }
     let cfg = config_from(&path);
     *guard = Some((key, cfg.clone()));

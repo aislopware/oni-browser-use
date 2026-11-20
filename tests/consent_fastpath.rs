@@ -116,9 +116,10 @@ fn run_case(
         return None;
     }
     let _env = POLICY_ENV.lock().unwrap_or_else(|e| e.into_inner());
+    // SAFETY: every case holds POLICY_ENV while it touches OBU_CONSENT.
     match policy {
-        Some(p) => std::env::set_var("OBU_CONSENT", p),
-        None => std::env::remove_var("OBU_CONSENT"),
+        Some(p) => unsafe { std::env::set_var("OBU_CONSENT", p) },
+        None => unsafe { std::env::remove_var("OBU_CONSENT") },
     }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -167,7 +168,8 @@ fn run_case(
         let evals = std::mem::take(&mut *log.lock().unwrap());
         (got, evals)
     });
-    std::env::remove_var("OBU_CONSENT");
+    // SAFETY: still under POLICY_ENV.
+    unsafe { std::env::remove_var("OBU_CONSENT") };
     Some(result)
 }
 

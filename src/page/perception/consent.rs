@@ -155,16 +155,14 @@ pub async fn dismiss_consent_with_stored(
                 })),
             )
             .await?;
-        if res.get("exceptionDetails").is_none() {
-            if let Some(v) = res
+        if res.get("exceptionDetails").is_none()
+            && let Some(v) = res
                 .get("result")
                 .and_then(|r| r.get("value"))
                 .and_then(|v| v.as_str())
-            {
-                if !v.is_empty() {
-                    return Ok(Some(v.to_string()));
-                }
-            }
+            && !v.is_empty()
+        {
+            return Ok(Some(v.to_string()));
         }
     }
 

@@ -321,10 +321,10 @@ async fn close_tabs_recorded_in(record: &Path, refs: &Path) -> String {
             lines.push(format!("{base}: closed {closed} agent tab(s)"));
         }
     }
-    if map.len() != recorded || !lines.is_empty() {
-        if let Err(e) = write_record(record, &map) {
-            lines.push(format!("{e} — the closed tabs are still recorded"));
-        }
+    if (map.len() != recorded || !lines.is_empty())
+        && let Err(e) = write_record(record, &map)
+    {
+        lines.push(format!("{e} — the closed tabs are still recorded"));
     }
     if lines.is_empty() {
         return "no agent tabs open".into();

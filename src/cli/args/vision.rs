@@ -51,10 +51,10 @@ pub(crate) fn steps_from_here(steps: &mut Value) {
         return;
     };
     for step in steps {
-        if step.get("action").and_then(Value::as_str) == Some("vision") {
-            if let Some(Value::String(path)) = step.get_mut("path") {
-                *path = from_here(path);
-            }
+        if step.get("action").and_then(Value::as_str) == Some("vision")
+            && let Some(Value::String(path)) = step.get_mut("path")
+        {
+            *path = from_here(path);
         }
         for child in ["then", "else", "steps"] {
             if let Some(nested) = step.get_mut(child) {

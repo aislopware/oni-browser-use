@@ -173,19 +173,19 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                 // Invalid plans need neither Chrome nor a lane/config refresh.
                 // In particular, a typo must not cost a cold browser launch or
                 // reset an existing session before the caller can correct it.
-                if method == "tools/call" {
-                    if let Err(error) = super::validate::tool_call(&params) {
-                        if !is_notification {
-                            let mut text = format!("\u{2717} error: {error}");
-                            if let Some(p) = page.as_ref() {
-                                text.push_str(&format!("\n--- current page state ---\n{}", p.view(1200)));
-                            }
-                            let mut result = json!({"content":[{"type":"text","text":text}],"isError":true});
-                            shape_result(&mut result, version);
-                            if !send(&mut out, &json!({"jsonrpc":"2.0","id":id,"result":result})) { break; }
+                if method == "tools/call"
+                    && let Err(error) = super::validate::tool_call(&params)
+                {
+                    if !is_notification {
+                        let mut text = format!("\u{2717} error: {error}");
+                        if let Some(p) = page.as_ref() {
+                            text.push_str(&format!("\n--- current page state ---\n{}", p.view(1200)));
                         }
-                        continue;
+                        let mut result = json!({"content":[{"type":"text","text":text}],"isError":true});
+                        shape_result(&mut result, version);
+                        if !send(&mut out, &json!({"jsonrpc":"2.0","id":id,"result":result})) { break; }
                     }
+                    continue;
                 }
 
                 let response = match method {
@@ -290,10 +290,10 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                         p.set_knowledge(knowledge.clone());
                                     }
                                     // Restore resource blocking after relaunch.
-                                    if let Some(ref bc) = block_classes {
-                                        if let Some(ref mut p) = page {
-                                            let _ = p.set_block_classes(bc).await;
-                                        }
+                                    if let Some(ref bc) = block_classes
+                                        && let Some(ref mut p) = page
+                                    {
+                                        let _ = p.set_block_classes(bc).await;
                                     }
                                     // First-run warming: seed cache/cookies/HSTS
                                     // by visiting a few top sites. Only runs once.
@@ -379,10 +379,10 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                             p.set_knowledge(knowledge.clone());
                                         }
                                         // Restore resource blocking after relaunch.
-                                        if let Some(ref bc) = block_classes {
-                                            if let Some(ref mut p) = page {
-                                                let _ = p.set_block_classes(bc).await;
-                                            }
+                                        if let Some(ref bc) = block_classes
+                                            && let Some(ref mut p) = page
+                                        {
+                                            let _ = p.set_block_classes(bc).await;
                                         }
                                         if retry_safe {
                                             relaunch_note = Some(
@@ -526,15 +526,15 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                 );
                             }
                             notes.extend(crate::browser::pending_notes());
-                            if !notes.is_empty() {
-                                if let Some(content) = result.get_mut("content").and_then(|c| c.as_array_mut()) {
-                                    if let Some(text) = content.first_mut().and_then(|c| c.get_mut("text")) {
-                                        if let Some(original) = text.as_str() {
-                                            *text = Value::String(super::proto::append_notices(original.into(), &notes.join("\n"), super::proto::json_response(&params["arguments"])));
-                                        }
-                                    } else {
-                                        content.insert(0, json!({ "type": "text", "text": notes.join("\n") }));
+                            if !notes.is_empty()
+                                && let Some(content) = result.get_mut("content").and_then(|c| c.as_array_mut())
+                            {
+                                if let Some(text) = content.first_mut().and_then(|c| c.get_mut("text")) {
+                                    if let Some(original) = text.as_str() {
+                                        *text = Value::String(super::proto::append_notices(original.into(), &notes.join("\n"), super::proto::json_response(&params["arguments"])));
                                     }
+                                } else {
+                                    content.insert(0, json!({ "type": "text", "text": notes.join("\n") }));
                                 }
                             }
                             shape_result(result, version);
@@ -589,10 +589,12 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                 // a hot copy of the on-disk profile: copying a live Chrome
                 // profile tears its SQLite and you come back logged out.
                 if browser.is_some() && last_sync.elapsed() >= sync_interval {
-                    if let Some(ref p) = page {
-                        if !p.cdp_ref().is_closed() && !crate::realbrowser::real_lane() {
-                            if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
-                        }
+                    if let Some(ref p) = page
+                        && !p.cdp_ref().is_closed()
+                        && !crate::realbrowser::real_lane()
+                        && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+                    {
+                        eprintln!("[obu] login snapshot failed: {e}");
                     }
                     // Sync knowledge base to disk (prune + write).
                     {
@@ -611,12 +613,11 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                 // the mask on a verdict transition before the agent's next
                 // call. Internally rate-limited to once a minute; skips the
                 // real lane.
-                if browser.is_some() {
-                    if let Some(p) = page.as_mut() {
-                        if !p.cdp_ref().is_closed() {
-                            p.gl_health_refresh().await;
-                        }
-                    }
+                if browser.is_some()
+                    && let Some(p) = page.as_mut()
+                    && !p.cdp_ref().is_closed()
+                {
+                    p.gl_health_refresh().await;
                 }
                 if idle_secs > 0
                     && browser.is_some()
@@ -631,10 +632,11 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                         // Persist live logins before killing Chrome so nothing
                         // is lost between the last periodic snapshot and exit.
                         // (Never on the real lane — not our cookie store.)
-                        if let Some(ref p) = page {
-                            if !crate::realbrowser::real_lane() {
-                                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await { eprintln!("[obu] login snapshot failed: {e}"); }
-                            }
+                        if let Some(ref p) = page
+                            && !crate::realbrowser::real_lane()
+                            && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+                        {
+                            eprintln!("[obu] login snapshot failed: {e}");
                         }
                         shutdown_browser(b).await;
                     }
@@ -650,12 +652,11 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
     if let Some(b) = browser.take() {
         // Persist live logins before killing Chrome.
         // (Never on the real lane — not our cookie store.)
-        if let Some(ref p) = page {
-            if !crate::realbrowser::real_lane() {
-                if let Err(e) = crate::logins::snapshot(p.cdp_ref()).await {
-                    eprintln!("[obu] login snapshot failed: {e}");
-                }
-            }
+        if let Some(ref p) = page
+            && !crate::realbrowser::real_lane()
+            && let Err(e) = crate::logins::snapshot(p.cdp_ref()).await
+        {
+            eprintln!("[obu] login snapshot failed: {e}");
         }
         shutdown_browser(b).await;
     }

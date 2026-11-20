@@ -200,10 +200,10 @@ async fn dispatch_tool(
                     if let Some(n) = &d.note {
                         notices.push_str(&format!("    ({n})\n"));
                     }
-                    if let Some(p) = &d.default_prompt {
-                        if !p.is_empty() {
-                            notices.push_str(&format!("    (prompt default: \"{}\")\n", p));
-                        }
+                    if let Some(p) = &d.default_prompt
+                        && !p.is_empty()
+                    {
+                        notices.push_str(&format!("    (prompt default: \"{}\")\n", p));
                     }
                 }
             }
@@ -540,11 +540,9 @@ async fn run_cli_inner(
     // never the command itself (main.rs leaves the flag here once a command
     // has been named). --json gets the machine form, like `help <cmd> --json`.
     if cmd != "help" && rest.iter().any(|a| a == "--help" || a == "-h") {
-        if json_mode {
-            if let Ok(j) = help_json(Some(cmd)) {
-                print!("{j}");
-                return Ok(());
-            }
+        if json_mode && let Ok(j) = help_json(Some(cmd)) {
+            print!("{j}");
+            return Ok(());
         }
         if let Some(text) = command_help_text(cmd) {
             print!("{text}");
@@ -809,10 +807,8 @@ async fn run_connected(
     // --no-daemon path (this used to be daemon/MCP-only, so `state set-cookie`
     // in a one-shot run never survived into the next one). Never for an
     // external browser we don't own.
-    if !external {
-        if let Err(e) = crate::logins::snapshot(page.cdp_ref()).await {
-            eprintln!("[obu] login snapshot failed: {e}");
-        }
+    if !external && let Err(e) = crate::logins::snapshot(page.cdp_ref()).await {
+        eprintln!("[obu] login snapshot failed: {e}");
     }
 
     Ok(result)

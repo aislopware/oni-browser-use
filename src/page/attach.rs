@@ -289,15 +289,13 @@ impl Page {
                             .get("frame")
                             .and_then(|f| f.get("parentId"))
                             .is_none()
-                        {
-                            if let Some(url) = ev
+                            && let Some(url) = ev
                                 .params
                                 .get("frame")
                                 .and_then(|f| f.get("url"))
                                 .and_then(|u| u.as_str())
-                            {
-                                last_main_url = Some(url.to_string());
-                            }
+                        {
+                            last_main_url = Some(url.to_string());
                         }
                         continue;
                     }
@@ -331,37 +329,37 @@ impl Page {
                         // consumed ONLY on a real match; a mismatch keeps it
                         // armed (the right dialog may still come) and the
                         // safe default applies to this one.
-                        if let Ok(mut slot) = dex.lock() {
-                            if let Some(exp) = slot.as_mut() {
-                                if std::time::Instant::now() >= exp.deadline {
-                                    note = Some(format!(
-                                        "armed '{}' expectation had expired; default handling applied",
-                                        exp.kind
-                                    ));
-                                    *slot = None;
-                                } else {
-                                    match super::match_dialog_expect(
-                                        exp,
-                                        &kind,
-                                        &message,
-                                        last_main_url.as_deref(),
-                                    ) {
-                                        Ok((acc, pt)) => {
-                                            accepted = acc;
-                                            prompt_to_send = pt;
-                                            via = "expectation".to_string();
-                                            note = Some(format!(
-                                                "answered via the armed '{}' expectation (one use consumed)",
-                                                exp.kind
-                                            ));
-                                            *slot = None;
-                                        }
-                                        Err(reason) => {
-                                            note = Some(format!(
-                                                "armed '{}' expectation did not match ({reason}); default handling applied",
-                                                exp.kind
-                                            ));
-                                        }
+                        if let Ok(mut slot) = dex.lock()
+                            && let Some(exp) = slot.as_mut()
+                        {
+                            if std::time::Instant::now() >= exp.deadline {
+                                note = Some(format!(
+                                    "armed '{}' expectation had expired; default handling applied",
+                                    exp.kind
+                                ));
+                                *slot = None;
+                            } else {
+                                match super::match_dialog_expect(
+                                    exp,
+                                    &kind,
+                                    &message,
+                                    last_main_url.as_deref(),
+                                ) {
+                                    Ok((acc, pt)) => {
+                                        accepted = acc;
+                                        prompt_to_send = pt;
+                                        via = "expectation".to_string();
+                                        note = Some(format!(
+                                            "answered via the armed '{}' expectation (one use consumed)",
+                                            exp.kind
+                                        ));
+                                        *slot = None;
+                                    }
+                                    Err(reason) => {
+                                        note = Some(format!(
+                                            "armed '{}' expectation did not match ({reason}); default handling applied",
+                                            exp.kind
+                                        ));
                                     }
                                 }
                             }
@@ -471,12 +469,12 @@ impl Page {
                             .get("totalBytes")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0);
-                        if let Ok(mut q) = dlq.lock() {
-                            if let Some(d) = q.iter_mut().find(|d| d.guid == guid) {
-                                d.state = state;
-                                d.received_bytes = received;
-                                d.total_bytes = total;
-                            }
+                        if let Ok(mut q) = dlq.lock()
+                            && let Some(d) = q.iter_mut().find(|d| d.guid == guid)
+                        {
+                            d.state = state;
+                            d.received_bytes = received;
+                            d.total_bytes = total;
                         }
                     }
                     Ok(_) => continue,
@@ -609,10 +607,9 @@ impl Page {
                                             && kl != "connection"
                                             && kl != "user-agent"
                                             && !kl.starts_with("sec-")
+                                            && let Some(s) = v.as_str()
                                         {
-                                            if let Some(s) = v.as_str() {
-                                                hdrs.push((k.clone(), s.to_string()));
-                                            }
+                                            hdrs.push((k.clone(), s.to_string()));
                                         }
                                     }
                                 }
@@ -729,10 +726,10 @@ impl Page {
                                     });
                                 }
                             }
-                            if let Ok(mut log) = xhr_log_t.lock() {
-                                if let Some(e) = log.iter_mut().rev().find(|e| e.id == id) {
-                                    e.status = status;
-                                }
+                            if let Ok(mut log) = xhr_log_t.lock()
+                                && let Some(e) = log.iter_mut().rev().find(|e| e.id == id)
+                            {
+                                e.status = status;
                             }
                         }
                     }
@@ -747,32 +744,32 @@ impl Page {
                             .unwrap_or("");
                         if !id.is_empty() {
                             open.remove(id);
-                            if let Ok(mut log) = xhr_log_t.lock() {
-                                if let Some(e) = log.iter_mut().rev().find(|e| e.id == id) {
-                                    e.done = true;
-                                    if ev.method == "Network.loadingFailed" {
-                                        e.error = Some(
-                                            ev.params
-                                                .get("errorText")
-                                                .and_then(|x| x.as_str())
-                                                .unwrap_or("failed")
-                                                .to_string(),
-                                        );
-                                    }
-                                    if e.url.contains("/i/api/graphql/") {
-                                        let st =
-                                            e.error.clone().unwrap_or_else(|| e.status.to_string());
-                                        tracing::debug!(
-                                            "xhr gql done: {} {} -> {}",
-                                            e.method,
-                                            e.url
-                                                .split('?')
-                                                .next()
-                                                .unwrap_or("")
-                                                .replace("https://x.com", ""),
-                                            st
-                                        );
-                                    }
+                            if let Ok(mut log) = xhr_log_t.lock()
+                                && let Some(e) = log.iter_mut().rev().find(|e| e.id == id)
+                            {
+                                e.done = true;
+                                if ev.method == "Network.loadingFailed" {
+                                    e.error = Some(
+                                        ev.params
+                                            .get("errorText")
+                                            .and_then(|x| x.as_str())
+                                            .unwrap_or("failed")
+                                            .to_string(),
+                                    );
+                                }
+                                if e.url.contains("/i/api/graphql/") {
+                                    let st =
+                                        e.error.clone().unwrap_or_else(|| e.status.to_string());
+                                    tracing::debug!(
+                                        "xhr gql done: {} {} -> {}",
+                                        e.method,
+                                        e.url
+                                            .split('?')
+                                            .next()
+                                            .unwrap_or("")
+                                            .replace("https://x.com", ""),
+                                        st
+                                    );
                                 }
                             }
                             if let Some((method, url, status)) = pending.remove(id) {
@@ -847,26 +844,25 @@ impl Page {
         // M4+M6: Check for consent banners and block pages after initial load.
         let consent = dismiss_consent(&cdp).await.unwrap_or(None);
         let blocked = detect_block(&cdp).await.unwrap_or(None);
-        if let Some(ref fw) = consent {
-            if let Ok(mut a) = ambient.lock() {
-                a.push(format!(
-                    "consent: {} ({})",
-                    if std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".into()) != "accept"
-                    {
-                        "rejected"
-                    } else {
-                        "accepted"
-                    },
-                    fw
-                ));
-            }
+        if let Some(ref fw) = consent
+            && let Ok(mut a) = ambient.lock()
+        {
+            a.push(format!(
+                "consent: {} ({})",
+                if std::env::var("OBU_CONSENT").unwrap_or_else(|_| "reject".into()) != "accept" {
+                    "rejected"
+                } else {
+                    "accepted"
+                },
+                fw
+            ));
         }
-        if let Some(ref bt) = blocked {
-            if let Ok(mut a) = ambient.lock() {
-                a.push(format!("blocked: {}", bt));
-                for step in crate::page::perception::remediation_ladder(bt) {
-                    a.push(format!("  remediation: {}", step));
-                }
+        if let Some(ref bt) = blocked
+            && let Ok(mut a) = ambient.lock()
+        {
+            a.push(format!("blocked: {}", bt));
+            for step in crate::page::perception::remediation_ladder(bt) {
+                a.push(format!("  remediation: {}", step));
             }
         }
 

@@ -110,10 +110,10 @@ pub(super) async fn resolve_text_target(
         if role == "hidden" {
             continue;
         }
-        if let Some(rf) = role_filter {
-            if role != rf {
-                continue;
-            }
+        if let Some(rf) = role_filter
+            && role != rf
+        {
+            continue;
         }
         let name = &el.raw.name;
         let name_lower = name.to_lowercase();
@@ -135,25 +135,24 @@ pub(super) async fn resolve_text_target(
         }
         // Alias group matching: if both query and element name are in
         // the same alias group, it's a strong match (score 55).
-        if score == 0 {
-            if let Some(group) = alias_group {
-                if group.iter().any(|a| *a == name_lower) {
-                    score = 55;
-                }
-            }
+        if score == 0
+            && let Some(group) = alias_group
+            && group.iter().any(|a| *a == name_lower)
+        {
+            score = 55;
         }
         // Type-based matching: if query matches the HTML input type.
-        if score == 0 {
-            if let Some(ref ty) = el.raw.element_type {
-                let ty_lower = ty.to_lowercase();
-                let type_match = (q == "password" && ty_lower == "password")
-                    || (q == "email" && ty_lower == "email")
-                    || (q == "search" && ty_lower == "search")
-                    || (q == "phone" && ty_lower == "tel")
-                    || (q == "url" && ty_lower == "url");
-                if type_match {
-                    score = 50;
-                }
+        if score == 0
+            && let Some(ref ty) = el.raw.element_type
+        {
+            let ty_lower = ty.to_lowercase();
+            let type_match = (q == "password" && ty_lower == "password")
+                || (q == "email" && ty_lower == "email")
+                || (q == "search" && ty_lower == "search")
+                || (q == "phone" && ty_lower == "tel")
+                || (q == "url" && ty_lower == "url");
+            if type_match {
+                score = 50;
             }
         }
         if score > 0 {

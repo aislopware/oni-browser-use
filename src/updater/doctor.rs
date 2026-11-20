@@ -466,15 +466,15 @@ fn check_login_sidecar() -> Check {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(&path) {
-            if meta.permissions().mode() & 0o077 != 0 {
-                return Check {
-                    name: "Login persistence",
-                    status: Status::Warn,
-                    detail: format!("{} has non-private permissions", path.display()),
-                    fix: Some(format!("Fix: chmod 600 {}", path.display())),
-                };
-            }
+        if let Ok(meta) = std::fs::metadata(&path)
+            && meta.permissions().mode() & 0o077 != 0
+        {
+            return Check {
+                name: "Login persistence",
+                status: Status::Warn,
+                detail: format!("{} has non-private permissions", path.display()),
+                fix: Some(format!("Fix: chmod 600 {}", path.display())),
+            };
         }
     }
     match std::fs::read(&path) {
@@ -564,10 +564,10 @@ fn fs_items(dir: &std::path::Path) -> std::io::Result<Vec<std::fs::Metadata>> {
     let mut out = Vec::new();
     if let Ok(e) = std::fs::read_dir(dir) {
         for f in e.flatten() {
-            if let Ok(m) = f.metadata() {
-                if m.is_file() {
-                    out.push(m);
-                }
+            if let Ok(m) = f.metadata()
+                && m.is_file()
+            {
+                out.push(m);
             }
         }
     }
@@ -786,24 +786,24 @@ fn check_disk_space() -> Check {
                     let fields: Vec<&str> = line.split_whitespace().collect();
                     let use_idx = fields.iter().position(|f| f.ends_with('%'));
                     let avail_idx = use_idx.and_then(|i| if i > 0 { Some(i - 1) } else { None });
-                    if let Some(idx) = avail_idx {
-                        if let Ok(avail_kb) = fields[idx].parse::<u64>() {
-                            let avail_mb = avail_kb as f64 / 1024.0;
-                            if avail_mb < 50.0 {
-                                return Check {
-                                    name: "Disk space",
-                                    status: Status::Warn,
-                                    detail: format!("{avail_mb:.0} MB free (updates need ~20MB)"),
-                                    fix: Some("Free up disk space before updating".into()),
-                                };
-                            }
+                    if let Some(idx) = avail_idx
+                        && let Ok(avail_kb) = fields[idx].parse::<u64>()
+                    {
+                        let avail_mb = avail_kb as f64 / 1024.0;
+                        if avail_mb < 50.0 {
                             return Check {
                                 name: "Disk space",
-                                status: Status::Pass,
-                                detail: format!("{avail_mb:.0} MB free"),
-                                fix: None,
+                                status: Status::Warn,
+                                detail: format!("{avail_mb:.0} MB free (updates need ~20MB)"),
+                                fix: Some("Free up disk space before updating".into()),
                             };
                         }
+                        return Check {
+                            name: "Disk space",
+                            status: Status::Pass,
+                            detail: format!("{avail_mb:.0} MB free"),
+                            fix: None,
+                        };
                     }
                 }
             }

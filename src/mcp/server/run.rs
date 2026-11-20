@@ -287,17 +287,16 @@ async fn execute_step(
 
     // Ordinary actions delegate their pre-navigation to act. Conditions and
     // waits have their own executor, so must honor url before evaluating too.
-    if matches!(action_str, "if" | "while" | "wait") {
-        if let Some(url) = step
+    if matches!(action_str, "if" | "while" | "wait")
+        && let Some(url) = step
             .get("url")
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
-        {
-            if crate::realbrowser::input_paused() {
-                return Err(crate::realbrowser::paused_error());
-            }
-            page.navigate(url).await?;
+    {
+        if crate::realbrowser::input_paused() {
+            return Err(crate::realbrowser::paused_error());
         }
+        page.navigate(url).await?;
     }
 
     match action_str {
@@ -488,15 +487,16 @@ async fn execute_step(
             // {"action":"extract"} and got "unknown action" — silently, under
             // optional:true).
             let mut see_args = step.clone();
-            if action_str == "extract" && see_args.get("extract").is_none() {
-                if let Some(obj) = see_args.as_object_mut() {
-                    obj.insert("extract".into(), serde_json::json!("auto"));
-                }
+            if action_str == "extract"
+                && see_args.get("extract").is_none()
+                && let Some(obj) = see_args.as_object_mut()
+            {
+                obj.insert("extract".into(), serde_json::json!("auto"));
             }
-            if see_args.get("budget").is_none() {
-                if let Some(obj) = see_args.as_object_mut() {
-                    obj.insert("budget".into(), serde_json::json!(3000));
-                }
+            if see_args.get("budget").is_none()
+                && let Some(obj) = see_args.as_object_mut()
+            {
+                obj.insert("budget".into(), serde_json::json!(3000));
             }
             // url= and block= navigate first via handle_see_tool (no duplicate
             // settle wait after page.navigate).
@@ -507,15 +507,14 @@ async fn execute_step(
         "state" | "open-tab" | "close-tab" | "switch-tab" | "save" | "load" | "cookies"
         | "set-cookie" => {
             let mut state_args = step.clone();
-            if action_str != "state" {
-                if let Some(obj) = state_args.as_object_mut() {
-                    if !obj.contains_key("op") {
-                        obj.insert(
-                            "op".to_string(),
-                            serde_json::Value::String(action_str.to_string()),
-                        );
-                    }
-                }
+            if action_str != "state"
+                && let Some(obj) = state_args.as_object_mut()
+                && !obj.contains_key("op")
+            {
+                obj.insert(
+                    "op".to_string(),
+                    serde_json::Value::String(action_str.to_string()),
+                );
             }
             match handle_state(&state_args, page).await {
                 Ok(result) => {

@@ -52,14 +52,14 @@ pub fn proxy_tz_mismatch(proxy: Option<&str>, tz: Option<&str>) -> bool {
 pub fn pending_notes() -> Vec<String> {
     let mut notes = Vec::new();
     if !crate::realbrowser::real_lane() {
-        if let Some(crate::browser::GpuState::Missing) = crate::browser::gpu_state() {
-            if claim(&GL_NOTE) {
-                notes.push(if crate::browser::gl_mid_session_loss() {
+        if let Some(crate::browser::GpuState::Missing) = crate::browser::gpu_state()
+            && claim(&GL_NOTE)
+        {
+            notes.push(if crate::browser::gl_mid_session_loss() {
                     "note: this browser LOST WebGL mid-session (the GPU process degraded — getContext('webgl') returns null on every page right now). This is often transient: the driver keeps re-probing and restores the GL state (and its mask) automatically when contexts return. While it lasts, pages see no WebGL.".into()
                 } else {
                     "note: this browser has no WebGL (getContext('webgl') returns null — the same as stock Chrome on this host); no GL mask is applied.".into()
                 });
-            }
         }
         if crate::browser::launched_headless() && claim(&HEADLESS_NOTE) {
             notes.push(

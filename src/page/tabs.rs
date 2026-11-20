@@ -253,15 +253,15 @@ impl Page {
         // New session attached — now detach the OLD one (pipe
         // mode) so only one session stays attached. Failure
         // here is harmless (two sessions attached briefly).
-        if let Some(client) = &self.browser_client {
-            if let Some(sid) = self.cdp.session_id() {
-                let _ = client
-                    .send(
-                        "Target.detachFromTarget",
-                        Some(serde_json::json!({ "sessionId": sid })),
-                    )
-                    .await;
-            }
+        if let Some(client) = &self.browser_client
+            && let Some(sid) = self.cdp.session_id()
+        {
+            let _ = client
+                .send(
+                    "Target.detachFromTarget",
+                    Some(serde_json::json!({ "sessionId": sid })),
+                )
+                .await;
         }
         *self = new_page;
         // Attached browser: the tab the session is on outlives this process —

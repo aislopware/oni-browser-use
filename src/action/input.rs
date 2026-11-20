@@ -603,10 +603,10 @@ pub(super) async fn dispatch_combo(
     commands: Option<Vec<String>>,
 ) -> Result<()> {
     let (mut evs, main_idx) = combo_events(combo).map_err(ObuError::Other)?;
-    if let Some(cmds) = commands {
-        if let Some(obj) = evs.get_mut(main_idx).and_then(|v| v.as_object_mut()) {
-            obj.insert("commands".to_string(), json!(cmds));
-        }
+    if let Some(cmds) = commands
+        && let Some(obj) = evs.get_mut(main_idx).and_then(|v| v.as_object_mut())
+    {
+        obj.insert("commands".to_string(), json!(cmds));
     }
     for (i, ev) in evs.into_iter().enumerate() {
         cdp.send("Input.dispatchKeyEvent", Some(ev)).await?;

@@ -415,10 +415,12 @@ pub(super) fn format_x_date(s: &str) -> String {
             "Dec" => 12,
             _ => 0,
         };
-        if mon > 0 && p[3].len() >= 5 && p[4].starts_with('+') {
-            if let Ok(day) = p[2].parse::<u32>() {
-                return format!("{}-{:02}-{:02} {} UTC", p[5], mon, day, &p[3][..5]);
-            }
+        if mon > 0
+            && p[3].len() >= 5
+            && p[4].starts_with('+')
+            && let Ok(day) = p[2].parse::<u32>()
+        {
+            return format!("{}-{:02}-{:02} {} UTC", p[5], mon, day, &p[3][..5]);
         }
     }
     s.to_string()

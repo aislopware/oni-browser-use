@@ -65,11 +65,11 @@ pub(super) fn handle_tools_list(id: Option<Value>, version: Option<&str>) -> Val
     // CacheableResult (SEP-2549): the tool list is static per binary,
     // so cache aggressively. Tools are returned in a deterministic
     // order for client-side caching and prompt cache hits.
-    if version == Some(STATELESS_VERSION) {
-        if let Some(obj) = result.as_object_mut() {
-            obj.insert("ttlMs".into(), json!(3_600_000));
-            obj.insert("cacheScope".into(), json!("public"));
-        }
+    if version == Some(STATELESS_VERSION)
+        && let Some(obj) = result.as_object_mut()
+    {
+        obj.insert("ttlMs".into(), json!(3_600_000));
+        obj.insert("cacheScope".into(), json!("public"));
     }
     shape_result(&mut result, version);
     json!({
@@ -143,10 +143,10 @@ async fn tools_call(
                     if let Some(n) = &d.note {
                         notices.push_str(&format!("    ({n})\n"));
                     }
-                    if let Some(p) = &d.default_prompt {
-                        if !p.is_empty() {
-                            notices.push_str(&format!("    (prompt default: \"{}\")\n", p));
-                        }
+                    if let Some(p) = &d.default_prompt
+                        && !p.is_empty()
+                    {
+                        notices.push_str(&format!("    (prompt default: \"{}\")\n", p));
                     }
                 }
             }
@@ -258,22 +258,20 @@ pub(crate) fn append_notices(text: String, notices: &str, json_mode: bool) -> St
     if notices.trim().is_empty() {
         return text;
     }
-    if json_mode {
-        if let Ok(mut value) = serde_json::from_str::<Value>(&text) {
-            let envelope = value.get("artifact").is_some() && value.get("next_offset").is_some()
-                || value.as_object().is_some_and(|o| {
-                    o.len() == 2
-                        && o.contains_key("data")
-                        && o.get("note").is_some_and(Value::is_string)
-                });
-            if envelope {
-                let previous = value.get("note").and_then(Value::as_str).unwrap_or("");
-                value["note"] = json!(format!("{previous}\n{}", notices.trim()).trim());
-            } else {
-                value = json!({"data":value,"note":notices.trim()});
-            }
-            return value.to_string();
+    if json_mode && let Ok(mut value) = serde_json::from_str::<Value>(&text) {
+        let envelope = value.get("artifact").is_some() && value.get("next_offset").is_some()
+            || value.as_object().is_some_and(|o| {
+                o.len() == 2
+                    && o.contains_key("data")
+                    && o.get("note").is_some_and(Value::is_string)
+            });
+        if envelope {
+            let previous = value.get("note").and_then(Value::as_str).unwrap_or("");
+            value["note"] = json!(format!("{previous}\n{}", notices.trim()).trim());
+        } else {
+            value = json!({"data":value,"note":notices.trim()});
         }
+        return value.to_string();
     }
     format!("{text}\n{}", notices.trim())
 }

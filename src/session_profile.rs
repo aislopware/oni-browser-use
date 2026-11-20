@@ -821,10 +821,11 @@ fn other_live_sessions_at(profiles: &Path) -> bool {
         let owner = std::fs::read_to_string(entry.path().join(".obu-owner"))
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok());
-        if let Some(pid) = owner {
-            if pid != my_pid && platform::process_alive(pid) {
-                return true;
-            }
+        if let Some(pid) = owner
+            && pid != my_pid
+            && platform::process_alive(pid)
+        {
+            return true;
         }
     }
     false

@@ -73,10 +73,8 @@ pub(crate) fn find_chrome() -> Result<String> {
     }
 
     let nix = std::path::Path::new("/nix/store").exists();
-    if nix {
-        if let Some(path) = find_in_nix_store() {
-            return Ok(path);
-        }
+    if nix && let Some(path) = find_in_nix_store() {
+        return Ok(path);
     }
 
     // Flatpak exports come after every native install (SteamOS and other
@@ -87,10 +85,8 @@ pub(crate) fn find_chrome() -> Result<String> {
         return Ok(path);
     }
 
-    if nix {
-        if let Some(path) = find_via_nix_shell() {
-            return Ok(path);
-        }
+    if nix && let Some(path) = find_via_nix_shell() {
+        return Ok(path);
     }
 
     Err(ObuError::Other(if cfg!(target_os = "linux") {
@@ -205,13 +201,12 @@ fn find_in_nix_store() -> Option<String> {
             "3",
         ])
         .output()
+        && output.status.success()
     {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                if line.ends_with("/bin/chromium") {
-                    return Some(line.to_string());
-                }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.ends_with("/bin/chromium") {
+                return Some(line.to_string());
             }
         }
     }

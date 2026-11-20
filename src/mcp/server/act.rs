@@ -215,12 +215,12 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
             }
         };
         let (_, verdict) = page.act(action).await?;
-        if let Some(want) = f_check {
-            if crate::action::read_checked(page.cdp_ref(), page.model(), &resolved).await? != want {
-                return Err(ObuError::Other(format!(
-                    "fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying"
-                )));
-            }
+        if let Some(want) = f_check
+            && crate::action::read_checked(page.cdp_ref(), page.model(), &resolved).await? != want
+        {
+            return Err(ObuError::Other(format!(
+                "fill {resolved}: click dispatched once but check={want} was not accepted; verify state before retrying"
+            )));
         }
         last_verdict = verdict;
         count += 1;
@@ -320,16 +320,16 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
     // Resource blocking (W1): `act navigate block=images,fonts,...`.
     // Applied before the navigation so the rules are live for the load,
     // and remembered per target domain (knowledge base).
-    if action_str == "navigate" {
-        if let Some(block) = args.get("block").and_then(|b| b.as_str()) {
-            let mask = page.set_block_classes(block).await?;
-            let target = if url.is_empty() {
-                page.model().url().to_string()
-            } else {
-                url.to_string()
-            };
-            page.remember_block_choice(&target, block, mask != 0);
-        }
+    if action_str == "navigate"
+        && let Some(block) = args.get("block").and_then(|b| b.as_str())
+    {
+        let mask = page.set_block_classes(block).await?;
+        let target = if url.is_empty() {
+            page.model().url().to_string()
+        } else {
+            url.to_string()
+        };
+        page.remember_block_choice(&target, block, mask != 0);
     }
 
     let action = match action_str {
@@ -500,10 +500,10 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
             // action", silently consuming an optional:true step). url= was
             // honored by the generic pre-navigation above.
             let mut see_args = args.clone();
-            if see_args.get("extract").is_none() {
-                if let Some(obj) = see_args.as_object_mut() {
-                    obj.insert("extract".into(), serde_json::json!("auto"));
-                }
+            if see_args.get("extract").is_none()
+                && let Some(obj) = see_args.as_object_mut()
+            {
+                obj.insert("extract".into(), serde_json::json!("auto"));
             }
             return handle_see(&see_args, page).await;
         }
@@ -662,15 +662,16 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                     .unwrap_or("unknown");
                 if step_action == "see" || step_action == "extract" {
                     let mut see_args = step.clone();
-                    if step_action == "extract" && see_args.get("extract").is_none() {
-                        if let Some(obj) = see_args.as_object_mut() {
-                            obj.insert("extract".into(), serde_json::json!("auto"));
-                        }
+                    if step_action == "extract"
+                        && see_args.get("extract").is_none()
+                        && let Some(obj) = see_args.as_object_mut()
+                    {
+                        obj.insert("extract".into(), serde_json::json!("auto"));
                     }
-                    if see_args.get("budget").is_none() {
-                        if let Some(obj) = see_args.as_object_mut() {
-                            obj.insert("budget".into(), serde_json::json!(3000));
-                        }
+                    if see_args.get("budget").is_none()
+                        && let Some(obj) = see_args.as_object_mut()
+                    {
+                        obj.insert("budget".into(), serde_json::json!(3000));
                     }
                     // url= and block= navigate first via handle_see_tool (which
                     // already ran load/settle/capture — no duplicate settle wait).
@@ -868,15 +869,14 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
         | "set-cookie" => {
             // Allow state ops as action shortcuts in batch/run steps.
             let mut state_args = args.clone();
-            if action_str != "state" {
-                if let Some(obj) = state_args.as_object_mut() {
-                    if !obj.contains_key("op") {
-                        obj.insert(
-                            "op".to_string(),
-                            serde_json::Value::String(action_str.to_string()),
-                        );
-                    }
-                }
+            if action_str != "state"
+                && let Some(obj) = state_args.as_object_mut()
+                && !obj.contains_key("op")
+            {
+                obj.insert(
+                    "op".to_string(),
+                    serde_json::Value::String(action_str.to_string()),
+                );
             }
             return handle_state(&state_args, page).await;
         }

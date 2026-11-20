@@ -132,15 +132,17 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         }
         "type" => {
             let mut pi = 0usize;
-            if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                if let Some(t) = pos.first() {
-                    if is_ref(t) {
-                        j["ref"] = json!(t);
-                    } else {
-                        j["label"] = json!(t);
-                    }
-                    pi = 1;
+            if j.get("ref").is_none()
+                && j.get("label").is_none()
+                && j.get("selector").is_none()
+                && let Some(t) = pos.first()
+            {
+                if is_ref(t) {
+                    j["ref"] = json!(t);
+                } else {
+                    j["label"] = json!(t);
                 }
+                pi = 1;
             }
             if j.get("text").is_none() && pos.len() > pi {
                 j["text"] = json!(pos[pi..].join(" "));
@@ -185,15 +187,17 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         }
         "select" => {
             let mut pi = 0usize;
-            if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                if let Some(t) = pos.first() {
-                    if is_ref(t) {
-                        j["ref"] = json!(t);
-                    } else {
-                        j["label"] = json!(t);
-                    }
-                    pi = 1;
+            if j.get("ref").is_none()
+                && j.get("label").is_none()
+                && j.get("selector").is_none()
+                && let Some(t) = pos.first()
+            {
+                if is_ref(t) {
+                    j["ref"] = json!(t);
+                } else {
+                    j["label"] = json!(t);
                 }
+                pi = 1;
             }
             if j.get("option").is_none() && pos.len() > pi {
                 j["option"] = json!(pos[pi..].join(" "));
@@ -213,13 +217,15 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
             // R3: non-ref positionals are labels, exactly like click/type
             // (the old arm forced every positional into ref= and died
             // "stale ref: Search box").
-            if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
-                if let Some(t) = pos.first() {
-                    if is_ref(t) {
-                        j["ref"] = json!(t);
-                    } else {
-                        j["label"] = json!(pos.join(" "));
-                    }
+            if j.get("ref").is_none()
+                && j.get("label").is_none()
+                && j.get("selector").is_none()
+                && let Some(t) = pos.first()
+            {
+                if is_ref(t) {
+                    j["ref"] = json!(t);
+                } else {
+                    j["label"] = json!(pos.join(" "));
                 }
             }
             if j.get("ref").is_none() && j.get("label").is_none() && j.get("selector").is_none() {
@@ -277,16 +283,17 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
         }
         "upload" => {
             let mut pi = 0usize;
-            if j.get("ref").is_none() && j.get("selector").is_none() {
-                if let Some(t) = pos.first() {
-                    if is_ref(t) {
-                        j["ref"] = json!(t);
-                        pi = 1;
-                    } else if j.get("label").is_none() {
-                        return Err(ObuError::Usage(format!(
-                            "upload target '{t}' is not a ref — pass a file-input ref (e.g. `act upload e5 /path/file.pdf`) or `--selector \"input[type=file]\"`"
-                        )));
-                    }
+            if j.get("ref").is_none()
+                && j.get("selector").is_none()
+                && let Some(t) = pos.first()
+            {
+                if is_ref(t) {
+                    j["ref"] = json!(t);
+                    pi = 1;
+                } else if j.get("label").is_none() {
+                    return Err(ObuError::Usage(format!(
+                        "upload target '{t}' is not a ref — pass a file-input ref (e.g. `act upload e5 /path/file.pdf`) or `--selector \"input[type=file]\"`"
+                    )));
                 }
             }
             // The MCP handler takes the file path in `text` (NOT `path`) —

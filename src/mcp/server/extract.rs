@@ -369,17 +369,17 @@ fn auto_extract_notes(val: &serde_json::Value, limit: usize) -> String {
     let num = |k: &str| val.get(k).and_then(|v| v.as_u64());
     let count = num("count").unwrap_or(0);
     let mut notes = String::new();
-    if val.get("partial").and_then(|p| p.as_bool()) == Some(true) {
-        if let Some(total) = num("page_total") {
-            if val.get("paged").and_then(|p| p.as_bool()) == Some(true) {
-                notes.push_str(&format!(
+    if val.get("partial").and_then(|p| p.as_bool()) == Some(true)
+        && let Some(total) = num("page_total")
+    {
+        if val.get("paged").and_then(|p| p.as_bool()) == Some(true) {
+            notes.push_str(&format!(
                     "\nnote: the page states {total} results and this is ONE page of them — only the {count} on this page were in the DOM; follow the pagination links, or act collect url=<next page> for the rest"
                 ));
-            } else {
-                notes.push_str(&format!(
+        } else {
+            notes.push_str(&format!(
                     "\nnote: the page states {total} results but only {count} were in the DOM — the rest are not loaded yet (lazy load or pagination); act collect scrolls + dedupes the whole feed, or follow the next-page link"
                 ));
-            }
         }
     }
     // The script clamps limit, so compare against the cap it actually used;
@@ -432,10 +432,10 @@ fn trim_for_inline(val: &mut serde_json::Value) -> Option<(String, Vec<&'static 
         let mut changed = false;
         if let Some(items) = val.get_mut("items").and_then(|i| i.as_array_mut()) {
             for it in items.iter_mut() {
-                if let Some(obj) = it.as_object_mut() {
-                    if obj.remove(field).is_some() {
-                        changed = true;
-                    }
+                if let Some(obj) = it.as_object_mut()
+                    && obj.remove(field).is_some()
+                {
+                    changed = true;
                 }
             }
         }
@@ -459,10 +459,10 @@ fn range_filter_note(url: &str, val: &serde_json::Value) -> Option<String> {
     let items = val.get("items")?.as_array()?;
     let mut prices: Vec<(String, f64)> = Vec::new();
     for it in items {
-        if let Some(p) = it.get("price").and_then(|p| p.as_str()) {
-            if let Some(v) = parse_price(p) {
-                prices.push((p.to_string(), v));
-            }
+        if let Some(p) = it.get("price").and_then(|p| p.as_str())
+            && let Some(v) = parse_price(p)
+        {
+            prices.push((p.to_string(), v));
         }
     }
     if prices.len() < 3 {

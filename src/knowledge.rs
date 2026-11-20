@@ -358,10 +358,10 @@ impl KnowledgeBase {
         }
         // Load stats.
         let stats_path = root.join("stats.json");
-        if let Ok(content) = std::fs::read_to_string(&stats_path) {
-            if let Ok(stats) = serde_json::from_str::<GlobalStats>(&content) {
-                kb.stats = stats;
-            }
+        if let Ok(content) = std::fs::read_to_string(&stats_path)
+            && let Ok(stats) = serde_json::from_str::<GlobalStats>(&content)
+        {
+            kb.stats = stats;
         }
         kb.pre_seed();
         kb
@@ -449,20 +449,20 @@ impl KnowledgeBase {
         // start and MAX_DOMAINS never bounds the store on disk.
         for domain in std::mem::take(&mut self.evicted) {
             let path = dir.join(format!("{domain}.json"));
-            if let Err(e) = std::fs::remove_file(&path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    self.evicted.insert(domain);
-                }
+            if let Err(e) = std::fs::remove_file(&path)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                self.evicted.insert(domain);
             }
         }
 
         // Write stats.
         let stats_path = root.join("stats.json");
         let stats_tmp = root.join("stats.json.tmp");
-        if let Ok(json) = serde_json::to_string_pretty(&self.stats) {
-            if crate::platform::secure_write_file(&stats_tmp, json.as_bytes()).is_ok() {
-                let _ = std::fs::rename(&stats_tmp, &stats_path);
-            }
+        if let Ok(json) = serde_json::to_string_pretty(&self.stats)
+            && crate::platform::secure_write_file(&stats_tmp, json.as_bytes()).is_ok()
+        {
+            let _ = std::fs::rename(&stats_tmp, &stats_path);
         }
         self.dirty = !failed.is_empty() || !self.evicted.is_empty();
         self.changed = failed;
@@ -555,14 +555,14 @@ impl KnowledgeBase {
     /// Downgrade consent confidence after a failed application.
     pub fn downgrade_consent(&mut self, domain: &str) {
         let now = now_secs();
-        if let Some(dk) = self.domains.get_mut(domain) {
-            if let Some(c) = &mut dk.consent {
-                c.confidence = (c.confidence - FAIL_DECREMENT).max(0.0);
-                c.fail_count += 1;
-                c.last_validated = now;
-                if c.confidence < EVICT_THRESHOLD {
-                    dk.consent = None;
-                }
+        if let Some(dk) = self.domains.get_mut(domain)
+            && let Some(c) = &mut dk.consent
+        {
+            c.confidence = (c.confidence - FAIL_DECREMENT).max(0.0);
+            c.fail_count += 1;
+            c.last_validated = now;
+            if c.confidence < EVICT_THRESHOLD {
+                dk.consent = None;
             }
         }
         self.touch(domain);

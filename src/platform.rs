@@ -23,10 +23,10 @@ use std::sync::atomic::{AtomicI32, Ordering};
 pub fn home_dir() -> PathBuf {
     #[cfg(unix)]
     {
-        if let Ok(h) = std::env::var("HOME") {
-            if !h.trim().is_empty() {
-                return PathBuf::from(h);
-            }
+        if let Ok(h) = std::env::var("HOME")
+            && !h.trim().is_empty()
+        {
+            return PathBuf::from(h);
         }
         // HOME unset or empty (cron, services, sanitized envs): ask the
         // password database for the account's real home. Falling straight
@@ -742,10 +742,10 @@ pub fn reharden_state_tree(root: &std::path::Path) {
     };
     // 0600, but never strip an exec bit (downloaded binaries, backups).
     let file600 = |p: &std::path::Path| {
-        if let Some(m) = owned(p) {
-            if m.permissions().mode() & 0o111 == 0 {
-                let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
-            }
+        if let Some(m) = owned(p)
+            && m.permissions().mode() & 0o111 == 0
+        {
+            let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
         }
     };
     dir700(root);

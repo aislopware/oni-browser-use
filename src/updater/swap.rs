@@ -33,11 +33,11 @@ pub fn swap_binary(downloaded: &Path) -> Result<PathBuf> {
     // Path::exists() — exists() follows symlinks, so a pre-planted DANGLING
     // symlink at this predictable name skipped the remove and the write
     // below then went THROUGH the link to an attacker-chosen target.
-    if let Ok(meta) = std::fs::symlink_metadata(&backup) {
-        if !meta.is_dir() {
-            std::fs::remove_file(&backup)
-                .map_err(|e| ObuError::Other(format!("cannot remove old backup: {e}")))?;
-        }
+    if let Ok(meta) = std::fs::symlink_metadata(&backup)
+        && !meta.is_dir()
+    {
+        std::fs::remove_file(&backup)
+            .map_err(|e| ObuError::Other(format!("cannot remove old backup: {e}")))?;
     }
 
     #[cfg(windows)]

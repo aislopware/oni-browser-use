@@ -231,10 +231,10 @@ pub(super) async fn run_rb(args: &[String], json_mode: bool) -> Result<()> {
                 // Already on: still self-heal a missing or stale clone (after
                 // `rb forget`, or `rb profile` into another user-data root) so
                 // the next launch never imports mid-run.
-                if let Ok((spec, profile)) = rb::resolve_selection(&cfg) {
-                    if rb::effective_mode(&cfg, &profile.root) == rb::Mode::Clone {
-                        rb::ensure_current_import(&spec, &profile)?;
-                    }
+                if let Ok((spec, profile)) = rb::resolve_selection(&cfg)
+                    && rb::effective_mode(&cfg, &profile.root) == rb::Mode::Clone
+                {
+                    rb::ensure_current_import(&spec, &profile)?;
                 }
                 if json_mode {
                     println!(

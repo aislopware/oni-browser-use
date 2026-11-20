@@ -65,10 +65,10 @@ impl ShutdownSignals {
             }
             #[cfg(windows)]
             {
-                if let Some(ctrl_c) = &mut self.ctrl_c {
-                    if ctrl_c.poll_recv(cx).is_ready() {
-                        return Poll::Ready(());
-                    }
+                if let Some(ctrl_c) = &mut self.ctrl_c
+                    && ctrl_c.poll_recv(cx).is_ready()
+                {
+                    return Poll::Ready(());
                 }
             }
             Poll::Pending
