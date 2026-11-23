@@ -896,7 +896,10 @@ mod extract_script_tests {
                 eprintln!("node not available — skipping extract script syntax check");
                 return;
             }
-            let path = std::env::temp_dir().join(format!("obu-js-check-extract-{post_marker}.js"));
+            let path = std::env::temp_dir().join(format!(
+                "obu-js-check-extract-{post_marker}-{}.js",
+                std::process::id()
+            ));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -1031,7 +1034,8 @@ mod extract_script_tests {
             eprintln!("node not available — skipping template script syntax check");
             return;
         }
-        let path = std::env::temp_dir().join("obu-js-check-template.js");
+        let path =
+            std::env::temp_dir().join(format!("obu-js-check-template-{}.js", std::process::id()));
         std::fs::write(&path, &js).expect("write js fixture");
         let out = std::process::Command::new("node")
             .arg("--check")

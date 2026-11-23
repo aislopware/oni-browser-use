@@ -580,7 +580,8 @@ mod script_syntax_tests {
             eprintln!("node not available — skipping {name} syntax check");
             return;
         }
-        let path = std::env::temp_dir().join(format!("obu-js-check-{name}.js"));
+        let path =
+            std::env::temp_dir().join(format!("obu-js-check-{name}-{}.js", std::process::id()));
         std::fs::write(&path, js).expect("write js fixture");
         let out = Command::new("node")
             .arg("--check")
@@ -608,7 +609,8 @@ mod script_syntax_tests {
             eprintln!("node not available — skipping {name}");
             return None;
         }
-        let path = std::env::temp_dir().join(format!("obu-js-run-{name}.js"));
+        let path =
+            std::env::temp_dir().join(format!("obu-js-run-{name}-{}.js", std::process::id()));
         std::fs::write(&path, js).expect("write js fixture");
         let out = Command::new("node").arg(&path).output().expect("run node");
         let _ = std::fs::remove_file(&path);

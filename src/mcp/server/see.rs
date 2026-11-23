@@ -801,7 +801,7 @@ mod pdf_read_tests {
         assert!(PDF_STATE_EXPR.contains(".pdf"));
         assert!(PDF_STATE_EXPR.contains("contentType"));
         // node --check (skipped when node is unavailable).
-        let dir = std::env::temp_dir().join("obu-pdf-tests");
+        let dir = std::env::temp_dir().join(format!("obu-pdf-tests-{}", std::process::id()));
         if std::fs::create_dir_all(&dir).is_err() {
             return;
         }

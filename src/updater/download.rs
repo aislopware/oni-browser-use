@@ -1047,7 +1047,8 @@ mod tests {
 
     #[test]
     fn verify_rejects_empty() {
-        let dir = std::env::temp_dir().join("obu-test-verify-empty");
+        let dir =
+            std::env::temp_dir().join(format!("obu-test-verify-empty-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("empty.bin");
         std::fs::write(&path, b"").unwrap();
@@ -1062,7 +1063,7 @@ mod tests {
 
     #[test]
     fn verify_rejects_tiny() {
-        let dir = std::env::temp_dir().join("obu-test-verify-tiny");
+        let dir = std::env::temp_dir().join(format!("obu-test-verify-tiny-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("tiny.bin");
         std::fs::write(&path, b"ab").unwrap();
@@ -1077,7 +1078,8 @@ mod tests {
 
     #[test]
     fn verify_rejects_wrong_magic() {
-        let dir = std::env::temp_dir().join("obu-test-verify-magic");
+        let dir =
+            std::env::temp_dir().join(format!("obu-test-verify-magic-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("wrong.bin");
         let mut f = std::fs::File::create(&path).unwrap();
@@ -1094,7 +1096,8 @@ mod tests {
 
     #[test]
     fn verify_rejects_too_large() {
-        let dir = std::env::temp_dir().join("obu-test-verify-large");
+        let dir =
+            std::env::temp_dir().join(format!("obu-test-verify-large-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("large.bin");
         // Write a file with correct magic but fake size > 500MB

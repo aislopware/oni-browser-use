@@ -727,7 +727,8 @@ mod action_tests {
         ] {
             let js = super::find::find_sig_expr("0|textbox|Post text|1", mode, text, &[0])
                 .expect("find-sig expr builds");
-            let path = std::env::temp_dir().join(format!("obu-findsig-{mode}.js"));
+            let path =
+                std::env::temp_dir().join(format!("obu-findsig-{mode}-{}.js", std::process::id()));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -748,7 +749,7 @@ mod action_tests {
             ("Join the conversation", Some("textbox"), true),
         ] {
             let js = super::find::find_text_expr(q, rf, ih).expect("find-text expr builds");
-            let path = std::env::temp_dir().join("obu-findtext.js");
+            let path = std::env::temp_dir().join(format!("obu-findtext-{}.js", std::process::id()));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
@@ -814,7 +815,7 @@ mod action_tests {
             ),
         ];
         for (name, js) in cases {
-            let path = std::env::temp_dir().join(format!("obu-{name}.js"));
+            let path = std::env::temp_dir().join(format!("obu-{name}-{}.js", std::process::id()));
             std::fs::write(&path, &js).expect("write js fixture");
             let out = std::process::Command::new("node")
                 .arg("--check")
