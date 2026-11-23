@@ -235,9 +235,9 @@ pub fn all_tools() -> Vec<ToolDef> {
                                 "action": {"type": "string", "enum": run_step_actions()},
                                 "optional": {"type": "boolean", "description": "Record runtime failure and continue."},
                                 "condition": {"type": "string", "description": "Same as act wait; js= expression, selector= CSS, text= text/title/url."},
-                                "then": {"type": "array", "description": "Sub-steps when condition matches."},
-                                "else": {"type": "array", "description": "Sub-steps on condition false/timeout."},
-                                "steps": {"type": "array", "description": "Body steps for while/batch."},
+                                "then": {"type": "array", "items": {"type": "object"}, "description": "Sub-steps when condition matches."},
+                                "else": {"type": "array", "items": {"type": "object"}, "description": "Sub-steps on condition false/timeout."},
+                                "steps": {"type": "array", "items": {"type": "object"}, "description": "Body steps for while/batch."},
                                 "max": {"type": "integer", "minimum": 0, "maximum": 100, "description": "while max iterations 0-100 (default 10)."}
                             }
                         }
@@ -345,6 +345,41 @@ mod tests {
             assert!(vision.get(key).is_some(), "missing {key}");
         }
         assert!(run.iter().any(|a| a == "vision"));
+    }
+
+    // Gemini rejects every function declaration of a request when one array has no `items`,
+    // so an Antigravity agent with obu attached could not run a single turn.
+    #[test]
+    fn every_array_schema_declares_items() {
+        fn walk(node: &Value, path: String, missing: &mut Vec<String>) {
+            match node {
+                Value::Object(map) => {
+                    if map.get("type").and_then(Value::as_str) == Some("array")
+                        && !map.contains_key("items")
+                    {
+                        missing.push(path.clone());
+                    }
+                    for (key, value) in map {
+                        walk(value, format!("{path}.{key}"), missing);
+                    }
+                }
+                Value::Array(items) => {
+                    for (index, value) in items.iter().enumerate() {
+                        walk(value, format!("{path}[{index}]"), missing);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut missing = Vec::new();
+        for tool in tools_to_json() {
+            walk(
+                &tool["inputSchema"],
+                tool["name"].as_str().unwrap().to_string(),
+                &mut missing,
+            );
+        }
+        assert!(missing.is_empty(), "arrays without items: {missing:?}");
     }
 
     fn enum_of(schema: &Value, path: &[&str]) -> Vec<String> {
