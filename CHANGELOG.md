@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The `run` tool declares `items` on its nested `then`, `else` and `steps` arrays. Gemini rejected the whole tool list without them, so an agent on a Gemini model (Antigravity) could not run a turn with obu attached.
+- A session's cookies and storage are no longer dropped at exit when its template lock was released moments before: a process forked in that instant still held the lock until it started, and the copy-back gave up at once instead of waiting it out.
+
 ## [4.10.0] - 2026-11-20
 
 Upstream 4.6.10 and 4.7.0, merged.
