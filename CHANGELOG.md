@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.10.1] - 2026-11-23
+
 ### Fixed
 - The `run` tool declares `items` on its nested `then`, `else` and `steps` arrays. Gemini rejected the whole tool list without them, so an agent on a Gemini model (Antigravity) could not run a turn with obu attached.
 - A session's cookies and storage are no longer dropped at exit when its template lock was released moments before: a process forked in that instant still held the lock until it started, and the copy-back gave up at once instead of waiting it out.
@@ -2281,7 +2283,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.10.0...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.10.1...HEAD
+[4.10.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.10.1
 [4.10.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.10.0
 [4.9.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.1
 [4.9.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.0
