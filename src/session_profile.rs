@@ -439,8 +439,16 @@ impl SessionProfile {
         #[cfg(unix)]
         {
             use std::os::fd::AsRawFd;
-            if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-                return None;
+            // A process forked while a guard was open shares its lock until it execs, so a
+            // guard just released can read as held for a moment; retry briefly before
+            // treating it as another copier's.
+            let mut attempts = 0;
+            while unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+                attempts += 1;
+                if attempts >= GUARD_RETRY_ATTEMPTS {
+                    return None;
+                }
+                std::thread::sleep(GUARD_RETRY_INTERVAL);
             }
         }
         let marker = root.join(".template.lock");
@@ -642,6 +650,12 @@ impl SessionProfile {
     }
 }
 
+/// Retries of a busy template guard: up to half a second in all.
+#[cfg(unix)]
+const GUARD_RETRY_ATTEMPTS: u32 = 50;
+#[cfg(unix)]
+const GUARD_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+
 /// How long one template copy may plausibly hold the lock marker.
 const TEMPLATE_LOCK_GRACE_SECS: u64 = 120;
 
@@ -835,6 +849,40 @@ fn other_live_sessions_at(profiles: &Path) -> bool {
 mod tests {
     use super::*;
 
+    // A guard that frees up moments later (a forked child still sharing it until exec)
+    // must not make a sync-back skip silently.
+    #[cfg(unix)]
+    #[test]
+    fn template_lock_waits_out_a_guard_released_moments_later() {
+        use std::os::fd::AsRawFd;
+        let root = std::env::temp_dir().join(format!("obu-test-guard-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let held = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(root.join(".template.guard"))
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            drop(held);
+        });
+        let lock = SessionProfile::acquire_lock_at(&root);
+        release.join().unwrap();
+        let acquired = lock.is_some();
+        drop(lock);
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            acquired,
+            "a guard released 50 ms later must not refuse the lock"
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn reused_owned_profile_is_private_without_chmodding_ancestors() {
@@ -890,7 +938,8 @@ mod tests {
         SessionProfile::cleanup_dir(&b);
         assert!(b.exists(), "a foreign marker must never authorize removal");
         // ...and an unmarked plant at a scheme name survives too.
-        let planted = std::env::temp_dir().join("obu-chrome-planted-test");
+        let planted =
+            std::env::temp_dir().join(format!("obu-chrome-planted-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&planted);
         std::fs::create_dir_all(&planted).unwrap();
         SessionProfile::cleanup_dir(&planted);
@@ -932,8 +981,8 @@ mod tests {
 
     #[test]
     fn copy_skips_singleton_files() {
-        let src = std::env::temp_dir().join("obu-test-copy-src");
-        let dst = std::env::temp_dir().join("obu-test-copy-dst");
+        let src = std::env::temp_dir().join(format!("obu-test-copy-src-{}", std::process::id()));
+        let dst = std::env::temp_dir().join(format!("obu-test-copy-dst-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&src);
         let _ = std::fs::remove_dir_all(&dst);
         std::fs::create_dir_all(src.join("Default")).unwrap();
@@ -996,8 +1045,8 @@ mod tests {
 
     #[test]
     fn copy_tolerates_missing_src() {
-        let src = std::env::temp_dir().join("obu-test-nonexistent");
-        let dst = std::env::temp_dir().join("obu-test-copy-dst2");
+        let src = std::env::temp_dir().join(format!("obu-test-nonexistent-{}", std::process::id()));
+        let dst = std::env::temp_dir().join(format!("obu-test-copy-dst2-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dst);
         copy_profile(&src, &dst); // must not panic
     }
@@ -1304,7 +1353,7 @@ mod tests {
     fn reaper_restores_template_displaced_by_interrupted_swap() {
         // Hermetic: run against a temp obu dir, not the shared ~/.obu that
         // other reaper tests mutate in parallel.
-        let obu_dir = std::env::temp_dir().join("obu-test-swap");
+        let obu_dir = std::env::temp_dir().join(format!("obu-test-swap-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&obu_dir);
 
         // Simulate the crash state: template was moved aside, new copy never
