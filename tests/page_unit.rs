@@ -1163,6 +1163,59 @@ assert.ok(!md.includes('**Price:**'), 'grid must not collapse into single produc
     );
 }
 
+/// A `display:none` element's `innerText` falls back to its full
+/// `textContent`, so a hidden error banner (Fastly's challenge page hides a
+/// 233-char `#loading-error`) won the content-root pick over the visible text,
+/// and `mode=content` then read the hidden root as empty. Its inline
+/// `data:` logo must not dump kilobytes of SVG into the markdown either.
+#[test]
+fn markdown_never_picks_a_hidden_element_as_the_content_root() {
+    let script = include_str!("../src/page/js/markdown.js")
+        .replace("__SCOPE_FLAG__", "false")
+        .replace("__BUDGET__", "8000")
+        .replace("__SCOPE_MAIN__", "findMain(document)");
+    let probe = format!(
+        r#"
+const assert = require('node:assert/strict');
+global.location = {{ hostname: 'pypi.org', href: 'https://pypi.org/search/?q=requests', pathname: '/search/' }};
+const view = {{ getComputedStyle: (n) => ({{ display: n.display || 'block', visibility: 'visible', opacity: '1' }}) }};
+const doc = {{ defaultView: view }};
+const el = (tag, id, text, display) => ({{
+  nodeType: 1, tagName: tag, id, className: '', innerHTML: 'x', hidden: false, display,
+  ownerDocument: doc, innerText: text, childNodes: [{{ nodeType: 3, textContent: text }}],
+  getAttribute: () => null, hasAttribute: () => false, querySelectorAll: () => [],
+}});
+const hidden = el('DIV', 'loading-error', 'A required part of this site could not load. '.repeat(6), 'none');
+const shown = el('DIV', 'pageContainer', 'Enter the characters seen in the image below: ' + 'Answer '.repeat(30));
+const logo = {{ ...el('IMG', 'fastlyLogo', ''), alt: 'Fastly Logo', src: 'data:image/svg+xml,<svg>' + ' '.repeat(4000) + '</svg>' }};
+shown.childNodes.unshift(logo);
+const body = el('BODY', '', '', 'block');
+body.childNodes = [hidden, shown];
+hidden.parentElement = body; shown.parentElement = body;
+Object.assign(doc, {{
+  title: 'Client Challenge', body,
+  querySelector: () => null,
+  querySelectorAll: (sel) => sel === 'div,section,table' ? [hidden, shown] : [],
+}});
+global.document = doc;
+const md = {script};
+assert.ok(md.includes('Enter the characters'), 'visible text missing from:\n' + JSON.stringify(md));
+assert.ok(!md.includes('could not load'), 'hidden text leaked into:\n' + md);
+assert.ok(md.includes('![Fastly Logo]') && !md.includes('data:'), 'an inline image must not dump its data URI:\n' + md.slice(0, 300));
+"#
+    );
+    let output = std::process::Command::new("node")
+        .arg("-e")
+        .arg(probe)
+        .output()
+        .expect("node is required for injected-script tests");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Regression (Gap #1A): repeated card buttons ("Add to basket") inside
 /// `<article class="product_pod">` inherit the card's heading title so filtered
 /// views distinguish items, while `#id` landmarks stay unchanged.
