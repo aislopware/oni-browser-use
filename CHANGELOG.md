@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.11.0] - 2026-11-24
+
 Upstream 4.8.0–4.8.3, merged.
 
 ### Added
@@ -2322,7 +2324,8 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.10.1...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.11.0...HEAD
+[4.11.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.11.0
 [4.10.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.10.1
 [4.10.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.10.0
 [4.9.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.9.1
