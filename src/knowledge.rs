@@ -1043,7 +1043,9 @@ pub fn pacing_multiplier(risk: BotRiskLevel) -> f64 {
 pub fn vendor_risk(vendor: &str) -> BotRiskLevel {
     match vendor {
         "datadome" | "akamai" | "perimeterx" => BotRiskLevel::Heavy,
-        "cloudflare" | "recaptcha" | "reddit" | "reddit-humanity" => BotRiskLevel::Medium,
+        "cloudflare" | "fastly" | "recaptcha" | "reddit" | "reddit-humanity" => {
+            BotRiskLevel::Medium
+        }
         "js-challenge" | "rate-limit" => BotRiskLevel::Low,
         _ => BotRiskLevel::Medium,
     }
@@ -1719,6 +1721,7 @@ mod tests {
         assert_eq!(vendor_risk("akamai"), BotRiskLevel::Heavy);
         assert_eq!(vendor_risk("perimeterx"), BotRiskLevel::Heavy);
         assert_eq!(vendor_risk("cloudflare"), BotRiskLevel::Medium);
+        assert_eq!(vendor_risk("fastly"), BotRiskLevel::Medium);
         assert_eq!(vendor_risk("recaptcha"), BotRiskLevel::Medium);
         assert_eq!(vendor_risk("reddit"), BotRiskLevel::Medium);
         assert_eq!(vendor_risk("reddit-humanity"), BotRiskLevel::Medium);

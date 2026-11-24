@@ -17,6 +17,10 @@ if(bl<800&&q('.cf-turnstile')&&!(q('input:not([type=hidden]):not([type=submit]):
 if(q('iframe[src*=captcha-delivery]')&&bl<1200)return 'datadome';
 if(bl<1200&&body.includes('datadome')&&q('iframe'))return 'datadome';
 if((q('#px-captcha')||q('script[src*=px-captcha]'))&&bl<1500)return 'perimeterx';
+// Fastly's bot challenge (PyPI and other Fastly sites): served under the
+// requested URL with the title "Client Challenge" and its scripts under
+// `/_fs-ch-<token>/`; an image CAPTCHA once the script decides.
+if(bl<1500&&(t==='client challenge'||q('script[src*="/_fs-ch-"]')))return 'fastly';
 // Reddit JS challenge — a tiny hidden auto-submitting form (a real browser
 // solves it in ~1s; solution = the token doubled). Not a wall: it clears
 // itself, so nav waits it out instead of reporting a block.

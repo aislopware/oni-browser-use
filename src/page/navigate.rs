@@ -249,7 +249,7 @@ impl Page {
         };
         let mut challenge_seen = false;
         let blocked = match blocked.as_deref() {
-            Some("cloudflare") | Some("datadome") | Some("perimeterx") => {
+            Some("cloudflare") | Some("datadome") | Some("perimeterx") | Some("fastly") => {
                 challenge_seen = true;
                 let pre_url = eval_location_href(&self.cdp).await;
                 let mut solved = false;

@@ -5,7 +5,7 @@
 use crate::cdp::CdpSession;
 use crate::error::Result;
 
-/// M6: Detect block/challenge pages (Cloudflare, DataDome, PerimeterX, reCAPTCHA, Akamai, Reddit).
+/// M6: Detect block/challenge pages (Cloudflare, DataDome, PerimeterX, Fastly, reCAPTCHA, Akamai, Reddit).
 /// Returns the block type if detected, or None.
 /// S12: remediation ladder — actionable steps for each block type.
 /// Appended to ambient events so the agent knows what to try next.
@@ -30,6 +30,10 @@ pub fn remediation_ladder(block_type: &str) -> Vec<String> {
             "reCAPTCHA challenge (v3 score-based or v2 checkbox)".into(),
             "v3: improve score via longer session with human-like behavior".into(),
             "v2: click checkbox via act click x=X y=Y".into(),
+        ],
+        "fastly" => vec![
+            "Fastly bot challenge \u{2014} its scripted check did not pass on its own; an image CAPTCHA is showing".into(),
+            "the CAPTCHA needs a person: solve it in the browser, or retry later or from a residential IP".into(),
         ],
         "akamai" => vec![
             "blocked by Akamai (IP reputation + TLS fingerprint)".into(),
