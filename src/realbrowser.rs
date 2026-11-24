@@ -585,23 +585,23 @@ mod tests {
     }
 
     #[test]
-    fn auto_attaches_to_a_fixed_port_only_while_something_listens() {
-        // A dead fixed port must leave `auto` on the clone (no
-        // DevToolsActivePort in this empty root either).
+    fn auto_attaches_to_a_fixed_port_only_when_devtools_answers() {
+        // Something that merely listens on the configured port (a dev
+        // server) is not a browser: `auto` must keep cloning (no
+        // DevToolsActivePort in this empty root either). The listener is
+        // held throughout: a freed ephemeral port can be rebound at once by
+        // a parallel test's mock browser. The dead-port case is covered by
+        // the injected probe above.
         let root = std::env::temp_dir().join(format!("obu-rb-port-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         assert!(loopback_listening(port), "bound listener reads as live");
-        // …but something that merely listens (a dev server on the configured
-        // port) is not a browser: `auto` must keep cloning, not attach to it.
         assert!(
             !devtools_listening(port),
             "a silent listener is no DevTools"
         );
-        drop(listener);
-        assert!(!loopback_listening(port), "closed port reads as dead");
         let cfg = Config {
             enabled: true,
             port: Some(port),
@@ -615,6 +615,7 @@ mod tests {
             ..cfg
         };
         assert_eq!(fixed_attach_port(&attach), Some(port));
+        drop(listener);
         let _ = std::fs::remove_dir_all(&root);
     }
 
