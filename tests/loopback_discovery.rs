@@ -6,8 +6,8 @@
 //! with "Chrome debug endpoint not responding after 20s" while Chrome was up.
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Answer each connection with `respond(request_line)`, counting hits.
 fn serve(respond: fn(&str) -> String) -> (u16, Arc<AtomicUsize>) {

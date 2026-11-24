@@ -24,8 +24,8 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::cdp::protocol::{CdpEvent, CdpIncoming, CdpMessage, CdpRequest};
 use crate::error::{ObuError, Result};
@@ -609,11 +609,12 @@ mod reliability_tests {
             ev.params.get("requestId").and_then(|v| v.as_str()),
             Some("r2")
         );
-        assert!(ev
-            .params
-            .get("request")
-            .and_then(|r| r.get("url"))
-            .is_some());
+        assert!(
+            ev.params
+                .get("request")
+                .and_then(|r| r.get("url"))
+                .is_some()
+        );
     }
 
     #[tokio::test]
@@ -715,9 +716,11 @@ mod reliability_tests {
         }))
         .await;
         assert_eq!(ev.params["frame"]["parentId"], "F1", "{}", ev.params);
-        assert!(ev.params["frame"]["url"]
-            .as_str()
-            .is_some_and(|u| u.starts_with("https://a.test/?q=x")));
+        assert!(
+            ev.params["frame"]["url"]
+                .as_str()
+                .is_some_and(|u| u.starts_with("https://a.test/?q=x"))
+        );
 
         // A paused request with a large body — without requestId the
         // interception task cannot continue it and the request hangs.
@@ -816,8 +819,8 @@ mod reliability_tests {
         // Regression: the client kept its own broadcast sender alive, so the
         // bus never closed — after the browser died every waiter ran out its
         // full deadline (10 s in navigate) and subscriber loops never ended.
-        use tokio_tungstenite::tungstenite::protocol::Role;
         use tokio_tungstenite::WebSocketStream;
+        use tokio_tungstenite::tungstenite::protocol::Role;
         let (near, far) = tokio::io::duplex(64 * 1024);
         let client_ws = WebSocketStream::from_raw_socket(near, Role::Client, None).await;
         let browser = WebSocketStream::from_raw_socket(far, Role::Server, None).await;

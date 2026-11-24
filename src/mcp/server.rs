@@ -23,7 +23,7 @@
 //! collect), `files` (pdf/download), `paginate` (bounded read/advance), `resolve` (text/selector → ref), and
 //! `validate` (supplied argument types before any navigation/input).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 mod act;
 mod boot;
@@ -120,7 +120,9 @@ fn shape_result(result: &mut Value, version: Option<&str>) {
 /// back through `see artifact="…"` (paged) — the path for pure-MCP clients
 /// with no shell/file access.
 fn artifact_hint(path: &str) -> String {
-    format!("full payload: {path} — read it back in pages with see artifact=\"{path}\" (offset/limit) or any file tool")
+    format!(
+        "full payload: {path} — read it back in pages with see artifact=\"{path}\" (offset/limit) or any file tool"
+    )
 }
 
 /// Preserve complete structured reads while bounding the inline context cost.

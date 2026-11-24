@@ -1,6 +1,6 @@
 //! `see` + `logs` handlers — the reading surface.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::page::Page;
@@ -536,7 +536,7 @@ async fn handle_logs_json(page: &mut Page, kind: &str) -> Result<String> {
         _ => {
             return Err(ObuError::Other(format!(
                 "unknown logs kind: {kind} (use 'console', 'network', or 'xhr')"
-            )))
+            )));
         }
     };
     if value.len() > 12000 {

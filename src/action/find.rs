@@ -10,8 +10,8 @@ use serde_json::json;
 
 use crate::cdp::CdpSession;
 use crate::error::{ObuError, Result};
-use crate::page::perception::JS_PREAMBLE;
 use crate::page::LivePageModel;
+use crate::page::perception::JS_PREAMBLE;
 
 use super::verdict::LEAF_TARGET_JS;
 
@@ -429,8 +429,7 @@ pub struct MissDiag {
 /// invisible matches with a reason for each.
 pub(super) fn find_miss_expr(query: &str) -> Result<String> {
     let q_js = serde_json::to_string(query)?;
-    Ok("((query)=>{ "
-        .to_string()
+    Ok("((query)=>{ ".to_string()
         + "const d=document;if(!d||!d.body)return{total:0,hidden:0,shadow:0,examples:[]};"
         + &JS_PREAMBLE
         + "const _vrs=function(n){let e=n;for(let i=0;i<14&&e;i++){try{const cs=getComputedStyle(e);if(cs.display==='none')return 'display:none'+(e!==n?' (ancestor '+e.tagName.toLowerCase()+')':'');if(cs.visibility==='hidden')return 'visibility:hidden'+(e!==n?' (ancestor '+e.tagName.toLowerCase()+')':'');}catch(_e){}e=e.parentElement||(e.getRootNode&&e.getRootNode().host);}const r=n.getBoundingClientRect();if(!r.width||!r.height)return 'zero-size';return 'not visible';};"

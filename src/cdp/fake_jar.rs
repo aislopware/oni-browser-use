@@ -17,7 +17,7 @@
 use std::sync::{Arc, Mutex};
 
 use futures_util::{SinkExt, StreamExt};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::cdp::{CdpClient, CdpSession};

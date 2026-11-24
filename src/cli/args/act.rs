@@ -2,7 +2,7 @@
 
 use super::{is_ref, normalize_fields, resolve_payload, take_num, take_value};
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `act` args. Universal `--field` flags mirror the MCP schema exactly
 /// (--ref, --label, --text, --role, --nth, --key, --url, --option, …), so an
@@ -63,7 +63,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                         _ => {
                             return Err(ObuError::Usage(format!(
                                 "--accept takes true or false, got '{v}'"
-                            )))
+                            )));
                         }
                     }
                 }
@@ -101,7 +101,7 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for act — see 'obu help act'"
-                    )))
+                    )));
                 }
             }
         } else {
@@ -535,16 +535,14 @@ pub(crate) fn parse_act_args(args: &[String]) -> Result<Value> {
                 Some(other) => {
                     return Err(ObuError::Usage(format!(
                         "dialog kind must be alert, confirm, prompt, beforeunload, any (or clear to disarm), got '{other}'"
-                    )))
+                    )));
                 }
-                None => {
-                    return Err(ObuError::Usage(
-                        "dialog needs a kind — `act dialog <alert|confirm|prompt|beforeunload|any> \
+                None => return Err(ObuError::Usage(
+                    "dialog needs a kind — `act dialog <alert|confirm|prompt|beforeunload|any> \
                          [--accept true|false] [--prompt-text <text>] [--message <match>]` \
                          before the click that opens it; `act dialog clear` disarms"
-                            .into(),
-                    ))
-                }
+                        .into(),
+                )),
             }
         }
         // Every ACT_ACTIONS entry has an arm above; the args tests walk the

@@ -8,6 +8,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.8.3] - 2026-11-21
+
+### Changed
+- **Zero-`.json` Reddit adapter for threads and search**: completely removed Reddit `.json` API endpoints (`/comments/...json`, `/api/info.json`, `/search.json`) and the `loid` reload loop that triggered HTTP 403 network-security walls and `CDP error (-32000) Inspected target navigated or closed`. Post and comment extraction now reads `<shreddit-post>`, `<shreddit-comment>`, and `old.reddit.com` trees directly from the live DOM, then sequentially expands `<faceplate-partial src="/svc/shreddit/more-comments/...">` ("View more comments" / "N more replies") and deep `div.fold-more` (`?force-legacy-sct=1`) / `.deepthread` continuation links one request at a time with polite jitter and in-browser `DOMParser` parsing — never firing parallel bursts, never navigating the tab away, and preserving full DFS depth, `op`, and detached single-comment permalink roots. Search pages extract Shreddit SDUI (`search-post-unit`) and `old.reddit.com` results directly from the DOM and follow `/svc/shreddit/search` HTML partials sequentially.
+
+### Fixed
+- **Mid-redirect `CDP error (-32000) Inspected target navigated or closed` recovery**: `CdpSession::eval_isolated_with_timeout` now backs off briefly across up to 3 stale-context retries, and `run_auto_extract` waits for load/route settle and retries once when a short-URL redirect (such as `/r/<sub>/comments/<id>/` → canonical slug) lands mid-evaluation.
+- **HTTP 429 (`Retry-After`) propagation across Reddit expansion, same-URL redirects, and reloads**: Reddit HTML partial sweeps stop immediately on HTTP 429 or security walls without hammering, preserve all collected comments, and report exact `HTTP 429` + `Retry-After` headers and remaining unexpanded reply counts; `navigate` and `act reload` now also surface `http:` 4xx/5xx notices even when the final URL matches the previous page (`delta.navigated == false`).
+- **Reddit DOM & Markdown extraction bugs**: scoped `[slot="comment"]`, `faceplate-timeago`, and `time` lookups to each owning `<shreddit-comment>` so deleted parents never steal child comment text; fixed `u/[deleted]` double-prefixing, `null !== ''` `NaN` score/depth coercion, and promoted-post filtering in `reddit.js`/`auto_extract.js`; and fixed `markdown.js` to match `reddit.com` hostnames strictly, read post author from `shreddit-post` instead of the navbar user link, and skip `shreddit-ad-post` / `shreddit-comments-page-ad` blocks.
+
+## [4.8.2] - 2026-11-20
+
+### Added
+- **Muted-by-default browser audio with opt-in `obu audio [on|off|status]`**: both the isolated agent browser and owned real-browser launches now pass `--mute-audio` by default so background YouTube/video/media playback never plays unexpected sound without a pause button (zero Blink/WebAudio fingerprint impact, verified `103/103` audit and `0 divergent` on both oracle lanes). Users opt in via `obu audio on` (persisted in `audio.json`), `obu rb audio on|off`, or `OBU_AUDIO=1|0`; toggling restarts the CLI daemon and drifts long-lived MCP sessions cleanly without touching externally attached browsers.
+- **Expanded Chromium-family discovery for the real-browser lane**: added first-class support for Google Chrome Beta/Canary, Ungoogled Chromium, Arc, Thorium, and Opera GX alongside Chromium, Chrome, Brave, Helium, Edge, Vivaldi, and Opera; added Linux `PATH` search for all browsers, Linux Flatpak export discovery and sandboxed `flatpak run` launches on the real lane, flat-root profile handling for Opera/Opera GX, portable/AppImage `--binary`-only resolution when no system browser is installed, and automatic fixed-port `--remote-debugging-port=<N>` attach discovery on Linux.
+
+### Fixed
+- **Automatic real-browser clone freshness synchronization**: `rb on` and real-lane clone launches now compare nanosecond mtime and cookie DB size stamps across `Local State`, `Cookies`/`Network/Cookies`, `Preferences`, `Login Data`, and `Local/Session Storage` against `profile-source.json`, automatically refreshing stale clones whenever you log into a site in your real browser instead of launching a logged-out copy. Running MCP and daemon sessions now hash the clone `.obu-import` generation in `launch_fingerprint()` so refreshed clones trigger an automatic relaunch on the next tool call.
+- **Locked-cookie diagnostics & crash-bubble prevention**: clone imports now detect and warn loudly (in CLI output and one-shot MCP advisories) if a running browser locks critical auth files (`Cookies`, `Local State`, `Preferences`), skip modern Chromium `Sessions`/`Sessions_Encrypted` tab-restore directories, and sanitize cloned `Preferences` (`exit_type: "Normal"`, `exited_cleanly: true`) so importing an open browser never triggers the "Restore pages?" crash bubble.
+- **Real-lane reliability, zero-patch isolation, and lifecycle fixes**: guarded `stealth::full_script()` / `has_full_script()` so an agent→real mid-session switch never leaks agent OOPIF stealth scripts into the real browser; added periodic exited-browser reaping in MCP and CLI daemon loops (eliminating `<defunct>` Chromium zombies and stuck `sess-<pid>` locks after closing a visible RB window); added `ProfileDropGuard` + bounded startup stderr capture + Flatpak helper cleanup to `Browser::launch_real`; added loopback reachability checks (`devtools_port_live`) and IPv6 `/proc/net/tcp6` ownership checks; prioritized real web tabs over `devtools://` and `chrome-extension://` targets in `first_page_target`; included the config path in `realbrowser::config()`'s cache key; updated `launched` fingerprints after `ObuError::Closed` reconnects; and included `Cookies`/`History` recency + `Local State` active profile hints in profile selection.
+
+### Performance
+- **~5–10× faster real-browser clone imports, launches, and sync-backs**: excluded large, auto-regenerated Chromium component/ML/telemetry caches (`component_crx_cache`, `WasmTtsEngine`, `Safe Browsing`, `BrowserMetrics`, `OnDeviceHeadSuggestModel`, `CertificateRevocation`, `GPUPersistentCache`, `Media Cache`, `CacheStorage`, `ScriptCache`, etc.) from profile copies while keeping all user cookies, storage, history, logins, extensions, and `WidevineCdm` intact.
+
+## [4.8.1] - 2026-11-20
+
+### Added
+- **Noir Syndicate ("Mafia Don") CLI visual overhaul**: modularized terminal UI (`src/ui/{palette,anim,render}.rs`) with TrueColor → 256-color → 16-color → plain auto-negotiation, responsive box-framed mastheads with gold-shimmer reveal, animated diamond spinners with RAII cursor restoration, 8× sub-block gold-to-crimson gradient download progress bars with smoothed throughput and ETA, grouped dossier layouts, word-wrapped cards, and Windows `ENABLE_VIRTUAL_TERMINAL_PROCESSING` support across `-u`/`update`, `--rollback`, `doctor`, `-v`/`--version`, `audit`, `rb`, `hermes`, and `help` while keeping pipes, `--json`, `NO_COLOR`, and `OBU_PLAIN=1` byte-clean.
+
+### Fixed
+- **Updater & rollback reliability across Linux, macOS, and Windows**: pre-flight install-directory writability check now fails immediately before downloading; live disk-space verification runs from response `Content-Length` headers via native OS APIs (`statvfs` on Unix, `GetDiskFreeSpaceExW` on Windows, eliminating permanent Windows `doctor` warnings); HTTP `416 Range Not Satisfiable` truncates stale partials and recovers cleanly; permanent 4xx errors fail fast with automatic fallback to legacy asset names on 404; Windows self-updates save the backup before moving the running executable, use retry-guarded atomic rename for AV scanners, and sweep leftover `*.exe.old` files; Unix rollbacks stage and smoke-test (`--version`) into a unique temp file before an atomic `rename` (eliminating the missing-binary window and `ETXTBSY`); both self-update and rollback gracefully stop any stale running CLI daemon.
+- **Cross-platform install-channel detection & npm launcher resilience**: normalized Windows backslashes and detected `npm`, `pnpm`, `bun`, `yarn`, `Homebrew`, `Cargo`, `source`, and standalone installs accurately so `-v`, `doctor`, and `-u` print the exact upgrade command; `npm/obu/binary.cjs` auto-repairs stripped Unix `+x` bits on optional-dependency binaries; `npm/obu/bin.js` adds actionable `ENOEXEC`/`EACCES` diagnostics and TTY-gated error formatting on `stderr`.
+- **Pi extension (`pi-extension.ts`) & Hermes CLI (`obu hermes`) fixes**: replaced bare global `require` in `pi-extension.ts` with a `createRequire(import.meta.url)` fallback so the extension loads cleanly under both jiti CJS and native Node/Bun ESM, verified executable files and Windows `.exe` fallback, added `/mcp` server description, updated `docs/setup.md` tool names (`mcp__obu__*`), and hardened `obu hermes` with Windows `.cmd` fallback and fresh-config `agent` defaults.
+
+### Performance
+- **Faster `obu doctor`, `-v`, and `-u`**: shared pooled HTTP clients (`tcp_nodelay`, 45s idle read timeout, `HEAD` release-tag probes); `obu doctor` runs Chrome `--version` and one shared release check in parallel with zero-subprocess Xvfb and disk-space lookups (~2× faster); `obu -u` fetches the `.sha256` sidecar concurrently with the binary download and computes SHA-256 in a single streaming pass on clean HTTP 200 transfers.
+
+## [4.8.0] - 2026-11-20
+
+### Added
+- **Compounding site-chrome folding (zero-staleness)**: links repeating identically across 2+ distinct paths on a domain are learned in the knowledge base and auto-folded into one compact line (`site-chrome ▸ N repeated site links folded`) on default views, reclaiming token budget for page-specific controls without hiding anything from `filter=`, `find=`, or live refs. Any link whose text or destination changes unfolds immediately, and vanished chrome entries evict automatically.
+- **Cross-session persistent HTTP disk-cache slots**: owned seasoned agent-lane sessions acquire an exclusive OS-locked RFC-9111 HTTP cache slot (`--disk-cache-dir`, 100 MiB cap, up to 4 concurrent slots), reusing immutable JS/CSS/font bundles across restarts while dynamic HTML/API documents still honor `Cache-Control`/`ETag` with zero staleness.
+- **Self-learning host GL stage, chirpy-network settle, and bidirectional bot-risk pacing**: remembers the working WebGL stage per Chrome binary and display mode (re-probing on binary upgrade or 7-day software TTL), learns persistent-connection domains to tighten idle network-drain grace without cutting short active fetches, scales pacing patience on high-risk anti-bot domains while gradually recovering after sustained clean visits, and surfaces knowledge + cache health in `obu doctor`.
+- **Overhauled `extract=auto` adapter engine & 10 new top site adapters**: modularized per-site JS adapters (`src/adapters/js/`), added adapters for Stack Exchange, Wikipedia, Amazon (search + product), arXiv, PyPI, npm, crates.io, Google/DuckDuckGo/Bing search, and JSON-LD structured-data fallback, and hardened existing Reddit, X, GitHub, HN, and YouTube adapters.
+- **Inline small `act download body:true` payloads**: UTF-8 text/JSON/XML/CSV/YAML downloads ≤ 8 KiB now include `body` inline alongside `path`, removing an extra `see artifact=` round-trip.
+
+### Fixed
+- **Stale refs never silently rebind across navigation**: monotonic session refs are retired on real page navigations (path/query/hash-route) and error loudly with `StaleRef` naming the old element and URLs instead of acting on a different item; pure in-page `#anchor` jumps keep live refs intact.
+- **`see mode=content` on `<article>`-based grids**: catalog/product grids using multiple `<article>` cards (e.g. e-commerce listings) now render all cards instead of collapsing to the first `<article>`.
+- **Truthful `act paginate` and `act collect` terminal states**: `paginate` only sets `complete: true` when pagination advanced past page 1 and the next control disappeared/disabled (a broken page-1 selector returns `complete: false`), and `collect` detects live pagination controls instead of falsely reporting `"feed exhausted"`.
+- **Per-domain `block_config` scoping and fused single-round-trip consent**: auto-applied domain block rules revert cleanly to `none` when leaving for a domain without one (stopping cross-domain leakage), cleared configs store `None` for proper pruning, consent fast-path + fallback fuse into one CDP evaluate with working confidence downgrade on stale selectors, and 8 additional major CMPs are supported.
+- **Card control context, `act` validation, and `act fill` clarity**: repeated card controls inside un-IDed `<article>`/`<li>`/`<tr>` cards include their heading title in `ctx`, `act` rejects ignored `filter`/`scope` args loudly, `fill` accepts bare CSS selectors in `submit` without requiring `selector=`, and partial `fill` failures disclose which fields were already written.
+
+### Performance
+- **Faster attach, settle, and domain profile lookup**: skipped redundant consent/block probes on `about:blank` attaches, eliminated false post-drain `re_settle` round-trips when zero requests completed during idle persistent connections, tightened settle observer polling to 25 ms, and mtime-cached `profiles.json`.
+
 ## [4.7.0] - 2026-11-20
 
 ### Added
@@ -2247,7 +2303,11 @@ Pre-release. Hardening pass complete, CLI update pending.
 - Fill only handled text fields (auto-detect type)
 - Multi-tab hang (5s timeout on Input events, 3s on Target.getTargets)
 
-[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.7.0...HEAD
+[Unreleased]: https://github.com/aislopware/oni-browser-use/compare/v4.8.3...HEAD
+[4.8.3]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.3
+[4.8.2]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.2
+[4.8.1]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.1
+[4.8.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.8.0
 [4.7.0]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.7.0
 [4.6.10]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.10
 [4.6.9]: https://github.com/aislopware/oni-browser-use/releases/tag/v4.6.9

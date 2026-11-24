@@ -31,7 +31,7 @@ impl ShutdownSignals {
     pub fn new(hangup: bool) -> Self {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
             let mut kinds = vec![SignalKind::terminate(), SignalKind::interrupt()];
             if hangup {
                 kinds.push(SignalKind::hangup());

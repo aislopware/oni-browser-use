@@ -11,7 +11,7 @@
 //! `act`/`state`/`run`/`vision` (re-exported here, one import path for callers).
 
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 mod act;
 mod nav;
@@ -316,9 +316,11 @@ mod tests {
         let v = parse_act_args(&a(&["fill", "{\"e3\":\"John\",\"e5\":\"Doe\"}"])).unwrap();
         let fields = v["fields"].as_array().unwrap();
         assert_eq!(fields.len(), 2);
-        assert!(fields
-            .iter()
-            .any(|f| f["ref"] == "e3" && f["text"] == "John"));
+        assert!(
+            fields
+                .iter()
+                .any(|f| f["ref"] == "e3" && f["text"] == "John")
+        );
     }
 
     #[test]

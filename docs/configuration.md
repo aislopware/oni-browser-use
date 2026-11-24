@@ -35,6 +35,7 @@ Embedded `user:pass@` credentials are refused at launch. Use an endpoint you can
 | Setting | Default or effect |
 |---|---|
 | `OBU_NO_ACTIVATE=1` | Keep Obu from raising the page, including when a tab is in the background. |
+| `OBU_AUDIO` | `0`/`off` (default — browser audio is muted via `--mute-audio`) or `1`/`on` to opt in to audible playback. Persist with `obu audio on` / `obu audio off`. |
 | `OBU_LOCALE` | Locale, default `en-US`. |
 | `OBU_TZ` | Override timezone using an IANA name such as `Asia/Kathmandu`. |
 | `OBU_CONSENT` | `reject` (default), `accept`, or `off` for recognized consent dialogs. |

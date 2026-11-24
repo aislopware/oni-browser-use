@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn doc_response_formats_status_retry_after_and_guidance() {
-        use super::{extract_retry_after, http_status_reason, DocResponse};
+        use super::{DocResponse, extract_retry_after, http_status_reason};
         use serde_json::json;
 
         assert_eq!(http_status_reason(429), "Too Many Requests");

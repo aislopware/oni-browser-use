@@ -15,7 +15,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
 use crate::cdp::client::CdpClient;
@@ -98,7 +98,7 @@ impl CdpSession {
         Some(id)
     }
 
-    fn is_stale_context_err(err: &ObuError) -> bool {
+    pub(crate) fn is_stale_context_err(err: &ObuError) -> bool {
         let msg = err.to_string();
         msg.contains("Cannot find context")
             || msg.contains("Execution context was destroyed")
@@ -116,7 +116,7 @@ impl CdpSession {
         await_promise: bool,
         deadline: Duration,
     ) -> Result<Value> {
-        for attempt in 0..2 {
+        for attempt in 0..3 {
             let Some(ctx_id) = self.ensure_isolated_ctx().await else {
                 break;
             };
@@ -135,8 +135,9 @@ impl CdpSession {
             {
                 Ok(v) => return Ok(v),
                 Err(e) if matches!(e, ObuError::Closed | ObuError::Timeout(_)) => return Err(e),
-                Err(e) if attempt == 0 && Self::is_stale_context_err(&e) => {
+                Err(e) if attempt < 2 && Self::is_stale_context_err(&e) => {
                     self.reset_isolated();
+                    tokio::time::sleep(Duration::from_millis(150 + attempt * 200)).await;
                     continue;
                 }
                 Err(_) => {
@@ -145,16 +146,33 @@ impl CdpSession {
                 }
             }
         }
-        self.send_with_timeout(
-            "Runtime.evaluate",
-            Some(json!({
-                "expression": expression,
-                "returnByValue": return_by_value,
-                "awaitPromise": await_promise,
-            })),
-            deadline,
-        )
-        .await
+        match self
+            .send_with_timeout(
+                "Runtime.evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "returnByValue": return_by_value,
+                    "awaitPromise": await_promise,
+                })),
+                deadline,
+            )
+            .await
+        {
+            Err(e) if Self::is_stale_context_err(&e) => {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                self.send_with_timeout(
+                    "Runtime.evaluate",
+                    Some(json!({
+                        "expression": expression,
+                        "returnByValue": return_by_value,
+                        "awaitPromise": await_promise,
+                    })),
+                    deadline,
+                )
+                .await
+            }
+            other => other,
+        }
     }
 
     /// Evaluate a stealth-sensitive watcher strictly inside the isolated world
@@ -305,7 +323,7 @@ impl CdpSession {
                         Ok(_) => continue,
                         Err(broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(broadcast::error::RecvError::Closed) => {
-                            return Err(crate::error::ObuError::Closed)
+                            return Err(crate::error::ObuError::Closed);
                         }
                     }
                 }
@@ -428,5 +446,50 @@ mod tests {
 
         let child_ev = child.recv().await.unwrap();
         assert_eq!(child_ev.method, "Page.loadEventFired");
+    }
+
+    #[tokio::test]
+    async fn eval_isolated_recovers_from_inspected_target_navigated() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let mut calls = 0usize;
+            for step in 0..2 {
+                let req = socket.next().await.unwrap().unwrap();
+                let req: Value = serde_json::from_str(req.to_text().unwrap()).unwrap();
+                calls += 1;
+                let msg = if step == 0 {
+                    json!({
+                        "id": req["id"],
+                        "error": { "code": -32000, "message": "Inspected target navigated or closed" }
+                    })
+                } else {
+                    json!({
+                        "id": req["id"],
+                        "result": { "result": { "value": "recovered" } }
+                    })
+                };
+                socket
+                    .send(Message::Text(msg.to_string().into()))
+                    .await
+                    .unwrap();
+            }
+            calls
+        });
+        let client = crate::cdp::CdpClient::connect(&format!("ws://{address}"))
+            .await
+            .unwrap();
+        let cdp = CdpSession::root(client);
+        let res = cdp
+            .eval_isolated_with_timeout("'ok'", true, false, Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(res["result"]["value"], "recovered");
+        assert_eq!(task.await.unwrap(), 2);
     }
 }

@@ -4,7 +4,7 @@
 use crate::error::{ObuError, Result};
 use crate::platform;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncReadExt;
@@ -24,20 +24,44 @@ impl Hermes {
         if let Some(profile) = &self.profile {
             cmd.args(["-p", profile]);
         }
-        let mut child = cmd
-            .args(args)
+        cmd.args(args)
             .env("NO_COLOR", "1")
             .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| {
-                ObuError::Other(format!(
+            .kill_on_drop(true);
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            #[cfg(windows)]
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && self.command == "hermes" => {
+                // On Windows, pip/npm/uv shims may install `hermes.cmd` or `hermes.bat`.
+                let mut fallback = tokio::process::Command::new("cmd.exe");
+                fallback.arg("/C").arg("hermes");
+                if let Some(profile) = &self.profile {
+                    fallback.args(["-p", profile]);
+                }
+                fallback
+                    .args(args)
+                    .env("NO_COLOR", "1")
+                    .env("PYTHONIOENCODING", "utf-8")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .kill_on_drop(true)
+                    .spawn()
+                    .map_err(|_| {
+                        ObuError::Other(format!(
+                            "cannot start Hermes: {e}; install its CLI or pass --hermes <path>"
+                        ))
+                    })?
+            }
+            Err(e) => {
+                return Err(ObuError::Other(format!(
                     "cannot start Hermes: {e}; install its CLI or pass --hermes <path>"
-                ))
-            })?;
+                )));
+            }
+        };
         let stdout = child
             .stdout
             .take()
@@ -121,11 +145,15 @@ fn disabled(value: Option<Value>) -> Result<Vec<String>> {
     match value {
         None | Some(Value::Null) => Ok(Vec::new()),
         Some(Value::Array(items)) if items.iter().all(Value::is_string) => Ok(items
-            .into_iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()),
+            .into_iter()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect()),
         // Hermes accepts a bare name as one item. Ambiguous serialized lists
         // are refused rather than silently losing an existing suppression.
         Some(Value::String(s)) if !s.trim_start().starts_with('[') => Ok(vec![s]),
-        _ => Err(ObuError::other("agent.disabled_toolsets must be a list of names; normalize it with `hermes config set agent.disabled_toolsets '[\"browser\"]'` (retain your other disabled names)")),
+        _ => Err(ObuError::other(
+            "agent.disabled_toolsets must be a list of names; normalize it with `hermes config set agent.disabled_toolsets '[\"browser\"]'` (retain your other disabled names)",
+        )),
     }
 }
 
@@ -248,7 +276,7 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
             _ => {
                 return Err(ObuError::Usage(
                     "obu hermes on|off|status [--profile <name>] [--hermes <path>] [--json]".into(),
-                ))
+                ));
             }
         }
     }
@@ -286,10 +314,7 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
     };
-    let agent = hermes
-        .get("agent")
-        .await?
-        .ok_or_else(|| ObuError::other("Hermes agent config is unavailable"))?;
+    let agent = hermes.get("agent").await?.unwrap_or_else(|| json!({}));
     if !agent.is_object() {
         return Err(ObuError::other("Hermes agent config must be a mapping"));
     }
@@ -302,18 +327,46 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
         return Err(ObuError::other("Hermes mcp_servers must be a mapping"));
     }
     let current = servers.get("obu").cloned();
-    let text = match action {
+    let (text, human_badge, human_rows) = match action {
         "status" => {
             let active = saved
                 .as_ref()
                 .is_some_and(|s| current.as_ref() == Some(&s.installed))
                 && has_browser(&names);
-            format!("Hermes browser: {}. Config: {}. {}", if active { "Obu configured" } else if saved.is_some() { "setup pending or settings changed" } else { "unmanaged" }, config.display(), "Start a new Hermes chat after switching; restart running gateways/desktop clients.")
+            let status_label = if active {
+                "Obu configured"
+            } else if saved.is_some() {
+                "setup pending or settings changed"
+            } else {
+                "unmanaged"
+            };
+            let badge = if active {
+                ("ACTIVE", crate::ui::Tone::Success)
+            } else if saved.is_some() {
+                ("DRIFTED", crate::ui::Tone::Warn)
+            } else {
+                ("UNMANAGED", crate::ui::Tone::Smoke)
+            };
+            let rows = vec![
+                ("browser", status_label.to_string()),
+                ("config", config.display().to_string()),
+                (
+                    "next",
+                    "Start a new Hermes chat after switching; restart running gateways/desktop clients".into(),
+                ),
+            ];
+            let plain = format!(
+                "Hermes browser: {status_label}. Config: {}. Start a new Hermes chat after switching; restart running gateways/desktop clients.",
+                config.display()
+            );
+            (plain, badge, rows)
         }
         "on" => {
             let s = if let Some(s) = saved {
                 if current != s.before && current.as_ref() != Some(&s.installed) {
-                    return Err(ObuError::other("mcp_servers.obu changed after setup; no settings changed. Restore the saved entry before retrying, or review .obu-browser/state.json"));
+                    return Err(ObuError::other(
+                        "mcp_servers.obu changed after setup; no settings changed. Restore the saved entry before retrying, or review .obu-browser/state.json",
+                    ));
                 }
                 s
             } else {
@@ -330,7 +383,7 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                     _ => {
                         return Err(ObuError::other(
                             "mcp_servers.obu.env must be a mapping; no settings changed",
-                        ))
+                        ));
                     }
                 };
                 for key in ["OBU_HOME", "CHROME_PATH"] {
@@ -364,7 +417,9 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                 // resume or restore only the settings it owns.
                 let encoded = serde_json::to_vec(&s)?;
                 if encoded.len() as u64 > LIMIT {
-                    return Err(ObuError::other("Hermes recovery state exceeds 256 KiB; no settings changed — reduce the existing Obu server environment before switching"));
+                    return Err(ObuError::other(
+                        "Hermes recovery state exceeds 256 KiB; no settings changed — reduce the existing Obu server environment before switching",
+                    ));
                 }
                 platform::secure_write_file(&state, &encoded)?;
                 s
@@ -372,20 +427,50 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
             if current.as_ref() != Some(&s.installed) {
                 hermes.write(SERVER, Some(&s.installed)).await?;
             }
+            let spin = (!json_mode)
+                .then(|| crate::ui::Spinner::start("Verifying Hermes ↔ Obu MCP handshake..."));
             let (connected, _) = hermes.call(&["mcp", "test", "obu"]).await?;
+            if let Some(sp) = spin {
+                if connected {
+                    sp.finish_ok("Hermes MCP handshake verified");
+                } else {
+                    sp.finish_fail("Hermes MCP handshake failed");
+                }
+            }
             if !connected {
-                return Err(ObuError::other("Hermes could not connect to Obu; built-in browser suppression was not changed. Run `hermes mcp test obu`, then retry `obu hermes on` or restore with `obu hermes off`"));
+                return Err(ObuError::other(
+                    "Hermes could not connect to Obu; built-in browser suppression was not changed. Run `hermes mcp test obu`, then retry `obu hermes on` or restore with `obu hermes off`",
+                ));
             }
             if !has_browser(&names) {
                 names.push("browser".into());
                 hermes.write(DISABLED, Some(&json!(names))).await?;
             }
-            "Obu configured through Hermes MCP; built-in browser tools disabled, web tools preserved. Start a new chat; restart running gateways/desktop clients. Revert: obu hermes off (same profile). Chrome/Chromium must be installed; `obu doctor` checks browser prerequisites.".into()
+            let rows = vec![
+                (
+                    "bridge",
+                    "Obu MCP registered · built-in browser suppressed".into(),
+                ),
+                ("web tools", "preserved untouched".into()),
+                ("config", config.display().to_string()),
+                (
+                    "revert",
+                    "obu hermes off (use same --profile if named)".into(),
+                ),
+                (
+                    "next",
+                    "Start a new Hermes chat; restart running gateways/desktop clients".into(),
+                ),
+            ];
+            let plain = "Obu configured through Hermes MCP; built-in browser tools disabled, web tools preserved. Start a new chat; restart running gateways/desktop clients. Revert: obu hermes off (same profile). Chrome/Chromium must be installed; `obu doctor` checks browser prerequisites.".into();
+            (plain, ("CONNECTED", crate::ui::Tone::Success), rows)
         }
         "off" => {
             if let Some(s) = saved {
                 if current != s.before && current.as_ref() != Some(&s.installed) {
-                    return Err(ObuError::other("mcp_servers.obu changed after setup; refusing to overwrite it. Review .obu-browser/state.json and restore the saved entry before retrying"));
+                    return Err(ObuError::other(
+                        "mcp_servers.obu changed after setup; refusing to overwrite it. Review .obu-browser/state.json and restore the saved entry before retrying",
+                    ));
                 }
                 // Restore the original browser policy before removing the MCP
                 // entry. Repeated off after a crash is safe at either boundary.
@@ -397,9 +482,26 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
                     hermes.write(SERVER, s.before.as_ref()).await?;
                 }
                 std::fs::remove_file(&state)?;
-                "Previous Hermes browser settings restored; unrelated settings preserved. Start a new chat; restart running gateways/desktop clients.".into()
+                let rows = vec![
+                    ("bridge", "Previous Hermes browser settings restored".into()),
+                    ("config", config.display().to_string()),
+                    (
+                        "next",
+                        "Start a new Hermes chat; restart running gateways/desktop clients".into(),
+                    ),
+                ];
+                let plain = "Previous Hermes browser settings restored; unrelated settings preserved. Start a new chat; restart running gateways/desktop clients.".into();
+                (plain, ("RESTORED", crate::ui::Tone::Smoke), rows)
             } else {
-                "No managed Hermes setup to revert; settings unchanged.".into()
+                let rows = vec![
+                    (
+                        "bridge",
+                        "No managed Hermes setup to revert; settings unchanged".into(),
+                    ),
+                    ("config", config.display().to_string()),
+                ];
+                let plain = "No managed Hermes setup to revert; settings unchanged.".into();
+                (plain, ("UNCHANGED", crate::ui::Tone::Smoke), rows)
             }
         }
         _ => unreachable!(),
@@ -408,6 +510,13 @@ pub(super) async fn run(args: &[String], json_mode: bool) -> Result<()> {
         println!(
             "{}",
             json!({"ok":true,"is_error":false,"text":text,"config":config})
+        );
+    } else if crate::ui::enabled() {
+        crate::ui::dossier_card(
+            "Hermes Integration",
+            human_badge,
+            &human_rows,
+            Some("Run `obu doctor` to verify Chrome/Chromium prerequisites"),
         );
     } else {
         println!("{text}");
@@ -443,11 +552,13 @@ mod tests {
         let exact = vec![b'x'; LIMIT as usize];
         assert_eq!(bounded(&exact[..]).await.unwrap().len() as u64, LIMIT);
         let overflow = vec![b'x'; LIMIT as usize + 1];
-        assert!(bounded(&overflow[..])
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("256 KiB"));
+        assert!(
+            bounded(&overflow[..])
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("256 KiB")
+        );
     }
 
     fn scratch() -> PathBuf {
@@ -510,7 +621,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn recovery_rejects_symlinks_and_public_files_without_touching_targets() {
-        use std::os::unix::fs::{symlink, PermissionsExt};
+        use std::os::unix::fs::{PermissionsExt, symlink};
         let root = scratch();
         platform::secure_create_dir_all(&root).unwrap();
         let target = root.join("target");
@@ -558,9 +669,11 @@ mod tests {
                 .await
                 .is_err()
         );
-        assert!(fake("printf 'permission denied\\n' >&2; exit 1")
-            .await
-            .is_err());
+        assert!(
+            fake("printf 'permission denied\\n' >&2; exit 1")
+                .await
+                .is_err()
+        );
         assert!(fake("printf 'not JSON\\n'").await.is_err());
     }
 }

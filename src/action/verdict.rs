@@ -11,10 +11,10 @@ use std::time::Duration;
 use crate::cdp::CdpSession;
 use crate::error::{ObuError, Result};
 use crate::page::perception::{JS_PREAMBLE, JS_READ_TREE};
-use crate::page::{wait_for_settle, LivePageModel, PageDelta};
+use crate::page::{LivePageModel, PageDelta, wait_for_settle};
 
-use super::edit::{clear_verdict_text, type_verdict_text, EditReport};
 use super::Action;
+use super::edit::{EditReport, clear_verdict_text, type_verdict_text};
 
 /// Build the coordinate hit-probe script: what element actually sits at
 /// viewport (x, y) - descending open shadow roots, since
@@ -50,8 +50,7 @@ pub async fn hit_probe(cdp: &CdpSession, x: f64, y: f64) -> Result<Option<String
 /// ancestors (a click on a label's inner span still flips the label's own
 /// control). Null when nothing toggle-like sits under the point.
 pub(super) fn coord_toggle_expr(x: f64, y: f64) -> String {
-    "((x,y)=>{const d=document;if(!d)return null;"
-        .to_string()
+    "((x,y)=>{const d=document;if(!d)return null;".to_string()
         + &JS_PREAMBLE
         + "let el=null;try{el=d.elementFromPoint(x,y);}catch(e){}if(!el)return null;"
         + "while(el&&el.shadowRoot){let inner=null;try{inner=el.shadowRoot.elementFromPoint(x,y);}catch(e){}if(!inner||inner===el)break;el=inner;}"
@@ -336,10 +335,14 @@ pub(super) fn compute_verdict(
             } else if !actual.is_empty() {
                 format!(
                     "outcome: typed \"{}\" \u{2192} value=\"{}\" (incomplete - framework may mask input)",
-                    clip(text, 40), clip(actual, 40)
+                    clip(text, 40),
+                    clip(actual, 40)
                 )
             } else {
-                format!("outcome: typed \"{}\" \u{2192} value empty (input may be framework-controlled)", clip(text, 40))
+                format!(
+                    "outcome: typed \"{}\" \u{2192} value empty (input may be framework-controlled)",
+                    clip(text, 40)
+                )
             }
         }
         Action::Clear { ref_id } => match edit {
@@ -548,8 +551,7 @@ pub(super) fn absence_confirmed(
 pub(crate) fn element_condition_expr(needle: &str) -> String {
     let needle_js =
         serde_json::to_string(&needle.to_lowercase()).unwrap_or_else(|_| "\"\"".to_string());
-    "(()=>{const d=document;if(!d||!d.body)return false;"
-        .to_string()
+    "(()=>{const d=document;if(!d||!d.body)return false;".to_string()
         + &JS_PREAMBLE
         + JS_READ_TREE
         + "const t="
@@ -562,8 +564,7 @@ pub(crate) fn element_condition_expr(needle: &str) -> String {
 pub(crate) fn text_condition_expr(needle: &str) -> String {
     let needle_js =
         serde_json::to_string(&needle.to_lowercase()).unwrap_or_else(|_| "\"\"".to_string());
-    "(()=>{const d=document;if(!d||!d.body)return false;const nd="
-        .to_string()
+    "(()=>{const d=document;if(!d||!d.body)return false;const nd=".to_string()
         + &needle_js
         + ";if((d.body.innerText||'').toLowerCase().includes(nd))return true;"
         + JS_READ_TREE
@@ -674,8 +675,12 @@ pub async fn eval_condition(
         }
         "selector" => {
             let selector = serde_json::to_string(text)?;
-            let expr = "(()=>{const d=document;".to_string() + &JS_PREAMBLE + JS_READ_TREE
-                + "const s=" + &selector + ";d.querySelector(s);let found=false;walkReadTree(d.documentElement,n=>{if(n.nodeType===1&&n.matches(s)&&vis(n)){found=true;return false;}});return found;})()";
+            let expr = "(()=>{const d=document;".to_string()
+                + &JS_PREAMBLE
+                + JS_READ_TREE
+                + "const s="
+                + &selector
+                + ";d.querySelector(s);let found=false;walkReadTree(d.documentElement,n=>{if(n.nodeType===1&&n.matches(s)&&vis(n)){found=true;return false;}});return found;})()";
             loop {
                 let res = cdp
                     .send(

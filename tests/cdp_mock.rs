@@ -14,9 +14,9 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use obu::cdp::{CdpClient, CdpSession};
 use obu::ObuError;
-use serde_json::{json, Value};
+use obu::cdp::{CdpClient, CdpSession};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -225,8 +225,8 @@ async fn protocol_error_is_typed() {
 #[tokio::test]
 async fn rejected_scroll_stops_at_first_dispatch_without_claiming_success() {
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     };
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -272,10 +272,12 @@ async fn rejected_scroll_stops_at_first_dispatch_without_claiming_success() {
     )
     .await
     .unwrap();
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("owned scroll refusal"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("owned scroll refusal")
+    );
     assert_eq!(dispatched.load(Ordering::SeqCst), 1);
     server.abort();
 }

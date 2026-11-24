@@ -74,7 +74,9 @@ pub(super) fn agent_extra_flags() -> Result<Vec<String>> {
         if !extra.iter().any(|flag| flag == "--incognito") {
             extra.push("--incognito".into());
         }
-        eprintln!("[obu] incognito compatibility: cookies and named sessions remain supported; history/cache and automatic localStorage persistence are unavailable. OBU_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility (restart the client/daemon).");
+        eprintln!(
+            "[obu] incognito compatibility: cookies and named sessions remain supported; history/cache and automatic localStorage persistence are unavailable. OBU_INCOGNITO=0 disables automatic Raspberry Pi OS trixie compatibility (restart the client/daemon)."
+        );
     }
     Ok(extra)
 }

@@ -3,8 +3,8 @@
 //! `perform_with_network`, plus the dispatch-time watchers (`MUT_WATCH`,
 //! `sub_fires`). Split from the `action` core.
 
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use serde_json::json;
@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::cdp::CdpSession;
 use crate::error::{ObuError, Result};
 use crate::page::perception::JS_PREAMBLE;
-use crate::page::{capture, wait_for_settle_with_network, LivePageModel, PageDelta, RouteSettle};
+use crate::page::{LivePageModel, PageDelta, RouteSettle, capture, wait_for_settle_with_network};
 
 use super::edit::*;
 use super::find::*;
@@ -614,23 +614,23 @@ pub async fn perform_with_network(
                     "select disabled" => {
                         return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is disabled; selection unchanged"
-                        )))
+                        )));
                     }
                     "selection rejected" => {
                         return Err(ObuError::Other(format!(
                             "{ref_id}: the page rejected \"{option}\" - the select still shows \"{}\"",
                             clip(found.text.as_deref().unwrap_or(""), 40)
-                        )))
+                        )));
                     }
                     "text combobox" => {
                         return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is a text combobox, not a <select>: type the text (act type {ref_id} \"{option}\"), then click the matching suggestion"
-                        )))
+                        )));
                     }
                     "not a native select" => {
                         return Err(ObuError::NotInteractable(format!(
                             "{ref_id} is a custom combobox, not a <select>; nothing was selected - click it to open the list, then click the option \"{option}\""
-                        )))
+                        )));
                     }
                     _ => {}
                 }
@@ -892,7 +892,7 @@ pub async fn perform_with_network(
                     _ => {
                         return Err(ObuError::ElementNotFound(format!(
                             "{ref_id} ({sig}) — hover failed: the mouse move did not dispatch ({first}) and the element could not be re-located"
-                        )))
+                        )));
                     }
                 };
                 dispatch_mouse_move(cdp, (b2[0] + b2[2] / 2.0, b2[1] + b2[3] / 2.0), last_mouse)
@@ -970,7 +970,7 @@ pub async fn perform_with_network(
                 None => {
                     return Err(ObuError::Other(format!(
                         "could not get objectId for file input {ref_id}"
-                    )))
+                    )));
                 }
             };
             // A sandboxed (Flatpak) browser cannot open a path outside its
@@ -996,7 +996,7 @@ pub async fn perform_with_network(
                 super::upload::UploadCheck::Undelivered(what) => {
                     return Err(ObuError::Other(format!(
                         "upload of {path} not delivered: {what}. A sandboxed browser (Flatpak, Snap) reads only files it was given access to."
-                    )))
+                    )));
                 }
             }
         }
@@ -1104,8 +1104,8 @@ pub async fn perform_with_network(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio_tungstenite::tungstenite::protocol::Role;
     use tokio_tungstenite::WebSocketStream;
+    use tokio_tungstenite::tungstenite::protocol::Role;
 
     #[tokio::test]
     async fn a_closed_event_bus_never_reads_as_a_fired_event() {

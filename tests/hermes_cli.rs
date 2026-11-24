@@ -1,6 +1,6 @@
 //! Native subprocess coverage of the PUBLIC Hermes CLI contract on every CI
 //! platform. tools/hermes_probe additionally checks this against actual Hermes.
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

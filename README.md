@@ -96,7 +96,7 @@ obu stop
 
 Start with the agent browser for a clean workspace. Use real-browser mode when a task depends on your browser setup or authenticated state. Actions in a signed-in profile can affect your account.
 
-`obu rb status` shows which browser and profile are selected. `obu rb pause` hands input back to you, and `obu rb off` switches back to the agent browser. [Profiles, attachment, and ownership](docs/browser-modes.md).
+`obu rb status` shows which browser and profile are selected. `obu rb pause` hands input back to you, and `obu rb off` switches back to the agent browser. Browser audio is muted by default across both lanes; run `obu audio on` to opt in to sound output. [Profiles, attachment, and ownership](docs/browser-modes.md).
 
 ## How it works
 

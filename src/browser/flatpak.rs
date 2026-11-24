@@ -18,8 +18,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::discover::{find_in_path, is_executable};
 
@@ -142,6 +142,11 @@ fn run_args(
     args.push(filesystem_arg(staging_dir));
     args.push(export.app_id.clone());
     args
+}
+
+/// True when `chrome_path` points to a Flatpak export wrapper (`exports/bin/<app.id>`).
+pub(super) fn is_flatpak_export(chrome_path: &str) -> bool {
+    parse_export(Path::new(chrome_path), &|key| std::env::var(key).ok()).is_some()
 }
 
 /// `flatpak run` for a Flatpak export with the session profile, the

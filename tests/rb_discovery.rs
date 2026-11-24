@@ -2,7 +2,7 @@
 //! here exercise discovery only; tools/rb_live/helium.py drives official Helium.
 #![cfg(target_os = "linux")]
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;

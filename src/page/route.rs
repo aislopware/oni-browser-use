@@ -259,7 +259,7 @@ mod tests {
     #[tokio::test]
     async fn failed_signature_samples_cannot_claim_stable_content() {
         use futures_util::{SinkExt, StreamExt};
-        use serde_json::{json, Value};
+        use serde_json::{Value, json};
         use tokio_tungstenite::tungstenite::Message;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();

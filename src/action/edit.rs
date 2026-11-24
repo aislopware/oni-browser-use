@@ -10,10 +10,10 @@ use serde_json::json;
 
 use crate::cdp::CdpSession;
 use crate::error::Result;
-use crate::page::{perception::JS_PREAMBLE, LivePageModel};
+use crate::page::{LivePageModel, perception::JS_PREAMBLE};
 
-use super::find::{find_by_sig, FoundElement};
-use super::input::{dispatch_combo, dispatch_key, type_per_char, KeyCombo};
+use super::find::{FoundElement, find_by_sig};
+use super::input::{KeyCombo, dispatch_combo, dispatch_key, type_per_char};
 use super::verdict::clip;
 
 /// Kind of edit an `EditReport` describes.

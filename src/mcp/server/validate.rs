@@ -134,6 +134,13 @@ fn act_fields(args: &Value) -> Result<()> {
             action,
         )));
     }
+    for key in ["filter", "scope"] {
+        if args.get(key).is_some() {
+            return Err(ObuError::Usage(format!(
+                "{key} is a see option, not supported on act {action} — use see(url=..., {key}=...) to navigate and read in one call"
+            )));
+        }
+    }
     if action == "paginate" {
         if args
             .get("next")
@@ -639,10 +646,10 @@ mod tests {
         ] {
             assert!(run(&json!({"steps":[effect,bad]})).is_err(), "{bad}");
         }
-        assert!(act(
-            &json!({"action":"batch","steps":[effect,{"action":"batch","steps":[effect]}]})
-        )
-        .is_err());
+        assert!(
+            act(&json!({"action":"batch","steps":[effect,{"action":"batch","steps":[effect]}]}))
+                .is_err()
+        );
         assert!(run(&json!({"steps":[{"action":"batch","steps":[effect]}]})).is_ok());
     }
 
@@ -652,15 +659,19 @@ mod tests {
         for _ in 0..34 {
             step = json!({"action":"if","js":"true","then":[step]});
         }
-        assert!(run(&json!({"steps":[step]}))
-            .unwrap_err()
-            .to_string()
-            .contains("nesting"));
+        assert!(
+            run(&json!({"steps":[step]}))
+                .unwrap_err()
+                .to_string()
+                .contains("nesting")
+        );
         let steps = vec![json!({"action":"eval","js":"1"}); 1001];
-        assert!(run(&json!({"steps":steps}))
-            .unwrap_err()
-            .to_string()
-            .contains("1000"));
+        assert!(
+            run(&json!({"steps":steps}))
+                .unwrap_err()
+                .to_string()
+                .contains("1000")
+        );
         assert!(
             run(&json!({"steps":[{"action":"while","js":"false","max":100,"steps":[]}]})).is_ok()
         );
@@ -784,10 +795,10 @@ mod tests {
         assert!(act(&json!({"action":"click","x":1.5,"y":2})).is_ok());
         assert!(act(&json!({"action":"fill","fields":[{"label":"Agree","check":false}]})).is_ok());
         assert!(act(&json!({"action":"fill","fields":[{"label":"Email","role":"textbox","nth":2,"text":"a@b.test"}],"submit":"selector=button[type=submit]"})).is_ok());
-        assert!(act(
-            &json!({"action":"fill","fields":[{"label":"Email","nth":0,"text":"a@b.test"}]})
-        )
-        .is_err());
+        assert!(
+            act(&json!({"action":"fill","fields":[{"label":"Email","nth":0,"text":"a@b.test"}]}))
+                .is_err()
+        );
         assert!(see(&json!({"mode":"content","budget":10})).is_ok());
         assert!(see(&json!({"mode":"extract","extract":"auto"})).is_ok());
         assert!(see(&json!({"mode":"extract"})).is_err());
@@ -799,5 +810,25 @@ mod tests {
         ] {
             assert!(see(&args).is_err(), "{args}");
         }
+    }
+
+    #[test]
+    fn act_rejects_see_only_filter_and_scope_instead_of_ignoring_them() {
+        for args in [
+            json!({"action":"navigate","url":"https://example.com","filter":"button"}),
+            json!({"action":"navigate","url":"https://example.com","scope":"main"}),
+            json!({"action":"click","text":"Next","filter":"link"}),
+        ] {
+            let err = act(&args).unwrap_err().to_string();
+            assert!(
+                err.contains("see(url=..."),
+                "expected pointer to see: {err}"
+            );
+        }
+        // `see` steps inside `run` still accept filter and scope.
+        assert!(
+            run(&json!({"steps":[{"action":"see","url":"https://example.com","filter":"button"}]}))
+                .is_ok()
+        );
     }
 }

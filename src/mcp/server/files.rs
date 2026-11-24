@@ -4,7 +4,7 @@
 //! a completed earlier transfer can never be reported for a later request —
 //! the `download_correlation_tests` at the bottom pin that contract.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ObuError, Result};
 use crate::page::{DownloadInfo, Page};
@@ -694,7 +694,47 @@ pub(super) async fn handle_body_download(args: &Value) -> Result<String> {
         "bin"
     };
     let path = crate::artifacts::write_artifact_bytes(&bytes, ext)?;
-    Ok(json!({"path":path,"bytes":bytes.len(),"status":status,"url":final_url,"content_type":kind,"note":"HTTP body; browser cookies/session not used; status is the server response"}).to_string())
+    let mut payload = json!({
+        "path": path,
+        "bytes": bytes.len(),
+        "status": status,
+        "url": final_url,
+        "content_type": kind,
+        "note": "HTTP body; browser cookies/session not used; status is the server response"
+    });
+    if let Some(body) = inline_body_text(&bytes, &kind) {
+        payload["body"] = json!(body);
+    }
+    Ok(payload.to_string())
+}
+
+/// Inline small UTF-8 text/JSON/XML bodies (<= 8 KiB) directly alongside the
+/// artifact path so callers do not pay a second `see(artifact=...)` round trip.
+const INLINE_BODY_MAX: usize = 8192;
+
+fn inline_body_text<'a>(bytes: &'a [u8], content_type: &str) -> Option<&'a str> {
+    if bytes.len() > INLINE_BODY_MAX || bytes.contains(&0) {
+        return None;
+    }
+    let ct = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let text_like = ct.is_empty()
+        || ct.starts_with("text/")
+        || ct.contains("json")
+        || ct.contains("xml")
+        || ct.contains("javascript")
+        || ct.contains("ecmascript")
+        || ct.contains("yaml")
+        || ct.contains("csv")
+        || ct == "application/x-www-form-urlencoded";
+    if !text_like {
+        return None;
+    }
+    std::str::from_utf8(bytes).ok()
 }
 
 fn normalize_download_url(raw: &str, base_url: Option<&str>) -> Result<(String, String)> {
@@ -797,8 +837,8 @@ mod body_proxy_tests {
     #[tokio::test]
     async fn body_client_without_obu_proxy_ignores_ambient_http_proxy_env() {
         use std::sync::{
-            atomic::{AtomicBool, Ordering},
             Arc,
+            atomic::{AtomicBool, Ordering},
         };
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -870,5 +910,26 @@ mod body_proxy_tests {
                 "https://example.com/files/report.pdf".into()
             )
         );
+    }
+
+    #[test]
+    fn inline_body_text_returns_small_text_and_skips_large_or_binary() {
+        let json_bytes = br#"{"ok":true,"count":3}"#;
+        assert_eq!(
+            inline_body_text(json_bytes, "application/json; charset=utf-8"),
+            Some(r#"{"ok":true,"count":3}"#)
+        );
+        assert_eq!(inline_body_text(b"hello", "text/plain"), Some("hello"));
+        assert_eq!(inline_body_text(b"plain", ""), Some("plain"));
+        assert_eq!(
+            inline_body_text(json_bytes, "application/octet-stream"),
+            None
+        );
+        assert_eq!(inline_body_text(b"%PDF-1.7", "application/pdf"), None);
+        assert_eq!(inline_body_text(b"a\0b", "text/plain"), None);
+        let big = vec![b'x'; INLINE_BODY_MAX + 1];
+        assert_eq!(inline_body_text(&big, "text/plain"), None);
+        let exact = vec![b'x'; INLINE_BODY_MAX];
+        assert!(inline_body_text(&exact, "text/plain").is_some());
     }
 }

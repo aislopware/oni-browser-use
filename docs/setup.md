@@ -48,7 +48,7 @@ For a desktop client with a different PATH, put the absolute executable path in 
 pi install npm:obu
 ```
 
-Pi registers five native `browser.*` tools from the binary's MCP schema. Start a new session if the current one does not pick them up.
+Pi registers five direct MCP tools (`mcp__obu__act`, `mcp__obu__see`, `mcp__obu__state`, `mcp__obu__run`, `mcp__obu__vision`) from the binary's MCP schema. Start a new session if the current one does not pick them up.
 
 ### DeepSeek Harness
 

@@ -35,14 +35,14 @@ mod verdict;
 mod dom_tests;
 
 pub use self::find::{
+    LabelRoute, MissDiag, MissExample, SelectorDiag, SelectorLookup, TextLocation, TextMatch,
     find_by_selector, find_by_text, find_label_route, find_miss_diag, focus, inspect, locate_text,
-    read_checked, read_text, LabelRoute, MissDiag, MissExample, SelectorDiag, SelectorLookup,
-    TextLocation, TextMatch,
+    read_checked, read_text,
 };
-pub use self::perform::{perform, perform_with_network, MUT_WATCH};
+pub use self::perform::{MUT_WATCH, perform, perform_with_network};
+pub use self::verdict::{CondOutcome, eval_condition};
 #[cfg(test)]
 pub(crate) use self::verdict::{element_condition_expr, text_condition_expr};
-pub use self::verdict::{eval_condition, CondOutcome};
 
 /// Validate chord syntax before a composed type+press can change a field.
 pub(crate) fn validate_key(key: &str) -> crate::error::Result<()> {
@@ -378,8 +378,8 @@ mod action_tests {
     #[test]
     fn dom_effect_summary_distinguishes_state_only_changes() {
         use super::verdict::dom_effect_summary;
-        use crate::page::refs::StateChange;
         use crate::page::PageDelta;
+        use crate::page::refs::StateChange;
         // Nothing changed → None (the quiet-click path).
         assert!(dom_effect_summary(&PageDelta::default()).is_none());
         // Node change → real counts.
@@ -411,8 +411,8 @@ mod action_tests {
     /// "no observable DOM change" (an empty delta that read nothing).
     #[test]
     fn verdict_after_an_unanswered_read_is_unverified() {
-        use super::verdict::{compute_verdict, ClickEvidence};
         use super::Action;
+        use super::verdict::{ClickEvidence, compute_verdict};
         use crate::page::perception::PageCapture;
         let mut lpm = crate::page::LivePageModel::new();
         lpm.ingest(PageCapture {
@@ -500,7 +500,7 @@ mod action_tests {
         // L3: an effect produced by a leaf-forwarded mouse click is credited
         // to the inner control that received it, never silently to the
         // addressed container.
-        use super::verdict::{compute_verdict, ClickEvidence};
+        use super::verdict::{ClickEvidence, compute_verdict};
         let lpm = crate::page::LivePageModel::new();
         let mut d = crate::page::PageDelta::default();
         d.removed.push("e9".into());
@@ -562,7 +562,7 @@ mod action_tests {
     fn scroll_verdict_reports_both_axes() {
         // A-hscroll: a carousel / wide page that DID scroll horizontally was
         // reported as "no movement - page already at the top".
-        use super::verdict::{scroll_verdict, ScrollReport};
+        use super::verdict::{ScrollReport, scroll_verdict};
         let at_rest = ScrollReport::default();
         let page_x = ScrollReport {
             after_x: 500.0,
@@ -813,7 +813,7 @@ mod action_tests {
 
     #[test]
     fn key_combos_parse_and_reject_junk() {
-        use super::input::{parse_key_combo, KeyCombo};
+        use super::input::{KeyCombo, parse_key_combo};
         let c = parse_key_combo("Control+a").unwrap().expect("combo");
         assert_eq!(
             c,
@@ -913,7 +913,7 @@ mod action_tests {
     fn value_fields_verify_exact_whitespace() {
         // A-ws: "  x" typed into a field that trims reads back "x"; the
         // normalized comparison called that verified.
-        use super::edit::{readback_matches, type_verdict_text, EditKind, EditReport};
+        use super::edit::{EditKind, EditReport, readback_matches, type_verdict_text};
         assert!(!readback_matches("input", "x", "  x"));
         assert!(!readback_matches("textarea", "a b", "a  b"));
         assert!(readback_matches("input", "  x", "  x"));
@@ -940,7 +940,7 @@ mod action_tests {
 
     #[test]
     fn verdicts_never_outclaim_the_readback() {
-        use super::edit::{clear_verdict_text, type_verdict_text, EditKind, EditReport};
+        use super::edit::{EditKind, EditReport, clear_verdict_text, type_verdict_text};
         let lpm = crate::page::LivePageModel::new();
         let base = EditReport {
             kind: EditKind::Type,
@@ -1013,37 +1013,47 @@ mod pause_gate_tests {
     #[test]
     fn pause_refuses_input_and_page_moves_but_not_reads() {
         // Input dispatch.
-        assert!(Action::Click {
-            ref_id: "e1".into()
-        }
-        .disrupts_page());
+        assert!(
+            Action::Click {
+                ref_id: "e1".into()
+            }
+            .disrupts_page()
+        );
         assert!(Action::ClickCoord { x: 1.0, y: 2.0 }.disrupts_page());
-        assert!(Action::Type {
-            ref_id: "e1".into(),
-            text: "x".into()
-        }
-        .disrupts_page());
-        assert!(Action::Upload {
-            ref_id: "e1".into(),
-            path: "/tmp/x".into()
-        }
-        .disrupts_page());
+        assert!(
+            Action::Type {
+                ref_id: "e1".into(),
+                text: "x".into()
+            }
+            .disrupts_page()
+        );
+        assert!(
+            Action::Upload {
+                ref_id: "e1".into(),
+                path: "/tmp/x".into()
+            }
+            .disrupts_page()
+        );
         // Page-level moves (history/reload) — they replace what the person
         // using the browser is looking at.
         assert!(Action::Back.disrupts_page());
         assert!(Action::Forward.disrupts_page());
         assert!(Action::Reload.disrupts_page());
         // Reads and waits stay available while paused.
-        assert!(!Action::Read {
-            ref_id: "e1".into()
-        }
-        .disrupts_page());
-        assert!(!Action::Wait {
-            condition: "settle".into(),
-            text: String::new(),
-            timeout: std::time::Duration::from_secs(1),
-        }
-        .disrupts_page());
+        assert!(
+            !Action::Read {
+                ref_id: "e1".into()
+            }
+            .disrupts_page()
+        );
+        assert!(
+            !Action::Wait {
+                condition: "settle".into(),
+                text: String::new(),
+                timeout: std::time::Duration::from_secs(1),
+            }
+            .disrupts_page()
+        );
         // `injects_input` stays exactly the input set (no navigation).
         assert!(!Action::Back.injects_input());
         assert!(!Action::Reload.injects_input());

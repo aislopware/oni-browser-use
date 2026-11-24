@@ -2,14 +2,14 @@
 //! (SEP-2575), `tools/list`, and the `tools/call` dispatch that routes to
 //! the tool handlers. Split from the `server` core.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::ObuError;
 use crate::mcp::tools::tools_to_json;
 use crate::page::Page;
 
+use super::{INSTRUCTIONS, PROTOCOL_VERSION, STATELESS_VERSION, SUPPORTED_VERSIONS, shape_result};
 use super::{handle_act, handle_run, handle_see_tool, handle_state, handle_vision};
-use super::{shape_result, INSTRUCTIONS, PROTOCOL_VERSION, STATELESS_VERSION, SUPPORTED_VERSIONS};
 
 pub(super) fn handle_initialize(id: Option<Value>, params: &Value) -> Value {
     // Legacy handshake (removed in 2026-07-28 but old clients require

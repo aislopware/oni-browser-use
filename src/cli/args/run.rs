@@ -2,7 +2,7 @@
 
 use super::{resolve_payload, take_value};
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parse `run` args: <json-steps> | @file | - (stdin) | --steps <json>.
 pub(crate) fn parse_run_args(args: &[String]) -> Result<Value> {
@@ -25,7 +25,7 @@ pub(crate) fn parse_run_args(args: &[String]) -> Result<Value> {
                 _ => {
                     return Err(ObuError::Usage(format!(
                         "unknown flag --{flag} for run — see 'obu help run'"
-                    )))
+                    )));
                 }
             }
         } else if steps_raw.is_none() {

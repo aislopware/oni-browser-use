@@ -24,17 +24,17 @@ pub mod tabs;
 mod gl;
 mod route;
 
-pub use self::logs::{http_status_reason, DocResponse, NetEntry, XhrEntry};
+pub use self::logs::{DocResponse, NetEntry, XhrEntry, http_status_reason};
 pub(crate) use self::navigate::{validate_nav_url, with_scheme};
-pub use self::route::{RouteEpoch, RouteSettle, ROUTE_BUDGET};
+pub use self::route::{ROUTE_BUDGET, RouteEpoch, RouteSettle};
 
 use std::time::Duration;
 
 pub use model::{LivePageModel, PageDelta, PageElement};
 pub use perception::{
-    capture, capture_content, detect_block, dismiss_consent, dismiss_consent_with_stored,
-    re_settle, wait_for_load, wait_for_settle, wait_for_settle_with_network, PageCapture,
-    RawElement,
+    PageCapture, RawElement, capture, capture_content, detect_block, dismiss_consent,
+    dismiss_consent_with_stored, re_settle, wait_for_load, wait_for_settle,
+    wait_for_settle_with_network,
 };
 pub use refs::{RefEntry, StateChange, StateProbe};
 
@@ -43,7 +43,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::cdp::{CdpClient, CdpSession};
 use crate::error::{ObuError, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Information about a JavaScript dialog (alert/confirm/prompt/beforeunload)
 /// that was auto-dismissed by the dialog handler task.
@@ -223,6 +223,14 @@ pub struct Page {
     intercept: intercept::InterceptState,
     /// Request-interception task handle.
     intercept_task: Option<tokio::task::JoinHandle<()>>,
+    /// True when the active `intercept` block rules were auto-applied from
+    /// domain knowledge rather than an explicit session `state block` call.
+    /// Ensures domain A's learned block config reverts cleanly when leaving
+    /// for domain B instead of leaking across the rest of the session.
+    block_from_knowledge: bool,
+    /// Cached bot-detection risk for the current page's domain (drives
+    /// lock-free adaptive pacing in `Page::pace`).
+    current_domain_risk: crate::knowledge::BotRiskLevel,
     /// Tracked downloads (V19), updated by the download-watch task. Newest
     /// last. `act action=download` waits on the newest entry.
     downloads: std::sync::Arc<Mutex<Vec<DownloadInfo>>>,
@@ -364,13 +372,56 @@ impl Page {
         // Keep the interception third-party baseline in sync with the
         // current page (covers SPA navigations that bypass navigate()).
         self.intercept.set_page_url(&cap.url);
-        Ok(self.lpm.ingest(cap))
+        let delta = self.lpm.ingest(cap);
+        if delta.navigated {
+            self.sync_domain_chrome_and_risk();
+        }
+        Ok(delta)
+    }
+
+    /// Observe live links on the current URL to learn/refresh confirmed site
+    /// chrome hashes and update the cached domain bot-risk for adaptive pacing.
+    pub(super) fn sync_domain_chrome_and_risk(&mut self) {
+        let url = self.lpm.url().to_string();
+        let domain = crate::knowledge::domain_from_url(&url);
+        if domain.is_empty() {
+            self.current_domain_risk = crate::knowledge::BotRiskLevel::Unknown;
+            self.lpm.set_chrome_hashes(std::collections::HashSet::new());
+            return;
+        }
+        let hashes = self.lpm.live_link_hashes();
+        let (confirmed, risk) = self
+            .knowledge
+            .as_ref()
+            .and_then(|kb| kb.lock().ok())
+            .map(|mut kb| {
+                let c = kb.observe_page_links(&domain, &url, &hashes);
+                let r = kb.get_bot_risk(&domain);
+                (c, r)
+            })
+            .unwrap_or_else(|| {
+                (
+                    std::collections::HashSet::new(),
+                    crate::knowledge::BotRiskLevel::Unknown,
+                )
+            });
+        self.current_domain_risk = risk;
+        self.lpm.set_chrome_hashes(confirmed);
+        let folded = self.lpm.learned_chrome_fold_count();
+        if folded > 0 {
+            if let Some(kb) = self.knowledge.as_ref() {
+                if let Ok(mut kb) = kb.lock() {
+                    kb.record_chrome_folded(folded);
+                }
+            }
+        }
     }
 
     /// Set active resource-block classes ("images,fonts,media,trackers").
     /// Empty / "none" clears blocking. Toggles the CDP Fetch domain so
     /// interception adds zero overhead while blocking is off.
     pub async fn set_block_classes(&mut self, spec: &str) -> Result<u32> {
+        self.block_from_knowledge = false;
         let mask = if spec.trim().eq_ignore_ascii_case("none")
             || spec.trim().eq_ignore_ascii_case("clear")
         {
@@ -379,6 +430,16 @@ impl Page {
             intercept::InterceptState::parse_classes(spec)
         };
         self.intercept.apply_rules(&self.cdp, mask).await
+    }
+
+    /// Apply a learned per-domain block config from `KnowledgeBase`. Marks the
+    /// active rules as knowledge-owned so navigating to a different domain
+    /// without a stored config cleanly reverts them to `none`.
+    pub(super) async fn apply_knowledge_block_classes(&mut self, spec: &str) -> Result<u32> {
+        let mask = intercept::InterceptState::parse_classes(spec);
+        let applied = self.intercept.apply_rules(&self.cdp, mask).await?;
+        self.block_from_knowledge = applied != 0;
+        Ok(applied)
     }
 
     /// Persist the agent's explicit resource-block choice for the domain of
@@ -506,6 +567,8 @@ impl Page {
             crate::action::Action::Wait { .. } | crate::action::Action::Read { .. } => return,
             _ => (140.0, 0.4),
         };
+        let risk_scale = crate::knowledge::pacing_multiplier(self.current_domain_risk);
+        let median_ms = median_ms * risk_scale;
         let mut rng = crate::stealth::biometrics::Rng::new();
         // v3.10 (speed pass): medians ~3x faster than the v3.9 pacing, and a
         // 3x-median cap so a rare log-normal tail can't stall an agent flow.
@@ -561,6 +624,15 @@ impl Page {
         } else {
             Vec::new()
         };
+        let is_reload = matches!(action, crate::action::Action::Reload);
+        if matches!(
+            action,
+            crate::action::Action::Reload
+                | crate::action::Action::Back
+                | crate::action::Action::Forward
+        ) {
+            self.clear_doc_response();
+        }
         let result = crate::action::perform_with_network(
             &self.cdp,
             &mut self.lpm,
@@ -604,6 +676,9 @@ impl Page {
             None => verdict,
         };
         if delta.navigated {
+            self.sync_domain_chrome_and_risk();
+        }
+        if delta.navigated || is_reload {
             if let Some(doc) = self.doc_response().filter(|d| d.status >= 400) {
                 if let Ok(mut a) = self.ambient.lock() {
                     a.push(doc.ambient_note(delta.url.starts_with("chrome-error://")));
@@ -709,11 +784,11 @@ impl Drop for Page {
 
 #[cfg(test)]
 mod tests {
-    use super::navigate::with_scheme;
     use super::BusyGuard;
+    use super::navigate::with_scheme;
     use crate::error::ObuError;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 
     fn stale_ref() -> crate::error::Result<()> {
         Err(ObuError::StaleRef("e4 gone from the current page".into()))
@@ -789,7 +864,7 @@ mod tests {
         assert_eq!(with_scheme("blob:https://x/abcd"), "blob:https://x/abcd");
     }
 
-    use super::{match_dialog_expect, origin_of, DialogExpect};
+    use super::{DialogExpect, match_dialog_expect, origin_of};
 
     fn exp(kind: &str) -> DialogExpect {
         DialogExpect {
@@ -806,13 +881,15 @@ mod tests {
     fn dialog_expect_matching_matrix() {
         // Kind gate: wrong kind keeps the expectation armed (Err), right
         // kind passes; "any" matches everything.
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "Delete?",
-            Some("https://shop.example/cart")
-        )
-        .is_ok());
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "Delete?",
+                Some("https://shop.example/cart")
+            )
+            .is_ok()
+        );
         assert!(match_dialog_expect(&exp("confirm"), "prompt", "x", None).is_err());
         assert!(match_dialog_expect(&exp("any"), "prompt", "x", None).is_ok());
         // Message matcher: case-insensitive substring; a miss is a mismatch.
@@ -821,20 +898,24 @@ mod tests {
         assert!(match_dialog_expect(&e, "confirm", "Really DELETE this?", None).is_ok());
         assert!(match_dialog_expect(&e, "confirm", "Save changes?", None).is_err());
         // Origin gate: same origin ok, foreign origin refuses, unknown url ok.
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "x",
-            Some("https://shop.example/cart")
-        )
-        .is_ok());
-        assert!(match_dialog_expect(
-            &exp("confirm"),
-            "confirm",
-            "x",
-            Some("https://evil.example/")
-        )
-        .is_err());
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "x",
+                Some("https://shop.example/cart")
+            )
+            .is_ok()
+        );
+        assert!(
+            match_dialog_expect(
+                &exp("confirm"),
+                "confirm",
+                "x",
+                Some("https://evil.example/")
+            )
+            .is_err()
+        );
         assert!(match_dialog_expect(&exp("confirm"), "confirm", "x", None).is_ok());
         // prompt_text passes only when accepting.
         let mut p = exp("prompt");

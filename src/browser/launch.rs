@@ -3,9 +3,10 @@
 
 use super::discover::{endpoint_owned_by_pid, find_chrome, free_port};
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use super::display::{apply_xvfb_env, VirtualDisplay};
+use super::display::{VirtualDisplay, apply_xvfb_env};
 use super::flags::{
-    classify_gl, gl_stages, launch_args, launch_args_real, stage_label, LaunchCfg, RealLaunchCfg,
+    LaunchCfg, RealLaunchCfg, classify_gl, launch_args, launch_args_real, ordered_gl_stages,
+    stage_label,
 };
 use super::probe::probe_gl_ws;
 use super::*;
@@ -73,7 +74,15 @@ impl Browser {
     /// next stage is tried (bounded — the ladder has four stages) so a
     /// GL-less browser is never what pages see.
     async fn launch_inner(port: u16, no_sandbox: bool) -> Result<Self> {
-        let stages = gl_stages();
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let headful_hint = VirtualDisplay::available();
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let headful_hint = true;
+        let chrome_hint = find_chrome().ok();
+        let preferred = chrome_hint
+            .as_deref()
+            .and_then(|p| crate::knowledge::preferred_gl_stage(p, headful_hint));
+        let stages = ordered_gl_stages(preferred);
         let mut last: Option<Self> = None;
         for (i, stage) in stages.iter().enumerate() {
             if let Some(b) = last.take() {
@@ -86,15 +95,20 @@ impl Browser {
             match probe {
                 Some(renderer) => {
                     let state = classify_gl(&renderer);
+                    let hardware = matches!(state, GpuState::Hardware(_));
                     eprintln!(
                         "[stealth] GL healthcheck: {renderer} ({}) via {}",
-                        if matches!(state, GpuState::Hardware(_)) {
-                            "hardware"
-                        } else {
-                            "software"
-                        },
+                        if hardware { "hardware" } else { "software" },
                         stage_label(*stage)
                     );
+                    if let Some(ref cp) = chrome_hint {
+                        crate::knowledge::record_working_gl_stage(
+                            cp,
+                            !launched_headless(),
+                            *stage,
+                            hardware,
+                        );
+                    }
                     set_gpu_state(Some(state));
                     return Ok(browser);
                 }
@@ -166,6 +180,11 @@ impl Browser {
             eprintln!("[launch-timing] profile: {:?}", t0.elapsed());
         }
         let user_data_dir = profile.dir().to_path_buf();
+        let disk_cache_dir = if !is_flatpak_browser(&chrome_path) {
+            profile.http_cache_dir().map(std::path::Path::to_path_buf)
+        } else {
+            None
+        };
         font_audit();
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -205,9 +224,11 @@ impl Browser {
             stage,
             headful,
             no_sandbox,
+            mute_audio: !audio_enabled(),
             transport: Transport::Ws,
             port,
             user_data_dir: &user_data_dir,
+            disk_cache_dir: disk_cache_dir.as_deref(),
             proxy: proxy.as_ref().map(|s| s.server.as_str()),
             extra: &extra,
         });
@@ -419,6 +440,20 @@ impl Browser {
             }
         };
         let extra = super::flags::env_chrome_flags()?;
+        let binary_str = binary.to_string_lossy().to_string();
+
+        // Ensure an owned clone session dir is removed (WITHOUT syncing back
+        // over a good template) if every launch attempt fails or returns early.
+        struct ProfileDropGuard(Option<crate::session_profile::SessionProfile>);
+        impl Drop for ProfileDropGuard {
+            fn drop(&mut self) {
+                if let Some(p) = self.0.take() {
+                    stop_profile_processes(&p, false);
+                    p.discard_unstarted();
+                }
+            }
+        }
+        let mut profile_guard = ProfileDropGuard(Some(profile));
 
         let mut last_err = None;
         // A quick clean exit means Chrome handed the command line to an
@@ -441,6 +476,7 @@ impl Browser {
             let args = launch_args_real(&RealLaunchCfg {
                 headless,
                 no_sandbox,
+                mute_audio: !audio_enabled(),
                 ozone_x11,
                 port,
                 user_data_dir: &user_data_dir,
@@ -454,18 +490,23 @@ impl Browser {
                 if headless { "headless" } else { "visible" }
             );
 
-            let mut cmd = Command::new(binary);
+            // Use `browser_command` so Flatpak exports run via `flatpak run`
+            // with `user_data_dir`, downloads, and upload staging shared into
+            // the sandbox (native binaries execute directly as before).
+            let mut cmd = browser_command(&binary_str, &user_data_dir);
             browser_temp_env(&mut cmd);
-            // OBU_RB_DEBUG=1 surfaces the browser's own stderr — the only
-            // way to see WHY a real-lane launch died (X11/Wayland/GL errors
-            // are otherwise discarded into /dev/null).
-            let child_stderr = if std::env::var("OBU_RB_DEBUG")
+            // OBU_RB_DEBUG=1 inherits stderr directly; otherwise capture
+            // bounded startup stderr so failures include the real browser error.
+            let inherit_stderr = std::env::var("OBU_RB_DEBUG")
                 .map(|v| v == "1")
-                .unwrap_or(false)
-            {
+                .unwrap_or(false);
+            let child_stderr = if inherit_stderr {
                 Stdio::inherit()
             } else {
-                Stdio::null()
+                match chrome_stderr_sink() {
+                    Some(f) => Stdio::from(f),
+                    None => Stdio::null(),
+                }
             };
             cmd.args(&args).stdout(Stdio::null()).stderr(child_stderr);
             #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -481,6 +522,7 @@ impl Browser {
 
             let base = format!("127.0.0.1:{port}");
             let deadline = Instant::now() + Duration::from_secs(20);
+            let started = Instant::now();
             loop {
                 match crate::cdp::version(&base).await {
                     Ok(v) => {
@@ -502,6 +544,9 @@ impl Browser {
                             "[realbrowser] browser ready: {} (protocol {})",
                             v.browser, v.protocol_version
                         );
+                        let profile = profile_guard.0.take().ok_or_else(|| {
+                            ObuError::Other("real-browser launch lost its profile handle".into())
+                        })?;
                         return Ok(Self {
                             child,
                             #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -521,20 +566,24 @@ impl Browser {
                                 // into our group can outlive it (and hold the
                                 // profile the retry is about to reuse).
                                 platform::kill_child_tree(&mut child);
+                                let tail = if inherit_stderr {
+                                    String::new()
+                                } else {
+                                    chrome_stderr_tail()
+                                };
                                 if spawned_at.elapsed() < Duration::from_secs(5) && status.success()
                                 {
-                                    last_err = Some(ObuError::Other(
+                                    last_err = Some(ObuError::Other(format!(
                                         "the browser exited immediately (status 0) — another \
                                          instance is almost certainly running on this profile \
                                          and Chrome handed the launch off to it. Close it and \
                                          retry, or use `rb mode clone` (works while it stays \
-                                         open), or `rb mode attach`."
-                                            .into(),
-                                    ));
+                                         open), or `rb mode attach`.{tail}"
+                                    )));
                                 } else {
                                     startup_exit = true;
                                     last_err = Some(ObuError::Other(format!(
-                                        "browser exited during startup: {status}"
+                                        "browser exited during startup: {status}{tail}"
                                     )));
                                 }
                                 break;
@@ -549,12 +598,23 @@ impl Browser {
                         }
                         if Instant::now() >= deadline {
                             platform::kill_child_tree(&mut child);
-                            last_err = Some(ObuError::Other(
-                                "browser debug endpoint not responding after 20s".into(),
-                            ));
+                            let tail = if inherit_stderr {
+                                String::new()
+                            } else {
+                                chrome_stderr_tail()
+                            };
+                            last_err = Some(ObuError::Other(format!(
+                                "browser debug endpoint not responding after 20s{tail}"
+                            )));
                             break;
                         }
-                        tokio::time::sleep(Duration::from_millis(300)).await;
+                        // Adaptive poll: real browsers usually answer well
+                        // under a second, so go tight early and coarse late.
+                        if started.elapsed() < Duration::from_secs(2) {
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                        } else {
+                            tokio::time::sleep(Duration::from_millis(300)).await;
+                        }
                     }
                 }
             }
@@ -602,31 +662,32 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
     let (spec, profile) = crate::realbrowser::resolve_selection(&cfg)?;
     let mode = crate::realbrowser::effective_mode(&cfg, &profile.root);
 
+    let profile_dir_arg =
+        (!profile.key.is_empty() && profile.key != ".").then_some(profile.key.as_str());
+
     match mode {
         crate::realbrowser::Mode::Attach => {
             let port = crate::realbrowser::devtools_port(&profile.root).ok_or_else(|| {
                 ObuError::Other(format!(
                     "no live debug endpoint found for `{}`. Auto-discovery reads Chrome's \
-                     DevToolsActivePort file, which browsers write when started with \
-                     `--remote-debugging-port=0` (or via chrome://inspect#remote-debugging on \
-                     Chrome 144+). For a browser on a FIXED debug port, point obu at it \
-                     directly: `obu nav <url> --port <N>` — a fixed port is also the \
-                     stealthier arm: Chrome reports navigator.webdriver=true for an ephemeral \
-                     port (measured, 151), and the lane never masks Chrome's own value. Or \
+                     DevToolsActivePort file (written for `--remote-debugging-port=0` or \
+                     chrome://inspect#remote-debugging on Chrome 144+) and, on Linux, a \
+                     running browser's fixed `--remote-debugging-port=<N>` flag. For a fixed \
+                     debug port on macOS/Windows, pass `obu nav <url> --port <N>` — a \
+                     fixed port is also the stealthier arm (`navigator.webdriver=false`). Or \
                      switch mechanism: `obu rb mode clone`.",
                     profile.path.display()
                 ))
             })?;
-            // SECURITY: the DevToolsActivePort file survives unclean exits
-            // (SIGKILL/OOM) and the port it names can be squatted — verify a
-            // live browser of this user actually holds the endpoint before
-            // driving it (Linux; elsewhere the file's existence is the best
-            // available signal).
-            if !crate::browser::endpoint_owned_by_own_browser(port) {
+            // SECURITY & RELIABILITY: the DevToolsActivePort file survives
+            // unclean exits (SIGKILL/OOM) and the port it names can be
+            // squatted — verify a live browser of this user actually holds
+            // the endpoint and it accepts connections before driving it.
+            if crate::realbrowser::devtools_port_live(&profile.root) != Some(port) {
                 return Err(ObuError::Other(format!(
-                    "the debug endpoint on port {port} (from {}'s DevToolsActivePort) is not \
-                     served by any live browser of this user — the file is stale or something \
-                     else took the port. Start the browser with `--remote-debugging-port=0`, \
+                    "the debug endpoint on port {port} (for {}) is not reachable or not \
+                     served by a live browser of this user — the DevToolsActivePort file \
+                     may be stale. Start the browser with `--remote-debugging-port=<N>`, \
                      or use `rb mode clone`.",
                     profile.root.display()
                 )));
@@ -647,14 +708,14 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
                     spec.name
                 )));
             }
-            // Imports on first use AND when the selected profile lives in
-            // another user-data root than the clone was imported from.
-            crate::realbrowser::ensure_current_import(&spec, &profile)?;
+            // Imports on first use, when the selected profile lives in another
+            // user-data root, AND automatically whenever the user's real
+            // browser has newer logins/cookies/storage since the last import.
+            let _ = crate::realbrowser::ensure_current_import(&spec, &profile)?;
             let root = crate::realbrowser::root_for(&spec.id);
             let sp = crate::session_profile::SessionProfile::create_real(&root)?;
             let browser =
-                Browser::launch_real(&spec.binary, sp, cfg.visible, Some(profile.key.as_str()))
-                    .await?;
+                Browser::launch_real(&spec.binary, sp, cfg.visible, profile_dir_arg).await?;
             let base = browser.base();
             Ok((Some(browser), base))
         }
@@ -689,8 +750,7 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
             }
             let sp = crate::session_profile::SessionProfile::adopt(&profile.root)?;
             let browser =
-                Browser::launch_real(&spec.binary, sp, cfg.visible, Some(profile.key.as_str()))
-                    .await?;
+                Browser::launch_real(&spec.binary, sp, cfg.visible, profile_dir_arg).await?;
             let base = browser.base();
             Ok((Some(browser), base))
         }
@@ -699,6 +759,16 @@ pub async fn launch_lane() -> Result<(Option<Browser>, String)> {
 }
 
 /// The agent-lane browser process. A Flatpak export is started through
+#[cfg(target_os = "linux")]
+pub(super) fn is_flatpak_browser(chrome_path: &str) -> bool {
+    super::flatpak::is_flatpak_export(chrome_path)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(super) fn is_flatpak_browser(_chrome_path: &str) -> bool {
+    false
+}
+
 /// `flatpak run` with the session profile shared into the sandbox — run
 /// as-is, Chrome would use a sandbox-private profile that vanishes on exit.
 pub(super) fn browser_command(chrome_path: &str, user_data_dir: &std::path::Path) -> Command {

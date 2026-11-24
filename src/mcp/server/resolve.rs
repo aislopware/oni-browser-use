@@ -186,7 +186,21 @@ pub(super) async fn resolve_text_target(
                 }
                 return Err(ObuError::Other(format!(
                     "ambiguous \"{query}\": {} equally ranked visible matches: {}. Use ref, selector or nth (1-based).",
-                    tied.len(), tied.iter().take(8).map(|m| format!("{} {} \"{}\" [{}]", m.0, m.1, m.2, page.model().element(&m.0).map(|e|e.raw.ctx.as_str()).unwrap_or(""))).collect::<Vec<_>>().join("; ")
+                    tied.len(),
+                    tied.iter()
+                        .take(8)
+                        .map(|m| format!(
+                            "{} {} \"{}\" [{}]",
+                            m.0,
+                            m.1,
+                            m.2,
+                            page.model()
+                                .element(&m.0)
+                                .map(|e| e.raw.ctx.as_str())
+                                .unwrap_or("")
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 )));
             }
         }
@@ -222,7 +236,19 @@ pub(super) async fn resolve_text_target(
                 return Ok(candidates[0].ref_id.clone());
             }
             if candidates.len() > 1 {
-                return Err(ObuError::Other(format!("ambiguous \"{query}\": {} possible fields: {}. Use ref, selector or an explicit field label.", candidates.len(), candidates.iter().take(8).map(|e| format!("{} {} \"{}\" [{}]",e.ref_id,e.raw.role,e.raw.name,e.raw.ctx)).collect::<Vec<_>>().join("; "))));
+                return Err(ObuError::Other(format!(
+                    "ambiguous \"{query}\": {} possible fields: {}. Use ref, selector or an explicit field label.",
+                    candidates.len(),
+                    candidates
+                        .iter()
+                        .take(8)
+                        .map(|e| format!(
+                            "{} {} \"{}\" [{}]",
+                            e.ref_id, e.raw.role, e.raw.name, e.raw.ctx
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )));
             }
         }
     }
@@ -341,7 +367,9 @@ pub(super) async fn page_lang_note(cdp: &crate::cdp::CdpSession) -> String {
     if lang.is_empty() || lang.starts_with("en") {
         return String::new();
     }
-    format!(" (page lang=\"{lang}\" - the UI may be localized; try the page's own wording, selector=, or a locale override)")
+    format!(
+        " (page lang=\"{lang}\" - the UI may be localized; try the page's own wording, selector=, or a locale override)"
+    )
 }
 
 /// Format the near-miss diagnostic for a selector that matched nothing

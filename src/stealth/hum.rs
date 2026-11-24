@@ -5,14 +5,14 @@
 //! thread dispatches occasional `mouseMoved` events during idle periods
 //! (no action for >3s), generating the behavioral noise of presence.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use serde_json::json;
 
 use crate::cdp::CdpSession;
-use crate::stealth::biometrics::{log_normal, Rng};
+use crate::stealth::biometrics::{Rng, log_normal};
 
 /// Idle threshold in ms — start humming after this much inactivity.
 const IDLE_THRESHOLD_MS: u64 = 3000;

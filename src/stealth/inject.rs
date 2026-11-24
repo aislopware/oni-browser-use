@@ -54,7 +54,7 @@
 
 use crate::cdp::CdpSession;
 use crate::error::Result;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod gpu;
@@ -72,7 +72,13 @@ static GL_SPOOFED: AtomicBool = AtomicBool::new(false);
 static FULL_SCRIPT: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
 
 /// The assembled full stealth script, if one has been registered.
+/// The last full stealth script registered by `apply()`, if any.
+/// Never returned on the real-browser lane (guards against an agent→real
+/// mid-session switch leaking agent OOPIF injections into the real browser).
 pub fn full_script() -> Option<String> {
+    if crate::realbrowser::real_lane() {
+        return None;
+    }
     let guard = FULL_SCRIPT.read().ok()?;
     if guard.is_empty() {
         None
@@ -82,8 +88,11 @@ pub fn full_script() -> Option<String> {
 }
 
 /// True once a full stealth script has been registered (drives whether the
-/// auto-attach handler needs to run at all).
+/// auto-attach handler needs to run at all). Always false on the real lane.
 pub fn has_full_script() -> bool {
+    if crate::realbrowser::real_lane() {
+        return false;
+    }
     FULL_SCRIPT.read().map(|s| !s.is_empty()).unwrap_or(false)
 }
 
@@ -252,8 +261,8 @@ fn is_software_gl(renderer: &str) -> bool {
 /// (fail-safe spoof).
 async fn adaptive_gl_spoof(env: &EnvProbe, cdp: &CdpSession) -> bool {
     use crate::browser::{
-        gpu_state, mark_gl_mid_session_loss, probe_gl_live, reconcile_gl, set_gpu_state, GlLive,
-        GlReconcile, GpuState,
+        GlLive, GlReconcile, GpuState, gpu_state, mark_gl_mid_session_loss, probe_gl_live,
+        reconcile_gl, set_gpu_state,
     };
     let state = gpu_state();
     let live: Option<String>;
@@ -508,7 +517,9 @@ pub async fn apply(cdp: &CdpSession, locale_override: Option<&str>) -> Result<Sc
         .filter(|s| !s.is_empty());
     let locale = raw_locale.as_deref().and_then(normalize_locale);
     if raw_locale.is_some() && locale.is_none() {
-        eprintln!("[stealth] WARNING: locale rejected (OBU_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped");
+        eprintln!(
+            "[stealth] WARNING: locale rejected (OBU_LOCALE / profiles.json value is not a BCP-47 tag like en-US) — locale override skipped"
+        );
     }
     if let Some(ref l) = locale {
         eprintln!("[stealth] registering locale override: {l}");

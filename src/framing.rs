@@ -76,12 +76,14 @@ mod tests {
         let mut reader = BufReader::new(input);
         let mut buffer = Vec::new();
         writer.write_all(&[0xf0, 0x9f]).await.unwrap();
-        assert!(tokio::time::timeout(
-            Duration::from_millis(10),
-            read_until_limited(&mut reader, b'\n', &mut buffer, 10)
-        )
-        .await
-        .is_err());
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(10),
+                read_until_limited(&mut reader, b'\n', &mut buffer, 10)
+            )
+            .await
+            .is_err()
+        );
         writer.write_all(&[0xa6, 0x80]).await.unwrap();
         drop(writer);
         assert_eq!(

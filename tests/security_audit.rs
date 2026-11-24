@@ -172,11 +172,12 @@ fn secure_tmp_rejects_preplaced_symlink_and_file() {
     let a = create_secure_tmp(&dir).expect("first temp");
     let b = create_secure_tmp(&dir).expect("second temp");
     assert_ne!(a, b);
-    assert!(a
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .starts_with(".obu-update"));
+    assert!(
+        a.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(".obu-update")
+    );
 
     // Pre-place a symlink + a regular file and verify O_EXCL semantics
     // hold for the API the updater uses (create_new): creation at an

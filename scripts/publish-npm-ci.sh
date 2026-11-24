@@ -4,8 +4,11 @@
 # <dist-dir> holds the release binaries named exactly as the GitHub assets:
 #   obu-linux-x64, obu-linux-arm64, obu-windows-x64.exe,
 #   obu-darwin-x64, obu-darwin-arm64
-# Order is fixed: platform packages first, the launcher last. A version the
-# registry already has is never republished — it fails closed.
+# Order is fixed: platform packages first, the launcher last. If the launcher
+# is already published at this version, fail closed. If an earlier run failed
+# partway through (e.g. a transient Sigstore Rekor 409 during provenance),
+# already-published platform packages are skipped while unpublished ones and
+# the launcher complete.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,6 +24,16 @@ for pkg in obu obu-linux-x64 obu-linux-arm64 obu-windows-x64 obu-darwin-x64 obu-
     [[ "$want" == "$VERSION" ]] || { echo "ERROR: npm/$pkg is $want, Cargo.toml is $VERSION" >&2; exit 1; }
 done
 
+is_published() {
+    npm view "$1@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"
+}
+
+# Fail closed if the public launcher itself is already live at this version.
+if is_published "obu"; then
+    echo "ERROR: obu@$VERSION is already published — never republish a release" >&2
+    exit 1
+fi
+
 copy() {
     [[ -f "$1" ]] || { echo "ERROR: missing $1" >&2; exit 1; }
     cp "$1" "$2"
@@ -32,20 +45,57 @@ copy "$DIST/obu-windows-x64.exe" npm/obu-windows-x64/obu.exe
 copy "$DIST/obu-darwin-x64"  npm/obu-darwin-x64/obu
 copy "$DIST/obu-darwin-arm64" npm/obu-darwin-arm64/obu
 
-publish() {
+publish_pkg() {
     local pkg="$1"
-    if npm view "$pkg@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"; then
+    local allow_skip="${2:-0}"
+
+    if is_published "$pkg"; then
+        if [[ "$allow_skip" == "1" ]]; then
+            echo "  $pkg@$VERSION (already published — skipping)"
+            return 0
+        fi
         echo "ERROR: $pkg@$VERSION is already published — never republish a version" >&2
         exit 1
     fi
-    echo "  $pkg@$VERSION"
-    ( cd "npm/$pkg" && npm publish --access public --provenance --no-audit --no-fund )
+
+    local attempt log
+    for attempt in 1 2 3; do
+        echo "  $pkg@$VERSION (attempt $attempt/3)"
+        log=$(mktemp)
+        if ( cd "npm/$pkg" && npm publish --access public --provenance --no-audit --no-fund ) 2>&1 | tee "$log"; then
+            rm -f "$log"
+            return 0
+        fi
+        # Re-check registry first in case npm accepted the publish before a
+        # transient response/tlog error surfaced.
+        sleep 5
+        if is_published "$pkg"; then
+            echo "  $pkg@$VERSION confirmed live on registry after transient error"
+            rm -f "$log"
+            return 0
+        fi
+        if grep -qE 'TLOG_CREATE_ENTRY_ERROR|E5[0-9]{2}|E429|ETIMEDOUT|ECONNRESET|EAI_AGAIN' "$log"; then
+            rm -f "$log"
+            if [[ "$attempt" -lt 3 ]]; then
+                local wait_s=$((attempt * 10))
+                echo "  transient publish/provenance error for $pkg@$VERSION — retrying in ${wait_s}s..." >&2
+                sleep "$wait_s"
+                continue
+            fi
+        else
+            rm -f "$log"
+            exit 1
+        fi
+    done
+
+    echo "ERROR: failed to publish $pkg@$VERSION after 3 attempts" >&2
+    exit 1
 }
 
 for pkg in obu-linux-x64 obu-linux-arm64 obu-windows-x64 obu-darwin-x64 obu-darwin-arm64; do
-    publish "$pkg"
+    publish_pkg "$pkg" 1
 done
-publish obu
+publish_pkg obu 0
 
 # Registry propagation: a bounded wait, not the old ten-minute window. Each
 # package must be visible at this version before the release goes Latest.
@@ -53,7 +103,7 @@ echo "verifying the registry..."
 for _ in $(seq 1 30); do
     ok=0
     for pkg in obu obu-linux-x64 obu-linux-arm64 obu-windows-x64 obu-darwin-x64 obu-darwin-arm64; do
-        if npm view "$pkg@$VERSION" version --prefer-online 2>/dev/null | grep -Fxq "$VERSION"; then
+        if is_published "$pkg"; then
             ok=$((ok + 1))
         fi
     done
