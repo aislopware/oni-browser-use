@@ -69,7 +69,7 @@ obu rb port 9222
 obu rb on
 ```
 
-The agent works in its own background tab and never touches yours. Set `OBU_SESSION=<name>` to give each agent its own tabs. `obu stop --close-tabs` closes the tabs obu opened.
+The agent works in its own background tab and never touches yours. Set `OBU_SESSION=<name>` to give each agent its own tabs. `obu stop --close-tabs` closes the tabs obu opened. A browser obu launches starts muted; `obu audio on` turns sound on.
 
 ## Docs
 

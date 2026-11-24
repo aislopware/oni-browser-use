@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Upstream 4.8.0–4.8.3, merged.
+
+### Added
+- `see extract=auto` has adapters for Stack Exchange, Wikipedia, Amazon search and product pages, arXiv, PyPI, npm, crates.io, and Google, DuckDuckGo and Bing results, with a JSON-LD fallback. The Reddit, X, GitHub, Hacker News and YouTube adapters are hardened.
+- Links that repeat on two or more pages of a site are folded into one line (`site-chrome ▸ N repeated site links folded`) in default views. `filter=`, `find=` and refs still reach them, and a link that changes unfolds at once.
+- `act download body:true` includes a text, JSON, XML, CSV or YAML body of up to 8 KiB inline, next to `path`.
+- Browsers obu launches start with audio muted. `obu audio on|off|status`, `obu rb audio on|off` or `OBU_AUDIO=1` turns sound on. An attached browser is never touched.
+- The real-browser lane finds Chrome Beta and Canary, Ungoogled Chromium, Arc, Thorium and Opera GX, searches `PATH` and Flatpak exports on Linux, and finds a browser started with a fixed `--remote-debugging-port` on Linux. `obu rb port <N>` still pins the port anywhere.
+- An agent-lane session keeps an HTTP disk cache across restarts (up to 4 slots of 100 MiB), so script, style and font bundles are not fetched again. Documents and API responses still follow their `Cache-Control` and `ETag`.
+- obu learns the working WebGL stage per browser binary, which sites hold connections open (so settling does not wait on them), and which sites are bot-risky (so it paces itself there). `obu doctor` reports this.
+- The CLI's own screens (`--version`, `doctor`, `update`, `rb`, `hermes`, `help`) are styled on a colour terminal. Pipes, `--json`, `NO_COLOR` and `OBU_PLAIN=1` stay plain.
+
+### Changed
+- A ref from before a navigation is retired: using it fails with `eN (role "name") was from a previous page (URL) and is invalid after navigation to URL — run see to get fresh refs`, instead of acting on whatever element now holds that number. A jump to an `#anchor` on the same page keeps refs.
+- `act` rejects `filter` and `scope`, which only `see` reads, and names the `see` call to use.
+- `act paginate` reports `complete: true` only after it moved past page 1 and the next control is gone. `act collect` no longer says the feed is exhausted while a pagination control is live.
+- The Reddit adapter reads threads and search results from the page and expands "more comments" one request at a time, with no `.json` endpoints, so Reddit no longer answers with HTTP 403 walls. An HTTP 429 stops the expansion and reports `Retry-After` and what is left.
+- The tool descriptions and MCP instructions are unchanged.
+- Dependencies refreshed (hyper 1.13.0, url 2.5.9). reqwest stays on 0.12, because 0.13 brings in rustls-platform-verifier.
+
+### Fixed
+- A ref table resumed from another process applies only to the page it was taken on. After that tab navigated, an old ref could have acted on a different element of the new page.
+- `obu mcp --port` no longer warms an attached browser. On a fresh install it used to open google.com, github.com and wikipedia.org in the browser's agent tab before the agent's first call.
+- Fastly's "Client Challenge" CAPTCHA page (PyPI shows it to headless browsers) is reported as `blocked: fastly`, with what to do, instead of as an ordinary page.
+- `see mode=content` never takes a hidden element as the page's main content. A hidden banner on Fastly's challenge page made it answer "page has no text content". An inline `data:` image shows its alt text without its multi-kilobyte URI.
+- A page script that runs while the page navigates away is retried a few times with a short backoff. It used to fail with `Inspected target navigated or closed`.
+- `navigate` and `act reload` attach the `http:` notice for a 4xx or 5xx page even when the URL did not change.
+- A domain's automatic `block` rules stop applying once the tab leaves that domain.
+- Consent banners are handled in one round trip, and 8 more consent managers are recognised.
+- Real-browser clones refresh when the source profile's cookies, logins or storage change, so `rb on` no longer launches a logged-out copy. A running session relaunches on its next call. Locked cookie files are reported, and an imported profile never shows "Restore pages?".
+- Real-lane reliability: exited browsers are reaped (no zombie Chromium processes or stuck session locks), agent-lane stealth scripts never reach the real browser, real tabs are preferred over `devtools://` and extension pages, and IPv6 debug ports are checked.
+- `obu update` and `--rollback`: check that the install directory is writable and that there is enough disk space before downloading, recover from HTTP 416, fail fast on permanent errors, and replace the binary atomically on every platform.
+- `-v`, `doctor` and `update` detect the npm, pnpm, bun, yarn, Homebrew, Cargo, source and standalone install channels, and print the matching upgrade command.
+
+### Performance
+- Real-browser clone imports skip Chromium's regenerated caches (components, ML models, GPU, media and script caches). Cookies, storage, history, logins and extensions are still copied, and imports run about 5–10× faster.
+- Attaching to `about:blank` skips the consent and block probes. Settling skips a needless second pass and polls every 25 ms.
+- `obu doctor` runs its checks in parallel, and `obu update` fetches the checksum while the binary downloads.
+
 ## [4.10.1] - 2026-11-23
 
 ### Fixed
