@@ -49,6 +49,8 @@ FIXUPS = [
     # A test of the 64 KiB output bound printed the name 9000 times (72 kB);
     # three letters need more repeats to cross it.
     ("src/updater/download.rs", '"obu".repeat(9000)', '"obu".repeat(24000)'),
+    # A width test counted the eight-letter name in its styled string.
+    ("src/ui.rs", "assert_eq!(visible_width(s), 10);", "assert_eq!(visible_width(s), 5);"),
     # The clone lands in a directory named after the repository, not the binary.
     ("src/updater/download.rs", f"{FORK}.git && cd obu", f"{FORK}.git && cd oni-browser-use"),
     ("docs/setup.md", f"{FORK}.git\ncd obu\n", f"{FORK}.git\ncd oni-browser-use\n"),
@@ -56,7 +58,7 @@ FIXUPS = [
     # there; nobody owns this one, so whoever publishes it would be believed.
     (
         "src/updater/version.rs",
-        """    // 2. npm registry fallback.
+        """    // 2. npm registry fallback (works even if GitHub is firewalled or a proxy strips 302).
     let npm_url = "https://registry.npmjs.org/obu/latest";
     if let Ok(resp) = client.get(npm_url).send().await {
         if resp.status().is_success() {

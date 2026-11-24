@@ -44,7 +44,7 @@ A running daemon or MCP server keeps executing the old binary, so stop it after 
 | CLI commands, daemon, help text | `src/cli.rs` + `src/cli/` (args/ per-command parsers, daemon, help, rb) |
 | sessions/profiles, seasoning, orphan reaper | `src/session_profile.rs` + `src/session_profile/` (reap, copy) |
 | cookies/storage/tabs, session save-load | `src/state.rs` |
-| site adapters (`extract=auto` fast paths) | `src/reddit.rs` + `src/reddit/`, `src/x.rs` + `src/x/` |
+| site adapters (`extract=auto` fast paths) | `src/adapters.rs` + `src/adapters/js/` (engine, per-site JS), `src/reddit.rs` + `src/reddit/`, `src/x.rs` + `src/x/` |
 | real-browser lane (`rb`) | `src/realbrowser.rs` + `src/realbrowser/` |
 | self-update, rollback, doctor | `src/updater/` |
 | human CLI output/styling | `src/ui.rs` |

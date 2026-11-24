@@ -49,7 +49,7 @@ use self::args::{
 use self::daemon::{MAX_REQUEST_BYTES, daemon_request};
 use self::daemon::{run_daemon, stop_daemon};
 pub use self::help::{command_help_text, help_json, help_text, suggest_command};
-use self::rb::run_rb;
+use self::rb::{run_audio, run_rb};
 
 /// Unix socket path for the CLI daemon: one daemon per data dir, or per
 /// named session (`OBU_SESSION`) within it.
@@ -480,6 +480,19 @@ fn send_to_daemon(req: &str) -> std::result::Result<ToolResult, DaemonCallError>
     })
 }
 
+/// Best-effort graceful stop of a running CLI daemon (used after self-update
+/// or rollback so the next command starts on the new binary instead of talking
+/// to the stale inode). Returns `true` if a live daemon was stopped.
+pub async fn stop_daemon_if_running() -> bool {
+    #[cfg(unix)]
+    {
+        if daemon_running() {
+            return stop_daemon().await.is_ok();
+        }
+    }
+    false
+}
+
 /// Main CLI entry point. Called from main.rs.
 ///
 /// Exit-code contract (documented in `help`):
@@ -552,6 +565,7 @@ async fn run_cli_inner(
 
     match cmd {
         "rb" | "realbrowser" => run_rb(rest, json_mode).await,
+        "audio" => run_audio(rest, json_mode).await,
         "hermes" => hermes::run(rest, json_mode).await,
         "daemon" => run_daemon().await,
         "stop" => {

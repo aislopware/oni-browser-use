@@ -113,6 +113,21 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
         .and_then(|f| f.as_array())
         .ok_or_else(|| ObuError::Other("fill requires 'fields' array".into()))?;
     let submit = args.get("submit").and_then(|s| s.as_str()).unwrap_or("");
+    let slim = args.get("slim").and_then(Value::as_bool).unwrap_or(false);
+    let mut filled_labels: Vec<String> = Vec::new();
+    match handle_fill_inner(fields, submit, slim, page, &mut filled_labels).await {
+        Ok(out) => Ok(out),
+        Err(err) => Err(wrap_fill_partial_err(err, &filled_labels, fields.len())),
+    }
+}
+
+async fn handle_fill_inner(
+    fields: &[Value],
+    submit: &str,
+    slim: bool,
+    page: &mut Page,
+    filled_labels: &mut Vec<String>,
+) -> Result<String> {
     let mut last_verdict = String::new();
     let mut count = 0usize;
     for field in fields {
@@ -148,6 +163,13 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
         };
 
         page.ensure_ref(&resolved).await?;
+        let display_name = if !f_label.is_empty() {
+            f_label.to_string()
+        } else if !f_selector.is_empty() {
+            f_selector.to_string()
+        } else {
+            resolved.clone()
+        };
         // Dispatch the right action based on element type.
         let role = page
             .model()
@@ -198,6 +220,7 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
                         ref_id: resolved.clone(),
                     }
                 } else {
+                    filled_labels.push(display_name);
                     count += 1;
                     continue; // already in desired state
                 }
@@ -223,12 +246,14 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
             )));
         }
         last_verdict = verdict;
+        filled_labels.push(display_name);
         count += 1;
     }
     let last_delta = if !submit.is_empty() {
         // Support explicit selector=/ref=/text=/label= prefixes (matching
-        // paginate's `next`), bare refs (`e8`), and bare visible button text.
-        // 'Edit', 'Enter', 'Email' start with 'e' but are text, not refs.
+        // paginate's `next`), bare refs (`e8`), bare CSS selectors
+        // (`input[type=submit]`, `#go`, `button.primary`), and bare visible
+        // button text. 'Edit', 'Enter', 'Email' start with 'e' but are text.
         let resolved = if let Some(sel) = submit.strip_prefix("selector=") {
             resolve_selector_target(page, sel, None).await?
         } else if let Some(r) = submit.strip_prefix("ref=") {
@@ -244,6 +269,16 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
                 && submit[1..].chars().all(|c| c.is_ascii_digit());
             if is_ref {
                 submit.to_string()
+            } else if looks_like_css_selector(submit) {
+                match resolve_selector_target(page, submit, None).await {
+                    Ok(r) => r,
+                    Err(ObuError::Closed) => return Err(ObuError::Closed),
+                    Err(sel_err) => match resolve_text_target(page, submit, None, None).await {
+                        Ok(r) => r,
+                        Err(ObuError::Closed) => return Err(ObuError::Closed),
+                        Err(_) => return Err(sel_err),
+                    },
+                }
             } else {
                 resolve_text_target(page, submit, None, None).await?
             }
@@ -262,12 +297,67 @@ pub async fn handle_fill(args: &Value, page: &mut Page) -> Result<String> {
     };
     Ok(format!(
         "filled {count} fields\n{last_verdict}\n{}",
-        if args.get("slim").and_then(Value::as_bool).unwrap_or(false) {
+        if slim {
             String::new()
         } else {
             page.delta_view(&last_delta, 8000)
         }
     ))
+}
+
+/// Heuristic for unprefixed CSS selectors passed to `fill submit="..."`
+/// (e.g. `input[type=submit]`, `#submit`, `.btn-primary`, `button.go`,
+/// `form > button`). Plain button labels (`Submit`, `Sign in`, `v1.2`,
+/// `Mr. Smith`) stay on text resolution.
+fn looks_like_css_selector(s: &str) -> bool {
+    let t = s.trim();
+    if t.is_empty() {
+        return false;
+    }
+    if t.starts_with('#') || t.starts_with('.') {
+        return true;
+    }
+    if t.contains('[') && t.contains(']') {
+        return true;
+    }
+    if t.contains(" > ") || t.contains(":nth") || t.contains("::") {
+        return true;
+    }
+    if !t.contains(' ')
+        && let Some((head, tail)) = t.split_once(['.', '#'])
+        && !head.is_empty()
+        && !tail.is_empty()
+        && head
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && tail
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
+    {
+        return true;
+    }
+    false
+}
+
+/// Disclose already-applied field mutations when a later field or `submit`
+/// fails in `handle_fill`. Preserves `ObuError::Closed` unwrapped for crash
+/// self-healing.
+fn wrap_fill_partial_err(err: ObuError, filled: &[String], total: usize) -> ObuError {
+    if matches!(err, ObuError::Closed) || filled.is_empty() {
+        return err;
+    }
+    let list = filled.join(", ");
+    let msg = format!(
+        "fill stopped after {} of {total} field(s) were already filled ({list}): {err} (already-filled values remain on the page — inspect or submit without re-filling them)",
+        filled.len()
+    );
+    match err {
+        ObuError::Usage(_) => ObuError::Usage(msg),
+        ObuError::StaleRef(_) => ObuError::StaleRef(msg),
+        ObuError::ElementNotFound(_) => ObuError::ElementNotFound(msg),
+        _ => ObuError::Other(msg),
+    }
 }
 
 pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
@@ -1013,5 +1103,55 @@ pub async fn handle_act(args: &Value, page: &mut Page) -> Result<String> {
                 "{e}\n\n--- current page state ---\n{view}"
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod fill_tests {
+    use super::*;
+
+    #[test]
+    fn looks_like_css_selector_distinguishes_selectors_from_labels() {
+        for sel in [
+            "input[type=submit]",
+            "button[type='submit']",
+            "#submit-btn",
+            ".btn-primary",
+            "button.submit",
+            "form > button",
+            "button:nth-of-type(2)",
+        ] {
+            assert!(looks_like_css_selector(sel), "{sel} should be CSS");
+        }
+        for label in [
+            "Submit",
+            "Sign in",
+            "Search",
+            "v1.2",
+            "Mr. Smith",
+            "a@b.com",
+        ] {
+            assert!(!looks_like_css_selector(label), "{label} should be text");
+        }
+    }
+
+    #[test]
+    fn wrap_fill_partial_err_discloses_completed_fields_and_preserves_closed() {
+        let filled = vec!["Search".to_string()];
+        let err = wrap_fill_partial_err(ObuError::Other("no submit".into()), &filled, 1);
+        let msg = err.to_string();
+        assert!(
+            msg.contains("1 of 1 field(s) were already filled (Search)")
+                && msg.contains("no submit"),
+            "{msg}"
+        );
+        // Zero filled fields leaves the error unwrapped.
+        let untouched = wrap_fill_partial_err(ObuError::Other("boom".into()), &[], 2);
+        assert_eq!(untouched.to_string(), "boom");
+        // Closed must never be wrapped so crash recovery stays intact.
+        assert!(matches!(
+            wrap_fill_partial_err(ObuError::Closed, &filled, 2),
+            ObuError::Closed
+        ));
     }
 }

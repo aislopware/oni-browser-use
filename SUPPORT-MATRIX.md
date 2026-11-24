@@ -20,7 +20,7 @@ Verification coverage by platform, browser engine and instrument, as the workflo
 | Google Chrome Stable (Ubuntu CI) | Parallel `probes.yml` browser jobs (`audit`, `oracle`, `qol`, `lanes`, `gap44`, `reliability`) |
 | Google Chrome (Windows CI) | `obu audit` with the release binary in `release.yml` |
 | Flatpak `org.chromium.Chromium` (`1.18.4` x86_64) | Discovery, sandboxed launch, host persistence, upload staging, download, and teardown verified on Linux x86_64 |
-| Chromium forks (Brave, Helium, Edge, Vivaldi, Opera) | Discovery, wrapper/AppImage PID ownership, and clone unit/integration fixtures (`tools/rb_live/helium.py` available for manual Helium runs) |
+| Chromium forks (Brave, Helium, Arc, Edge, Vivaldi, Opera, Opera GX, Thorium, Ungoogled Chromium) | Discovery, wrapper/AppImage PID ownership, and clone unit/integration fixtures (`tools/rb_live/helium.py` available for manual Helium runs) |
 
 ## Feature-to-Instrument Map
 

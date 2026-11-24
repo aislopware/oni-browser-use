@@ -83,16 +83,17 @@ fn exit_immediately(code: i32) -> ! {
     std::process::exit(code);
 }
 
-/// One error line: `obu:` dim, message red — or yellow for usage errors
-/// (a typo is not a failure).
+/// One error line: crimson/gold Noir prefix on stderr, yellow for usage
+/// errors (a typo is not a failure). Keeps classic `\x1b[31m` on 16-color
+/// stderr so legacy terminals and stream-isolation tests stay exact.
 fn print_error(e: &obu::ObuError) {
     let msg = e.to_string();
-    let styled = if matches!(e, obu::ObuError::Usage(_)) {
-        ui::err::yellow(&msg)
+    let (icon, styled) = if matches!(e, obu::ObuError::Usage(_)) {
+        (ui::err::gold("▲"), ui::err::yellow(&msg))
     } else {
-        ui::err::red(&msg)
+        (ui::err::bold_crimson("✖"), ui::err::red(&msg))
     };
-    eprintln!("{} {styled}", ui::err::dim("obu:"));
+    eprintln!("  {icon} {} {styled}", ui::err::dim("obu:"));
 }
 
 /// The `--json` failure object — the same shape run_cli prints.
@@ -259,8 +260,20 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
                 "unknown command `{cmd}`{suggestion} (run `obu help` for the command list)"
             ));
         }
-        eprintln!("{} unknown command `{cmd}`{suggestion}", ui::err::red("✗"));
-        eprintln!("  {}", ui::err::dim("run `obu help` for the command list"));
+        eprintln!(
+            "  {} unknown command `{cmd}`{}",
+            ui::err::red("✗"),
+            if suggestion.is_empty() {
+                String::new()
+            } else {
+                ui::err::gold(&suggestion)
+            }
+        );
+        eprintln!(
+            "    {} {}",
+            ui::err::gold("›"),
+            ui::err::dim("run `obu help` for the command list")
+        );
         std::process::exit(2);
     }
 
@@ -323,7 +336,7 @@ fn run(args: Vec<String>, json_mode: bool) -> Result<()> {
         }
         // CLI commands go through the new CLI module.
         "nav" | "see" | "act" | "state" | "run" | "vision" | "daemon" | "stop" | "help" | "rb"
-        | "realbrowser" | "hermes" => {
+        | "realbrowser" | "audio" | "hermes" => {
             let mut cli_args: Vec<String> = std::iter::once(cmd.clone())
                 .chain(positional.iter().cloned())
                 .collect();
@@ -406,6 +419,7 @@ fn is_cli_command(cmd: &str) -> bool {
             | "help"
             | "rb"
             | "realbrowser"
+            | "audio"
             | "hermes"
     )
 }

@@ -131,16 +131,35 @@ impl CdpSession {
         await_promise: bool,
         deadline: Duration,
     ) -> Result<Value> {
-        self.send_with_timeout(
-            "Runtime.evaluate",
-            Some(json!({
-                "expression": expression,
-                "returnByValue": return_by_value,
-                "awaitPromise": await_promise,
-            })),
-            deadline,
-        )
-        .await
+        let params = json!({
+            "expression": expression,
+            "returnByValue": return_by_value,
+            "awaitPromise": await_promise,
+        });
+        // A redirect landing mid-read destroys the context the read ran in
+        // (`Inspected target navigated or closed`); the new document answers
+        // a moment later. Reads only, so running one again is harmless.
+        for attempt in 0..2u64 {
+            match self
+                .send_with_timeout("Runtime.evaluate", Some(params.clone()), deadline)
+                .await
+            {
+                Err(e) if Self::is_stale_context_err(&e) => {
+                    tokio::time::sleep(Duration::from_millis(150 + attempt * 200)).await;
+                }
+                other => return other,
+            }
+        }
+        self.send_with_timeout("Runtime.evaluate", Some(params), deadline)
+            .await
+    }
+
+    /// The error a read gets when its document went away under it.
+    pub(crate) fn is_stale_context_err(err: &ObuError) -> bool {
+        let msg = err.to_string();
+        msg.contains("Cannot find context")
+            || msg.contains("Execution context was destroyed")
+            || msg.contains("Inspected target navigated")
     }
 
     /// A driver-side watcher whose result does not matter (the mutation
@@ -369,5 +388,50 @@ mod tests {
 
         let child_ev = child.recv().await.unwrap();
         assert_eq!(child_ev.method, "Page.loadEventFired");
+    }
+
+    #[tokio::test]
+    async fn eval_isolated_recovers_from_inspected_target_navigated() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let mut calls = 0usize;
+            for step in 0..2 {
+                let req = socket.next().await.unwrap().unwrap();
+                let req: Value = serde_json::from_str(req.to_text().unwrap()).unwrap();
+                calls += 1;
+                let msg = if step == 0 {
+                    json!({
+                        "id": req["id"],
+                        "error": { "code": -32000, "message": "Inspected target navigated or closed" }
+                    })
+                } else {
+                    json!({
+                        "id": req["id"],
+                        "result": { "result": { "value": "recovered" } }
+                    })
+                };
+                socket
+                    .send(Message::Text(msg.to_string().into()))
+                    .await
+                    .unwrap();
+            }
+            calls
+        });
+        let client = crate::cdp::CdpClient::connect(&format!("ws://{address}"))
+            .await
+            .unwrap();
+        let cdp = CdpSession::root(client);
+        let res = cdp
+            .eval_isolated_with_timeout("'ok'", true, false, Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(res["result"]["value"], "recovered");
+        assert_eq!(task.await.unwrap(), 2);
     }
 }

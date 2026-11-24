@@ -20,16 +20,16 @@ Real-browser mode uses your Chromium-family binary and selected profile. It runs
 
 | `rb mode` | What Obu does |
 |---|---|
-| `auto` · default | Attaches if a debug endpoint is available, otherwise imports and uses a clone. |
-| `clone` | Imports your profile into a Obu-owned copy. The source profile can stay open and is left untouched. |
+| `auto` · default | Attaches if a live, reachable debug endpoint is available, otherwise imports and uses a clone. |
+| `clone` | Imports your profile into a Obu-owned copy and automatically refreshes whenever your real browser writes newer logins, cookies, or storage. The source profile can stay open and is left untouched. |
 | `profile` | Launches on your live profile. Close the browser first. Branded Chrome 136+ refuses remote debugging on its default data directory. |
-| `attach` | Connects to an existing debug endpoint. The browser remains caller-owned and stays open when Obu detaches. |
+| `attach` | Connects to an existing debug endpoint (including `DevToolsActivePort`, Chrome 144+ `chrome://inspect#remote-debugging`, and fixed-port Linux browsers). The browser remains caller-owned and stays open when Obu detaches. |
 
 A browser started with `--remote-debugging-port=<N>` writes no `DevToolsActivePort`, so name the port once with `obu rb port <N>` (`obu rb port auto` clears it). An attached session works in its own background tab and never navigates, hides or raises yours; its refs stay valid from one CLI command to the next. Several agents can share one attached browser when each sets `OBU_SESSION=<name>`: each gets its own tabs and daemon, while logins and `rb` settings stay shared. `obu stop --close-tabs` closes the tabs that session opened.
 
-For a given install, use `obu rb use <id>` and `obu rb profile <key>` to select a browser and profile. Recognized Chromium-family installs include Chromium, Chrome, Brave, Helium, Edge, Vivaldi, and Opera. Recognition and full runtime verification differ by engine. See the [support matrix](../SUPPORT-MATRIX.md).
+For a given install, use `obu rb use <id>` and `obu rb profile <key>` to select a browser and profile. Recognized Chromium-family installs include Chromium, Chrome (Stable/Beta/Canary), Ungoogled Chromium, Brave, Helium, Arc, Edge, Vivaldi, Opera, Opera GX, and Thorium — including PATH installs and Linux Flatpak exports. Recognition and full runtime verification differ by engine. See the [support matrix](../SUPPORT-MATRIX.md).
 
-For a portable binary, launch it once to create the profile, then use `obu rb use --binary /absolute/path/to/browser`. An explicit browser path is useful for AppImage or custom installations. `obu rb refresh` reimports the clone and `obu rb forget` removes the imported copy.
+For a portable binary or AppImage, launch it once to create the profile, then use `obu rb use --binary /absolute/path/to/browser` (and `obu rb profile /absolute/path/to/profile` if stored in a custom location). `obu rb refresh` forces an immediate re-import and `obu rb forget` removes the imported copy. If a running browser locks `Cookies` during a clone import (common on Windows), Obu surfaces a warning so you can close the browser and run `obu rb refresh`.
 
 ## Pause and switch back
 
@@ -41,4 +41,4 @@ obu rb off
 
 Pause blocks input, navigation, downloads, collection, and tab operations while you take control. Reads, waits, and eval remain available. Resume re-enables input. Turning the mode off switches back to the agent browser. The CLI restarts its daemon on a lane change. MCP picks up the change on the next use, relaunching an owned browser or detaching an attached one. `rb status --json` reports the current selection and live state.
 
-Real-browser mode can act in authenticated sessions. Choose the profile and account you want the agent to use before handing it control. To leave a caller-owned browser open, use attach mode. For visual and idle behavior run `obu help rb` or inspect the current settings with `rb status`.
+Real-browser mode can act in authenticated sessions. Choose the profile and account you want the agent to use before handing it control. To leave a caller-owned browser open, use attach mode. Owned launches (both agent and real-browser modes) mute audio by default so media players never produce unexpected sound; opt in with `obu audio on` (or `OBU_AUDIO=1`). For visual and idle behavior run `obu help rb` or inspect the current settings with `rb status`.
