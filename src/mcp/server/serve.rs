@@ -300,7 +300,11 @@ pub(super) async fn serve(use_pipe: bool, host: &str, port: u16) -> Result<()> {
                                     // by visiting a few top sites. Only runs once.
                                     // The note explains WHY the first tool call
                                     // took ~10s before the agent's request ran.
-                                    if !crate::realbrowser::real_lane()
+                                    // Only a browser obu launched: an attached
+                                    // one (`--port`, a host's panel) is someone's
+                                    // own, and warming would browse it.
+                                    if browser.is_some()
+                                        && !crate::realbrowser::real_lane()
                                         && crate::session_profile::SessionProfile::claim_warming()
                                     {
                                         if let Some(ref mut p) = page {

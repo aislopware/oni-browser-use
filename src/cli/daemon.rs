@@ -294,9 +294,11 @@ pub async fn run_daemon() -> Result<()> {
                             if let Some(ref mut p) = page {
                                 p.set_knowledge(knowledge.clone());
                             }
-                            // Never warm the real lane: it would navigate the
-                            // user's own browser to seed sites.
-                            if !crate::realbrowser::real_lane()
+                            // Never warm the real lane or an attached browser:
+                            // it would navigate someone's own browser to seed
+                            // sites.
+                            if browser.is_some()
+                                && !crate::realbrowser::real_lane()
                                 && crate::session_profile::SessionProfile::claim_warming()
                                 && let Some(ref mut p) = page
                             {
