@@ -58,6 +58,7 @@ pub(super) fn digest(snap: &RefSnapshot) -> u64 {
     snap.next_ref.hash(&mut h);
     snap.refs.hash(&mut h);
     snap.graveyard.hash(&mut h);
+    snap.url.hash(&mut h);
     h.finish()
 }
 
@@ -298,7 +299,8 @@ mod tests {
         id.trim_start_matches('e').parse().unwrap()
     }
 
-    /// Another page in the same tab: every old ref is retired, none reused.
+    /// Another page in the same tab: every old ref is retired, none reused,
+    /// and none rebinds to an element that only looks the same.
     #[test]
     fn a_resumed_table_never_reuses_a_ref_on_another_page() {
         let mut a = LivePageModel::new();
@@ -307,7 +309,8 @@ mod tests {
 
         let mut b = LivePageModel::new();
         b.seed(snap.clone());
-        b.ingest(page("https://y.test/", &["alpha", "beta"]));
+        // "two" on the next page has the same sig as "two" on the first.
+        b.ingest(page("https://y.test/", &["alpha", "two"]));
         for e in b.elements() {
             assert!(
                 ref_number_of(&e.ref_id) >= snap.next_ref,
@@ -317,8 +320,30 @@ mod tests {
         }
         for (id, ..) in &snap.refs {
             assert!(b.element(id).is_none(), "{id} must be dead");
-            assert!(b.graveyard_lookup(id).is_some(), "{id} must still heal");
+            assert!(b.graveyard_lookup(id).is_none(), "{id} must not heal");
+            let (_, _, old_url) = b.nav_retired_lookup(id).expect("retired by the navigation");
+            assert_eq!(old_url, "https://x.test/");
         }
+    }
+
+    /// A one-shot command moved the tab to another page and printed refs
+    /// there. The daemon adopting its table is on that page too: the refs
+    /// stay, they are not retired as the daemon's old page.
+    #[test]
+    fn an_adopted_table_keeps_the_refs_of_the_page_it_was_taken_on() {
+        let mut daemon = LivePageModel::new();
+        daemon.ingest(page("https://x.test/", &["one", "two"]));
+
+        let mut oneshot = LivePageModel::new();
+        oneshot.seed(daemon.snapshot());
+        oneshot.ingest(page("https://x.test/", &["one", "two"]));
+        oneshot.ingest(page("https://y.test/", &["alpha", "beta"]));
+        let alpha = ref_of(&oneshot, "alpha");
+
+        daemon.seed(oneshot.snapshot());
+        daemon.ingest(page("https://y.test/", &["alpha", "beta"]));
+        assert_eq!(daemon.element(&alpha).unwrap().raw.name, "alpha");
+        assert!(daemon.nav_retired_lookup(&alpha).is_none());
     }
 
     /// A daemon and a one-shot command on one tab: the daemon takes over the
@@ -362,6 +387,7 @@ mod tests {
             next_ref: 2,
             refs: vec![("e7".into(), "link:a".into(), "link".into(), "a".into(), 0)],
             graveyard: vec![("e9".into(), "link:b".into(), "link".into(), "b".into())],
+            url: String::new(),
         };
         assert_eq!(snap.floor(), 10);
         let mut lpm = LivePageModel::new();

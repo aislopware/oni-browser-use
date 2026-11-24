@@ -135,6 +135,10 @@ pub struct RefSnapshot {
     /// Dead refs, oldest first: (ref id, sig, role, name).
     #[serde(default)]
     pub graveyard: Vec<(String, String, String, String)>,
+    /// The page these refs belong to. Refs are page-scoped: a table resumed
+    /// on another page retires them instead of binding them to look-alikes.
+    #[serde(default)]
+    pub url: String,
 }
 
 /// `e12` -> 12. Anything else has no number (and sorts first).
@@ -211,6 +215,7 @@ impl LivePageModel {
             next_ref: self.next_ref,
             refs,
             graveyard: self.graveyard.clone(),
+            url: self.url.clone(),
         }
     }
 
@@ -236,6 +241,11 @@ impl LivePageModel {
             })
             .collect();
         self.graveyard = snap.graveyard;
+        // The refs belong to the page the table was taken on, which may not
+        // be the one this process last saw (an older file has no page).
+        if !snap.url.is_empty() {
+            self.url = snap.url;
+        }
         if self.graveyard.len() > GRAVEYARD_CAP {
             let excess = self.graveyard.len() - GRAVEYARD_CAP;
             self.graveyard.drain(..excess);
@@ -479,7 +489,9 @@ impl LivePageModel {
             };
         }
         let navigated = self.initialized && self.url != cap.url;
-        let page_changed = navigated && !super::heal::same_page_url(&self.url, &cap.url);
+        // `url` is set before the first capture only by a resumed ref table
+        // (`seed`): its refs are as page-scoped as this process's own.
+        let page_changed = !self.url.is_empty() && !super::heal::same_page_url(&self.url, &cap.url);
         let title_changed = self.initialized && self.title != cap.title;
         let phase = cap.phase().to_string();
 
@@ -536,10 +548,12 @@ impl LivePageModel {
 
         let removed: Vec<String> = if page_changed {
             let old_url = self.url.clone();
+            // `prev_state`, not `elements`: a resumed table has refs but no
+            // elements yet.
             let old_live: Vec<(String, String, String)> = self
-                .elements
+                .prev_state
                 .iter()
-                .map(|e| (e.ref_id.clone(), e.raw.role.clone(), e.raw.name.clone()))
+                .map(|(id, p)| (id.clone(), p.role.clone(), p.name.clone()))
                 .collect();
             let old_graveyard: Vec<(String, String, String)> = std::mem::take(&mut self.graveyard)
                 .into_iter()
