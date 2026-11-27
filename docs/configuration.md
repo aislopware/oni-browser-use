@@ -37,7 +37,7 @@ Embedded `user:pass@` credentials are refused at launch. Use an endpoint you can
 
 | Setting | Default or effect |
 |---|---|
-| `OBU_NO_ACTIVATE=1` | Keep Obu from raising the page, including when a tab is in the background. |
+| `OBU_NO_ACTIVATE=1` | Keep Obu from raising the browser window on input, navigation, and tab operations (`open-tab` opens in the background and reports that input focus is suppressed; initial browser launch on macOS/Windows still opens Chrome's normal window). |
 | `OBU_AUDIO` | `0`/`off` (default — browser audio is muted via `--mute-audio`) or `1`/`on` to opt in to audible playback. Persist with `obu audio on` / `obu audio off`. |
 | `OBU_LOCALE` | Locale, default `en-US`. |
 | `OBU_TZ` | Override timezone using an IANA name such as `Asia/Kathmandu`. |

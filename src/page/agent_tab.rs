@@ -124,7 +124,8 @@ pub(super) async fn browser_client(base: &str) -> Result<CdpClient> {
     CdpClient::connect(&ws).await
 }
 
-/// `Target.createTarget`. `quiet` (an attached browser): the tab gets its own
+/// `Target.createTarget`. `background` (`OBU_NO_ACTIVATE=1`) opens the tab
+/// without activating it. `quiet` (an attached browser): the tab gets its own
 /// window, created in the background. Measured on Brave 157: a default
 /// create — and `Page.bringToFront` — turns the user's active tab `hidden`;
 /// a background tab in their window is itself `hidden` (throttled); a
@@ -134,10 +135,14 @@ pub(super) async fn create_tab(
     url: &str,
     context: Option<&str>,
     quiet: bool,
+    background: bool,
 ) -> Result<String> {
     let mut params = json!({ "url": url });
     if let Some(id) = context {
         params["browserContextId"] = json!(id);
+    }
+    if background {
+        params["background"] = json!(true);
     }
     if quiet {
         let mut window = params.clone();
@@ -190,7 +195,7 @@ pub(super) async fn agent_target(base: &str, record: &Path) -> Result<TargetInfo
         }
     }
     let client = browser_client(base).await?;
-    let id = create_tab(&client, "about:blank", None, true).await?;
+    let id = create_tab(&client, "about:blank", None, true, true).await?;
     // Recorded before anything else can fail: an unrecorded tab would be
     // orphaned and the next command would open another window. If it cannot
     // be recorded (data dir read-only, disk full) it is closed again, so a
@@ -516,7 +521,7 @@ mod tests {
         // way they always did (same window, foreground).
         let (base, browser) = fake_browser(false).await;
         let client = browser_client(&base).await.unwrap();
-        let id = create_tab(&client, "https://a.test/", Some("CTX"), false)
+        let id = create_tab(&client, "https://a.test/", Some("CTX"), false, false)
             .await
             .unwrap();
         assert_eq!(id, "AGENT1");

@@ -333,7 +333,9 @@ impl Drop for LaunchGuard {
             if spawned {
                 stop_profile_processes(&profile, false);
             }
-            profile.cleanup();
+            // Launch never succeeded: discard the session copy without syncing
+            // a crashed/unstarted dir back over the seasoned template.
+            profile.discard_unstarted();
         }
     }
 }

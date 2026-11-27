@@ -10,7 +10,7 @@ Verification coverage by platform, browser engine and instrument, as the workflo
 | Linux ARM64 | Cross `clippy --all-targets -D warnings` (`zig cc`) | Not built by `release.yml`; no binary published, no browser runtime in CI |
 | macOS Apple Silicon (`darwin-arm64`) | Cross `clippy --all-targets -D warnings` | Native release binary in `release.yml`, built on the organisation's own Mac, where the release gate also runs native `cargo check --all-targets`, unit tests (`--lib`) and `cargo build --release` |
 | macOS Intel (`darwin-x64`) | Cross `clippy --all-targets -D warnings` | Not built by `release.yml`; no binary published |
-| Windows x86_64 | Cross `clippy --all-targets -D warnings` + native check, unit tests (`--lib`), and `cargo build --release` on `windows-latest` | `zigbuild` PE binary in `release.yml`, run on `windows-latest` (`--version`, `obu audit` with the runner's Chrome) before publishing |
+| Windows x86_64 | Cross `clippy --all-targets -D warnings` + native check, unit tests (`--lib`), and `cargo build --release` (`+crt-static`, PE `VERSIONINFO` checked) on `windows-latest` | Native MSVC binary (`+crt-static`, PE `VERSIONINFO` + `asInvoker` manifest) in `release.yml`, run on `windows-latest` (`--version`, `obu audit` with the runner's Chrome) before publishing |
 | Android (`aarch64-linux-android`) | Source compile check (`ci.yml` NDK job) | Source-level `cfg` guard only; no binary published and no runtime claim |
 
 ## Browser Engines

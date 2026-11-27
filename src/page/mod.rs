@@ -30,9 +30,11 @@ mod route;
 mod ua;
 
 pub use self::agent_tab::{close_own_tabs, session_target};
+pub(crate) use self::gl::stamp_gl_checked;
 pub use self::logs::{DocResponse, NetEntry, XhrEntry, http_status_reason};
 pub(crate) use self::navigate::{validate_nav_url, with_scheme};
 pub use self::route::{ROUTE_BUDGET, RouteEpoch, RouteSettle};
+pub use self::tabs::no_activate_enabled;
 
 use std::time::Duration;
 
@@ -720,7 +722,15 @@ impl Page {
                 verdict = new_verdict;
                 // Keep the opener usable and report the popup once. Finish
                 // normal busy/timing cleanup below, even when a tab opened.
-                if let Err(e) = self.activate().await {
+                // Always `activate`, not `activate_if_needed`: focus emulation
+                // makes the covered opener read "visible", so only an explicit
+                // raise hands the foreground back. OBU_NO_ACTIVATE=1 never
+                // raises the browser window (#100).
+                if no_activate_enabled() {
+                    verdict.push_str(
+                        "; opener activation suppressed by OBU_NO_ACTIVATE; use state switch-tab",
+                    );
+                } else if let Err(e) = self.activate().await {
                     verdict.push_str(&format!(
                         "; opener activation failed: {e}; use state switch-tab"
                     ));

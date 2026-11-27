@@ -155,8 +155,8 @@ pub async fn probe_gl_live(session: &crate::cdp::CdpSession) -> GlLive {
     // mask, exactly as a page script would (a page session otherwise reads
     // apart from it and would see the unmasked renderer).
     let session = &session.main_world();
-    for _ in 0..3 {
-        if let Ok(v) = session
+    for attempt in 0..3 {
+        match session
             .send_with_timeout(
                 "Runtime.evaluate",
                 Some(json!({ "expression": GL_PROBE_ONCE_EXPR, "returnByValue": true, "awaitPromise": true })),
@@ -164,7 +164,7 @@ pub async fn probe_gl_live(session: &crate::cdp::CdpSession) -> GlLive {
             )
             .await
         {
-            match extract_reply(&v) {
+            Ok(v) => match extract_reply(&v) {
                 OnceReply::Live(r) => return GlLive::Live(r),
                 OnceReply::NoContext(w) => {
                     saw_no_context = true;
@@ -173,9 +173,13 @@ pub async fn probe_gl_live(session: &crate::cdp::CdpSession) -> GlLive {
                     }
                 }
                 OnceReply::Skip | OnceReply::Malformed => {}
-            }
+            },
+            Err(crate::error::ObuError::Closed) => break,
+            Err(_) => {}
         }
-        tokio::time::sleep(Duration::from_millis(300)).await;
+        if attempt < 2 {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
     }
     if saw_no_context {
         GlLive::NoContext { worker }

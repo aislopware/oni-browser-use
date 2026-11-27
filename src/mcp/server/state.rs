@@ -73,8 +73,18 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
             let new_id = page.open_tab_target(url).await?;
             page.switch_tab(&new_id).await?;
             let view = page.view(1500);
+            let note = match (
+                crate::page::no_activate_enabled(),
+                page.takes_background_input(),
+            ) {
+                (false, _) => "",
+                (true, true) => " (opened in background by OBU_NO_ACTIVATE)",
+                (true, false) => {
+                    " (opened in background; input into it is suppressed by OBU_NO_ACTIVATE)"
+                }
+            };
             return Ok(format!(
-                "\u{2713} opened + switched to tab {new_id}\n{view}"
+                "\u{2713} opened + switched to tab {new_id}{note}\n{view}"
             ));
         }
         "switch-tab" => {
@@ -85,7 +95,14 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
             }
             page.switch_tab(target_id).await?;
             let view = page.view(1500);
-            return Ok(format!("\u{2713} switched to tab {target_id}\n{view}"));
+            let note = if crate::page::no_activate_enabled() {
+                " (window activation suppressed by OBU_NO_ACTIVATE)"
+            } else {
+                ""
+            };
+            return Ok(format!(
+                "\u{2713} switched to tab {target_id}{note}\n{view}"
+            ));
         }
         "close-tab" => {
             // Manual-control pause: the tab could be one the person is using.
@@ -112,8 +129,13 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
                 if let Some(first) = tabs.first() {
                     page.switch_tab(&first.id).await?;
                     let view = page.view(1500);
+                    let note = if crate::page::no_activate_enabled() {
+                        "; window activation suppressed by OBU_NO_ACTIVATE"
+                    } else {
+                        ""
+                    };
                     return Ok(format!(
-                        "\u{2713} closed tab {target_id} (was current; switched to {})\n{view}",
+                        "\u{2713} closed tab {target_id} (was current; switched to {}{note})\n{view}",
                         first.id
                     ));
                 }

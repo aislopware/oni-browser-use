@@ -98,6 +98,7 @@ ENVIRONMENT
   OBU_IDLE_TIMEOUT   daemon idle before Chrome shuts down, seconds (default 600)
   OBU_NO_COMPRESS=1  disable response compression
   OBU_MAIN_WORLD=1   run the driver's page reads in the page's JS world (default: isolated)
+  OBU_NO_ACTIVATE=1  never raise the browser window on input, navigation, or tab ops
   OBU_LANE           real|agent — force the real-browser lane for this process
   OBU_RB_DEBUG=1     real lane: surface the browser's own stderr on launch failures
   OBU_PLAIN          plain output — no ANSI even on a terminal
@@ -527,6 +528,7 @@ pub fn help_json(cmd: Option<&str>) -> Result<String> {
             "OBU_IDLE_TIMEOUT": "daemon idle before Chrome shuts down, seconds (default 600)",
             "OBU_NO_COMPRESS": "set 1 to disable response compression",
             "OBU_MAIN_WORLD": "set 1 to run the driver's page reads in the page's JS world (default: an isolated world the page cannot observe)",
+            "OBU_NO_ACTIVATE": "set 1 to keep Obu from raising the browser window on input, navigation, or tab ops (open-tab opens in the background)",
             "OBU_LANE": "real|agent — force the real-browser lane for this process",
             "OBU_RB_DEBUG": "real lane: set 1 to surface the browser's own stderr on launch failures",
             "OBU_PLAIN": "plain CLI output — no ANSI even on a TTY (NO_COLOR also honored; CLICOLOR_FORCE=1 forces color off-TTY)",
