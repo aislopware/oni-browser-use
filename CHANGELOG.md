@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Upstream 4.8.4, merged.
+
+### Changed
+- The Windows binary is built natively with MSVC and a static C runtime, and carries Windows version information and an `asInvoker` manifest, so antivirus scanners are less likely to flag it as an unknown stripped executable.
+- `OBU_NO_ACTIVATE=1` covers tab operations too: `state open-tab` opens the tab in the background, and `switch-tab`, `close-tab` and a click that opens a popup never raise the browser window. The verdicts say when activation was suppressed. A CLI daemon started with a different `OBU_NO_ACTIVATE` refuses the command instead of ignoring the setting.
+- `state switch-tab` raises the window only when the tab could miss input: a page with focus emulation, or one already in front, is left where it is.
+- Real-browser clones no longer watch the source profile's saved-password files to decide when to refresh. Cookies, preferences and storage still trigger a refresh, and the password files are still copied.
+- The tool descriptions and MCP instructions are unchanged.
+- Dependencies refreshed (cc 1.12.0, sha2 0.11.2). reqwest stays on 0.12, because 0.13 still brings in rustls-platform-verifier.
+
+### Fixed
+- `state open-tab <url>` loads the URL in the new tab through the normal navigation path. The tab used to be created with the URL, so its first page loaded before obu attached, without the stealth script or the site's domain profile, and the verdict showed `about:blank` while the page was still loading.
+- A failed browser start no longer copies its half-started profile over the session template.
+- `act click` no longer reports a dialog or navigation wait it did not have when CDP events arrive in a burst, and waits for a client-side route change before reading the page.
+- A handler panic in the CLI daemon is reported as an error, and the daemon still shuts Chrome down and saves logins.
+- Cookie readback after `set-cookie` and `del-cookie` compares domains case-insensitively. Select-all uses Cmd+A on macOS.
+- Timing arithmetic that could panic shortly after the machine booted no longer does.
+
+### Performance
+- Cold starts and attaches are faster: one shared HTTP client for the debug endpoint, the Page, Network and DOM domains enabled at once, the Linux font audit moved off the launch path, and no redundant WebGL check on the first call.
+- CDP frames are no longer copied in full when read, page captures no longer clone the DOM tree, and landmark folding runs in one pass.
+- `act wait` with `settle_ms: 0` (including `network-idle`) skips the settle round trips, and session restore writes `localStorage` in one batch.
+
 ## [4.11.0] - 2026-11-24
 
 Upstream 4.8.0–4.8.3, merged.

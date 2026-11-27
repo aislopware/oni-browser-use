@@ -140,8 +140,8 @@ jobs:
           path: dist/*
           retention-days: 7
 
-  # The Windows binary is cross-built on Linux; this runs the shipped bytes on
-  # Windows, against the runner's own Chrome, before anything is published.
+  # The stealth vectors run on the shipped Windows bytes, against the runner's
+  # own Chrome, before anything is published.
   smoke-windows:
     needs: [plan, build]
     runs-on: windows-latest
