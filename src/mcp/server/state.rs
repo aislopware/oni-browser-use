@@ -70,8 +70,12 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
             // wants to act in it — a separate switch-tab call
             // would be pure waste. Browser-level create (works in
             // both transports; the page session is not always valid).
-            let new_id = page.open_tab_target(url).await?;
-            page.switch_tab(&new_id).await?;
+            let (new_id, delta) = page.open_tab(url).await?;
+            let unverified = if delta.is_some_and(|d| d.unanswered) {
+                "outcome: navigation unverified - the page did not answer the post-navigation read (busy or mid-load); observe before acting\n"
+            } else {
+                ""
+            };
             let view = page.view(1500);
             let note = match (
                 crate::page::no_activate_enabled(),
@@ -84,7 +88,7 @@ async fn handle_state_inner(args: &Value, page: &mut Page) -> Result<String> {
                 }
             };
             return Ok(format!(
-                "\u{2713} opened + switched to tab {new_id}{note}\n{view}"
+                "\u{2713} opened + switched to tab {new_id}{note}\n{unverified}{view}"
             ));
         }
         "switch-tab" => {

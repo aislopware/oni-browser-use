@@ -214,6 +214,26 @@ impl Page {
         Ok(id)
     }
 
+    /// Open `url` in a new tab and move the session to it. The tab is created
+    /// blank and loaded through [`Page::navigate`]: created with the URL, its
+    /// first document loaded before the session attached (without the
+    /// stealth script or the domain profile), and the verdict showed
+    /// about:blank while the page was still loading.
+    pub async fn open_tab(&mut self, url: &str) -> Result<(String, Option<PageDelta>)> {
+        let url = url.trim();
+        let blank = url.is_empty() || url.eq_ignore_ascii_case("about:blank");
+        if !blank {
+            validate_nav_url(url)?;
+        }
+        let id = self.open_tab_target("about:blank").await?;
+        self.switch_tab(&id).await?;
+        if blank {
+            return Ok((id, None));
+        }
+        let delta = self.navigate(url).await?;
+        Ok((id, Some(delta)))
+    }
+
     /// Attached browser: record the tab the session is on (see `agent_tab`).
     /// Best-effort — a failed write costs continuity, never the command.
     fn remember_tab(&self, target_id: &str, created: bool) {
@@ -518,6 +538,26 @@ mod activation_tests {
                 "{visibility} emulation={emulation} no_activate={no_activate}: {methods:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn open_tab_creates_a_blank_tab_and_loads_the_url_through_navigate() {
+        let (mut page, seen) = mock_page("visible", true).await;
+        let _ = page.open_tab("example.org/x").await;
+        let seen = seen.lock().unwrap();
+        let created = seen
+            .iter()
+            .find(|(_, m, _)| m == "Target.createTarget")
+            .map(|(_, _, p)| p.clone())
+            .expect("Target.createTarget sent");
+        assert_eq!(created["url"], json!("about:blank"), "{created}");
+        let navigated = seen
+            .iter()
+            .find(|(_, m, _)| m == "Page.navigate")
+            .map(|(sid, _, p)| (sid.clone(), p.clone()))
+            .expect("Page.navigate sent");
+        assert_eq!(navigated.0, "S_NEW", "navigates the new tab: {navigated:?}");
+        assert_eq!(navigated.1["url"], json!("https://example.org/x"));
     }
 
     #[tokio::test]
